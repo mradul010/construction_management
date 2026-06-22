@@ -88,7 +88,8 @@ fixtures = [{"dt": "Custom Field", "filters": [["module", "=", "Construction Man
 # ------------
 
 # before_install = "construction_management.install.before_install"
-# after_install = "construction_management.install.after_install"
+after_install = "construction_management.construction_management.setup.after_install"
+after_migrate = "construction_management.construction_management.setup.after_migrate"
 
 # Uninstallation
 # ------------

@@ -2,6 +2,14 @@ import frappe
 import os
 
 
+def after_install():
+	create_boq_client_script()
+
+
+def after_migrate():
+	create_boq_client_script()
+
+
 def create_boq_client_script():
 	script_path = os.path.join(
 		os.path.dirname(__file__),
