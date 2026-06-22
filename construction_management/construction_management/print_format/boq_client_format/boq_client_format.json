@@ -1,0 +1,19 @@
+{
+ "creation": "2026-06-05 00:00:00.000000",
+ "default_print_format": 1,
+ "disable_print_for_cancelled": 0,
+ "doc_type": "BOQ",
+ "doctype": "Print Format",
+ "html": "",
+ "line_breaks": 0,
+ "modified": "2026-06-10 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Construction Management",
+ "name": "BOQ Client Format",
+ "owner": "Administrator",
+ "portrait": 1,
+ "print_format_type": "Jinja",
+ "print_hide_fields": 0,
+ "show_section_headings": 0,
+ "standard": "No"
+}

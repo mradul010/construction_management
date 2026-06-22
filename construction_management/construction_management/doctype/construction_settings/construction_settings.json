@@ -1,0 +1,121 @@
+{
+ "actions": [],
+ "creation": "2026-06-05 00:00:00.000000",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "default_settings_section",
+  "default_currency",
+  "default_company",
+  "default_margin",
+  "default_boq_price_list",
+  "naming_series_section",
+  "boq_naming_series",
+  "ra_naming_series",
+  "swo_naming_series",
+  "print_settings_section",
+  "company_logo",
+  "print_footer_note"
+ ],
+ "fields": [
+  {
+   "fieldname": "default_settings_section",
+   "fieldtype": "Section Break",
+   "label": "Default Settings"
+  },
+  {
+   "default": "AED",
+   "fieldname": "default_currency",
+   "fieldtype": "Link",
+   "label": "Default Currency",
+   "options": "Currency",
+   "reqd": 1
+  },
+  {
+   "fieldname": "default_company",
+   "fieldtype": "Link",
+   "label": "Default Company",
+   "options": "Company",
+   "reqd": 1
+  },
+  {
+   "default": "32",
+   "description": "Default margin % applied to new BOQ items",
+   "fieldname": "default_margin",
+   "fieldtype": "Percent",
+   "label": "Default Margin"
+  },
+  {
+   "description": "ERPNext Price List used to fetch item unit costs in BOQ",
+   "fieldname": "default_boq_price_list",
+   "fieldtype": "Link",
+   "label": "Default BOQ Price List",
+   "options": "Price List"
+  },
+  {
+   "fieldname": "naming_series_section",
+   "fieldtype": "Section Break",
+   "label": "Naming Series"
+  },
+  {
+   "default": "BOQ-YYYY-.####",
+   "fieldname": "boq_naming_series",
+   "fieldtype": "Data",
+   "label": "BOQ Naming Series"
+  },
+  {
+   "default": "RA-YYYY-.####",
+   "fieldname": "ra_naming_series",
+   "fieldtype": "Data",
+   "label": "RA Naming Series"
+  },
+  {
+   "default": "SWO-YYYY-.####",
+   "fieldname": "swo_naming_series",
+   "fieldtype": "Data",
+   "label": "SWO Naming Series"
+  },
+  {
+   "fieldname": "print_settings_section",
+   "fieldtype": "Section Break",
+   "label": "Print Settings"
+  },
+  {
+   "fieldname": "company_logo",
+   "fieldtype": "Attach Image",
+   "label": "Company Logo"
+  },
+  {
+   "description": "Appears at bottom of all print formats",
+   "fieldname": "print_footer_note",
+   "fieldtype": "Small Text",
+   "label": "Print Footer Note"
+  }
+ ],
+ "issingle": 1,
+ "links": [],
+ "modified": "2026-06-05 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Construction Management",
+ "name": "Construction Settings",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": [],
+ "track_changes": 1
+}

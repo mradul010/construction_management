@@ -1,0 +1,10 @@
+[
+  {
+    "doctype": "Client Script",
+    "name": "BOQ-client-script",
+    "dt": "BOQ",
+    "script": "",
+    "enabled": 1,
+    "view": "Form"
+  }
+]

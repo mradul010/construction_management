@@ -1,0 +1,14 @@
+[
+  {
+    "doctype": "Custom Field",
+    "name": "Item-default_cost_components",
+    "dt": "Item",
+    "fieldname": "default_cost_components",
+    "fieldtype": "Table",
+    "options": "Item Cost Template",
+    "label": "Default Cost Breakdown",
+    "insert_after": "description",
+    "module": "Construction Management",
+    "description": "Default Labour/Material/Equipment breakdown for this item. Auto-fills in BOQ when this item is selected, and can be updated here for future reuse across all BOQs."
+  }
+]

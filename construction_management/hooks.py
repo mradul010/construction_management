@@ -5,6 +5,8 @@ app_description = "Construction Management app build by vigisolvo private limite
 app_email = "mradulmishra010@gmail.com"
 app_license = "mit"
 
+fixtures = [{"dt": "Custom Field", "filters": [["module", "=", "Construction Management"]]}]
+
 # Apps
 # ------------------
 
