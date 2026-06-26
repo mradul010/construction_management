@@ -324,7 +324,7 @@ frappe.ui.form.on("RA Bill", {
 		frm.ra_bill_make_link_control = function (parent, fieldname, options, value, getQuery, onChange) {
 			let isInitializing = true;
 			const control = frappe.ui.form.make_control({
-				parent: parent,
+				parent: parent.get ? parent.get(0) : parent,
 				df: {
 					fieldtype: "Link",
 					fieldname: fieldname,
@@ -337,8 +337,10 @@ frappe.ui.form.on("RA Bill", {
 					},
 				},
 				render_input: true,
+				only_input: true,
 			});
 
+			control.get_query = getQuery;
 			control.refresh();
 			control.set_value(value || "");
 			setTimeout(() => {
@@ -402,6 +404,55 @@ frappe.ui.form.on("RA Bill", {
 			frm.ra_bill_load_boq_context().then(() => {
 				let html = `
 					<style>
+						#ra-bill-custom-items-grid {
+							width: 100%;
+							max-width: 100%;
+							overflow: visible;
+						}
+						#ra-bill-custom-items-grid .ra-bill-table-shell {
+							border: 1px solid var(--border-color);
+							border-radius: 6px;
+							font-family: var(--font-stack);
+							font-size: 13px;
+							width: 100%;
+							max-width: 100%;
+							box-sizing: border-box;
+							overflow: visible;
+						}
+						#ra-bill-custom-items-grid table {
+							width: 100%;
+							border-collapse: collapse;
+							table-layout: fixed;
+							box-sizing: border-box;
+						}
+						#ra-bill-custom-items-grid th,
+						#ra-bill-custom-items-grid td {
+							text-align: center;
+							vertical-align: middle;
+							white-space: nowrap;
+							box-sizing: border-box;
+						}
+
+						#ra-bill-custom-items-grid th {
+							padding: 8px 4px;
+							font-size: 10px;
+							font-weight: 700;
+							text-transform: uppercase;
+							color: #374151;
+							background: var(--control-bg);
+							border-bottom: 1px solid var(--border-color);
+						}
+
+						#ra-bill-custom-items-grid td {
+							height: 48px;
+							padding: 7px 4px;
+							overflow: hidden;
+							text-overflow: ellipsis;
+							font-size: 12px;
+							font-weight: 500;
+							color: #374151;
+						}
+
 						#ra-bill-custom-items-grid .frappe-control,
 						#ra-bill-custom-items-grid .form-group {
 							margin-bottom: 0;
@@ -414,25 +465,95 @@ frappe.ui.form.on("RA Bill", {
 						}
 						#ra-bill-custom-items-grid .link-field,
 						#ra-bill-custom-items-grid .form-control {
-							min-height: 28px;
-							height: 28px;
-							font-size: 11px;
+							width: 100%;
+							max-width: 100%;
+							min-height: 32px;
+							height: 32px;
+							font-size: 13px;
+							font-weight: 500;
+							text-align: center;
+							color: #374151;
+							box-sizing: border-box;
+						}
+						#ra-bill-custom-items-grid .ra-work-complete {
+							width: 70px;
+							max-width: 100%;
+							margin: 0 auto;
+							text-align: center;
+							display: block;
+						}
+						#ra-bill-custom-items-grid .awesomplete,
+						#ra-bill-custom-items-grid .awesomplete > input {
+							width: 100%;
+							max-width: 100%;
+							box-sizing: border-box;
+							text-align: center;
+						}
+						#ra-bill-custom-items-grid .awesomplete > ul {
+							z-index: 1060;
+							text-align: left;
+							white-space: normal;
+						}
+						#ra-bill-custom-items-grid td.ra-currency-cell {
+							text-align: center;
+							padding-left: 0;
+							padding-right: 0;
+						}
+						#ra-bill-custom-items-grid .ra-currency-value {
+							display: flex;
+							align-items: center;
+							justify-content: center;
+							width: 100%;
+							font-variant-numeric: tabular-nums;
+							text-align: center;
+						}
+						#ra-bill-custom-items-grid td.ra-amount-cell {
+							font-weight: 700;
+							color: var(--primary);
+						}
+
+						#ra-bill-custom-items-grid td.ra-action-cell {
+							text-align: center;
+							padding: 0;
+							overflow: hidden;
+						}
+
+						#ra-bill-custom-items-grid .ra-action-btn {
+							width: 22px;
+							height: 22px;
+							padding: 0;
+							margin: 0 auto;
+							display: inline-flex;
+							align-items: center;
+							justify-content: center;
 						}
 					</style>
-					<div style="border:1px solid var(--border-color);border-radius:6px;overflow:hidden;font-family:var(--font-stack);font-size:12px">
-						<table style="width:100%;border-collapse:collapse;table-layout:fixed">
+					<div class="ra-bill-table-shell">
+						<table>
+							<colgroup>
+								<col style="width:5%">
+								<col style="width:16%">
+								<col style="width:16%">
+								<col style="width:17%">
+								<col style="width:8%">
+								<col style="width:10%">
+								<col style="width:6%">
+								<col style="width:8%">
+								<col style="width:10%">
+								<col style="width:4%">
+							</colgroup>
 							<thead>
-								<tr style="background:var(--control-bg);border-bottom:1px solid var(--border-color)">
-									<th style="width:5%;padding:8px;text-align:center">S.NO</th>
-									<th style="width:13%;padding:8px;text-align:left">CATEGORY NAME</th>
-									<th style="width:13%;padding:8px;text-align:left">SUB CATEGORY</th>
-									<th style="width:19%;padding:8px;text-align:left">ITEM</th>
-									<th style="width:8%;padding:8px;text-align:center">BOQ QTY</th>
-									<th style="width:10%;padding:8px;text-align:center">BOQ RATE</th>
-									<th style="width:6%;padding:8px;text-align:center">UOM</th>
-									<th style="width:9%;padding:8px;text-align:center">WORK %</th>
-									<th style="width:11%;padding:8px;text-align:center">AMOUNT</th>
-									<th style="width:6%;padding:8px;text-align:center">ACTION</th>
+								<tr>
+									<th>S.NO</th>
+									<th>CATEGORY NAME</th>
+									<th>SUB CATEGORY</th>
+									<th>ITEM</th>
+									<th>BOQ QTY</th>
+									<th>BOQ RATE</th>
+									<th>UOM</th>
+									<th>WORK %</th>
+									<th>AMOUNT</th>
+									<th>ACTION</th>
 								</tr>
 							</thead>
 							<tbody>
@@ -454,26 +575,27 @@ frappe.ui.form.on("RA Bill", {
 
 					html += `
 						<tr data-row-name="${row.name}" style="border-bottom:1px solid var(--border-color);background:${index % 2 === 0 ? "var(--bg-color)" : "var(--control-bg)"}">
-							<td style="padding:7px;text-align:center">${index + 1}</td>
-							<td style="padding:6px"><div class="ra-category-cell" data-row-name="${row.name}"></div></td>
-							<td style="padding:6px"><div class="ra-subcategory-cell" data-row-name="${row.name}"></div></td>
-							<td style="padding:6px"><div class="ra-item-cell" data-row-name="${row.name}"></div></td>
-							<td style="padding:7px;text-align:center;white-space:nowrap">${frm.ra_bill_format_number(row.boq_qty)}</td>
-							<td style="padding:7px;text-align:center;white-space:nowrap">${frm.ra_bill_format_currency(row.boq_rate)}</td>
-							<td style="padding:7px;text-align:center;white-space:nowrap">${row.uom || ""}</td>
-							<td style="padding:6px;text-align:center">
+							<td>${index + 1}</td>
+							<td><div class="ra-category-cell" data-row-name="${row.name}"></div></td>
+							<td><div class="ra-subcategory-cell" data-row-name="${row.name}"></div></td>
+							<td><div class="ra-item-cell" data-row-name="${row.name}"></div></td>
+							<td>${frm.ra_bill_format_number(row.boq_qty)}</td>
+							<td class="ra-currency-cell">
+								<span class="ra-currency-value">${frm.ra_bill_format_currency(row.boq_rate)}</span>
+							</td>
+							<td>${row.uom || "Nos"}</td>
+							<td>
 								${
 									isEditable
-										? `<input type="number" class="form-control ra-work-complete" data-row-name="${row.name}" value="${frm.ra_bill_format_number(completion)}" min="0" max="100" step="any" style="height:28px;text-align:center;font-size:11px;padding:2px 4px">`
-										: `${frm.ra_bill_format_number(completion)}%`
+										? `<input type="number" class="form-control ra-work-complete" data-row-name="${row.name}" value="${frm.ra_bill_format_number(completion)}" min="0" max="100" step="any" style="padding:2px 4px">`
+									: `${frm.ra_bill_format_number(completion)}%`
 								}
 							</td>
-							<td style="padding:7px;text-align:center;font-weight:600;color:var(--primary);white-space:nowrap">${frm.ra_bill_format_currency(row.current_amount)}</td>
-							<td style="padding:7px;text-align:center;white-space:nowrap">
-								<button class="btn btn-xs btn-default ra-row-edit" data-row-name="${row.name}" title="Edit" ${isEditable ? "" : "disabled"} style="margin-right:4px">
-									<i class="fa fa-pencil"></i>
-								</button>
-								<button class="btn btn-xs btn-default ra-row-delete" data-row-name="${row.name}" title="Delete" ${isEditable ? "" : "disabled"}>
+							<td class="ra-currency-cell ra-amount-cell">
+								<span class="ra-currency-value">${frm.ra_bill_format_currency(row.current_amount)}</span>
+							</td>
+							<td class="ra-action-cell">
+								<button class="btn btn-xs btn-default ra-row-delete ra-action-btn" data-row-name="${row.name}" title="Delete" ${isEditable ? "" : "disabled"}>
 									<i class="fa fa-trash" style="color:#ef4444"></i>
 								</button>
 							</td>
