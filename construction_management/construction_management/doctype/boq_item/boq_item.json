@@ -1,10 +1,11 @@
 {
  "actions": [],
- "creation": "2026-06-05 00:00:00.000000",
+ "creation": "2026-06-05 00:00:00",
  "doctype": "DocType",
  "editable_grid": 1,
  "engine": "InnoDB",
  "field_order": [
+  "component_key",
   "boq_category",
   "boq_parent_category",
   "item",
@@ -19,21 +20,26 @@
  ],
  "fields": [
   {
+   "fieldname": "component_key",
+   "fieldtype": "Data",
+   "hidden": 1,
+   "label": "Component Key",
+   "no_copy": 0,
+   "search_index": 1
+  },
+  {
    "fieldname": "boq_category",
    "fieldtype": "Link",
    "in_list_view": 1,
    "label": "Category",
    "options": "BOQ Category",
    "reqd": 1,
-   "search_index": 1,
-   "filters": [["BOQ Category", "is_group", "=", 0]]
+   "search_index": 1
   },
   {
-   "description": "Auto-filled from BOQ Category tree — used for grouping",
+   "description": "Auto-filled from BOQ Category tree \u2014 used for grouping",
    "fieldname": "boq_parent_category",
    "fieldtype": "Data",
-   "hidden": 0,
-   "in_list_view": 0,
    "label": "Parent Category",
    "read_only": 1
   },
@@ -55,6 +61,7 @@
    "read_only": 1
   },
   {
+   "allow_on_submit": 1,
    "default": "1",
    "fieldname": "qty",
    "fieldtype": "Float",
@@ -63,6 +70,7 @@
    "reqd": 1
   },
   {
+   "allow_on_submit": 1,
    "fetch_from": "item.stock_uom",
    "fetch_if_empty": 1,
    "fieldname": "uom",
@@ -73,6 +81,7 @@
    "reqd": 1
   },
   {
+   "allow_on_submit": 1,
    "default": "0",
    "description": "Auto-calculated as sum of Cost Breakdown components if present, otherwise enter directly",
    "fieldname": "unit_cost",
@@ -82,15 +91,17 @@
    "options": "currency"
   },
   {
+   "allow_on_submit": 1,
    "default": "0",
-   "description": "Contractor margin % — hidden from client print format",
+   "description": "Contractor margin % \u2014 hidden from client print format",
    "fieldname": "margin_percent",
    "fieldtype": "Percent",
    "in_list_view": 1,
    "label": "Margin %"
   },
   {
-   "description": "unit_cost × (1 + margin/100) — client-facing rate",
+   "allow_on_submit": 1,
+   "description": "unit_cost \u00d7 (1 + margin/100) \u2014 client-facing rate",
    "fieldname": "unit_rate",
    "fieldtype": "Currency",
    "in_list_view": 1,
@@ -99,7 +110,8 @@
    "read_only": 1
   },
   {
-   "description": "qty × unit_rate",
+   "allow_on_submit": 1,
+   "description": "qty \u00d7 unit_rate",
    "fieldname": "amount",
    "fieldtype": "Currency",
    "in_list_view": 1,
@@ -108,20 +120,21 @@
    "read_only": 1
   },
   {
+   "allow_on_submit": 1,
    "fieldname": "notes",
    "fieldtype": "Small Text",
-   "in_list_view": 0,
    "label": "Notes"
   }
  ],
  "istable": 1,
  "links": [],
- "modified": "2026-06-18 00:00:00.000000",
+ "modified": "2026-06-25 23:23:21.033756",
  "modified_by": "Administrator",
  "module": "Construction Management",
  "name": "BOQ Item",
  "owner": "Administrator",
  "permissions": [],
+ "row_format": "Dynamic",
  "sort_field": "creation",
  "sort_order": "DESC",
  "states": []
