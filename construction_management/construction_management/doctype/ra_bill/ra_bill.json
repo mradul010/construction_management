@@ -1,0 +1,253 @@
+{
+ "actions": [],
+ "autoname": "RA-YYYY-.####",
+ "creation": "2026-06-26 00:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "project_boq_section",
+  "project",
+  "boq",
+  "bill_no",
+  "status",
+  "billing_period_section",
+  "billing_period_column",
+  "billing_period_from",
+  "billing_period_to",
+  "customer_column",
+  "customer",
+  "currency",
+  "ra_bill_items_section",
+  "items",
+  "totals_section",
+  "gross_amount",
+  "retention_percent",
+  "retention_amount",
+  "totals_column",
+  "net_payable",
+  "cumulative_billed",
+  "invoice_details_section",
+  "sales_invoice",
+  "amended_from"
+ ],
+ "fields": [
+  {
+   "fieldname": "project_boq_section",
+   "fieldtype": "Section Break",
+   "label": "Project & BOQ"
+  },
+  {
+   "fieldname": "project",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Project",
+   "options": "Project",
+   "reqd": 1
+  },
+  {
+   "description": "Select BOQ for this project to bill against",
+   "fieldname": "boq",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "BOQ",
+   "options": "BOQ",
+   "reqd": 1
+  },
+  {
+   "description": "Auto-incremented per project+BOQ combination",
+   "fieldname": "bill_no",
+   "fieldtype": "Int",
+   "in_list_view": 1,
+   "label": "Bill No",
+   "read_only": 1
+  },
+  {
+   "default": "Draft",
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "Status",
+   "options": "Draft\nSubmitted\nApproved\nInvoiced\nCancelled",
+   "read_only": 1
+  },
+  {
+   "fieldname": "billing_period_section",
+   "fieldtype": "Section Break",
+   "label": "Billing Period"
+  },
+  {
+   "fieldname": "billing_period_column",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "billing_period_from",
+   "fieldtype": "Date",
+   "label": "Billing Period From",
+   "reqd": 1
+  },
+  {
+   "fieldname": "billing_period_to",
+   "fieldtype": "Date",
+   "label": "Billing Period To",
+   "reqd": 1
+  },
+  {
+   "fieldname": "customer_column",
+   "fieldtype": "Column Break"
+  },
+  {
+   "description": "Client to be invoiced",
+   "fieldname": "customer",
+   "fieldtype": "Link",
+   "label": "Customer",
+   "options": "Customer",
+   "reqd": 1
+  },
+  {
+   "default": "AED",
+   "fieldname": "currency",
+   "fieldtype": "Link",
+   "label": "Currency",
+   "options": "Currency",
+   "reqd": 1
+  },
+  {
+   "fieldname": "ra_bill_items_section",
+   "fieldtype": "Section Break",
+   "label": "RA Bill Items"
+  },
+  {
+   "fieldname": "items",
+   "fieldtype": "Table",
+   "label": "Billed Items",
+   "options": "RA Bill Item"
+  },
+  {
+   "fieldname": "totals_section",
+   "fieldtype": "Section Break",
+   "label": "Totals"
+  },
+  {
+   "bold": 1,
+   "fieldname": "gross_amount",
+   "fieldtype": "Currency",
+   "label": "Gross Amount",
+   "options": "currency",
+   "read_only": 1
+  },
+  {
+   "default": "10",
+   "fieldname": "retention_percent",
+   "fieldtype": "Percent",
+   "label": "Retention %"
+  },
+  {
+   "fieldname": "retention_amount",
+   "fieldtype": "Currency",
+   "label": "Retention Held",
+   "options": "currency",
+   "read_only": 1
+  },
+  {
+   "fieldname": "totals_column",
+   "fieldtype": "Column Break"
+  },
+  {
+   "bold": 1,
+   "fieldname": "net_payable",
+   "fieldtype": "Currency",
+   "label": "Net Payable",
+   "options": "currency",
+   "read_only": 1
+  },
+  {
+   "fieldname": "cumulative_billed",
+   "fieldtype": "Currency",
+   "label": "Total Billed to Date (this BOQ)",
+   "options": "currency",
+   "read_only": 1
+  },
+  {
+   "collapsible": 1,
+   "fieldname": "invoice_details_section",
+   "fieldtype": "Section Break",
+   "label": "Invoice Details"
+  },
+  {
+   "fieldname": "sales_invoice",
+   "fieldtype": "Link",
+   "label": "Sales Invoice",
+   "options": "Sales Invoice",
+   "read_only": 1
+  },
+  {
+   "fieldname": "amended_from",
+   "fieldtype": "Link",
+   "label": "Amended From",
+   "no_copy": 1,
+   "options": "RA Bill",
+   "print_hide": 1,
+   "read_only": 1
+  }
+ ],
+ "is_submittable": 1,
+ "links": [],
+ "modified": "2026-06-26 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Construction Management",
+ "name": "RA Bill",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "amend": 1,
+   "cancel": 1,
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "submit": 1,
+   "write": 1
+  },
+  {
+   "amend": 1,
+   "cancel": 0,
+   "create": 1,
+   "delete": 0,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Construction Manager",
+   "share": 1,
+   "submit": 1,
+   "write": 1
+  },
+  {
+   "amend": 0,
+   "cancel": 0,
+   "create": 1,
+   "delete": 0,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Construction User",
+   "share": 1,
+   "submit": 0,
+   "write": 1
+  }
+ ],
+ "search_fields": "project,boq,status",
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": [],
+ "title_field": "project",
+ "track_changes": 1
+}

@@ -24,7 +24,6 @@
    "fieldtype": "Data",
    "hidden": 1,
    "label": "Component Key",
-   "no_copy": 0,
    "search_index": 1
   },
   {
@@ -128,14 +127,16 @@
  ],
  "istable": 1,
  "links": [],
- "modified": "2026-06-25 23:23:21.033756",
+ "modified": "2026-06-26 17:44:42.986791",
  "modified_by": "Administrator",
  "module": "Construction Management",
  "name": "BOQ Item",
  "owner": "Administrator",
  "permissions": [],
  "row_format": "Dynamic",
+ "search_fields": "item_name,item,uom,unit_rate",
  "sort_field": "creation",
  "sort_order": "DESC",
- "states": []
+ "states": [],
+ "title_field": "item_name"
 }

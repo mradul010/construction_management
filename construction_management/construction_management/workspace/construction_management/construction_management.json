@@ -1,0 +1,101 @@
+{
+ "app": "construction_management",
+ "charts": [],
+ "content": "[{\"id\":\"cm_header\",\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h4\\\"><b>Construction Management</b></span>\",\"col\":12}},{\"id\":\"cm_card\",\"type\":\"card\",\"data\":{\"card_name\":\"Construction Management\",\"col\":4}}]",
+ "creation": "2026-06-26 00:00:00.000000",
+ "custom_blocks": [],
+ "docstatus": 0,
+ "doctype": "Workspace",
+ "for_user": "",
+ "hide_custom": 0,
+ "icon": "project",
+ "idx": 0,
+ "is_hidden": 0,
+ "label": "Construction Management",
+ "links": [
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Construction Management",
+   "link_count": 0,
+   "onboard": 0,
+   "type": "Card Break"
+  },
+  {
+   "dependencies": "Project",
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "BOQ",
+   "link_count": 0,
+   "link_to": "BOQ",
+   "link_type": "DocType",
+   "onboard": 1,
+   "type": "Link"
+  },
+  {
+   "dependencies": "Project, BOQ",
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "RA Bill",
+   "link_count": 0,
+   "link_to": "RA Bill",
+   "link_type": "DocType",
+   "onboard": 1,
+   "type": "Link"
+  },
+  {
+   "dependencies": "",
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "BOQ Category",
+   "link_count": 0,
+   "link_to": "BOQ Category",
+   "link_type": "DocType",
+   "onboard": 1,
+   "type": "Link"
+  }
+ ],
+ "modified": "2026-06-26 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Construction Management",
+ "name": "Construction Management",
+ "number_cards": [],
+ "owner": "Administrator",
+ "parent_page": "",
+ "public": 1,
+ "quick_lists": [],
+ "restrict_to_domain": "",
+ "roles": [],
+ "sequence_id": 1.0,
+ "shortcuts": [
+  {
+   "color": "Blue",
+   "doc_view": "List",
+   "format": "{}",
+   "label": "BOQ",
+   "link_to": "BOQ",
+   "stats_filter": "[]",
+   "type": "DocType"
+  },
+  {
+   "color": "Green",
+   "doc_view": "List",
+   "format": "{}",
+   "label": "RA Bill",
+   "link_to": "RA Bill",
+   "stats_filter": "[]",
+   "type": "DocType"
+  },
+  {
+   "color": "Grey",
+   "doc_view": "List",
+   "format": "{}",
+   "label": "BOQ Category",
+   "link_to": "BOQ Category",
+   "stats_filter": "[]",
+   "type": "DocType"
+  }
+ ],
+ "title": "Construction Management",
+ "type": "Workspace"
+}

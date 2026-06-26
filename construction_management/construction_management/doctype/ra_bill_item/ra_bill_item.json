@@ -1,0 +1,117 @@
+{
+ "actions": [],
+ "creation": "2026-06-26 00:00:00.000000",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "boq_item",
+  "item_name",
+  "boq_qty",
+  "boq_rate",
+  "uom",
+  "prev_cumulative_qty",
+  "current_qty",
+  "cumulative_qty",
+  "completion_pct",
+  "current_amount"
+ ],
+ "fields": [
+  {
+   "description": "Pick a BOQ item from the selected BOQ",
+   "fieldname": "boq_item",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "BOQ Item",
+   "options": "BOQ Item",
+   "reqd": 1
+  },
+  {
+   "description": "Auto-filled from BOQ item",
+   "fieldname": "item_name",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Item Name",
+   "read_only": 1
+  },
+  {
+   "description": "Original quantity from BOQ",
+   "fieldname": "boq_qty",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "BOQ Qty",
+   "read_only": 1
+  },
+  {
+   "description": "Unit rate from BOQ (unit_rate field)",
+   "fieldname": "boq_rate",
+   "fieldtype": "Currency",
+   "in_list_view": 1,
+   "label": "BOQ Rate",
+   "options": "currency",
+   "read_only": 1
+  },
+  {
+   "fieldname": "uom",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "UOM",
+   "options": "UOM",
+   "read_only": 1
+  },
+  {
+   "description": "Sum of current_qty from all previous submitted RA Bills for this BOQ item",
+   "fieldname": "prev_cumulative_qty",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "Prev. Cumulative Qty",
+   "read_only": 1
+  },
+  {
+   "default": "0",
+   "description": "Measured quantity for this billing period",
+   "fieldname": "current_qty",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "Current Qty",
+   "reqd": 1
+  },
+  {
+   "description": "prev_cumulative_qty + current_qty",
+   "fieldname": "cumulative_qty",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "Cumulative Qty",
+   "read_only": 1
+  },
+  {
+   "description": "cumulative_qty / boq_qty * 100",
+   "fieldname": "completion_pct",
+   "fieldtype": "Percent",
+   "in_list_view": 1,
+   "label": "Completion %",
+   "read_only": 1
+  },
+  {
+   "description": "current_qty * boq_rate",
+   "fieldname": "current_amount",
+   "fieldtype": "Currency",
+   "in_list_view": 1,
+   "label": "Amount",
+   "options": "currency",
+   "read_only": 1
+  }
+ ],
+ "istable": 1,
+ "links": [],
+ "modified": "2026-06-26 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Construction Management",
+ "name": "RA Bill Item",
+ "owner": "Administrator",
+ "permissions": [],
+ "row_format": "Dynamic",
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": []
+}
