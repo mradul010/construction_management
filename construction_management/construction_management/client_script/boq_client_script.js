@@ -250,7 +250,7 @@ frappe.ui.form.on("BOQ", {
 				},
 			});
 			d.show();
-        };        
+		};
 		// ── Cost breakdown dialog (click unit cost cell to open) ─────
 		frm.boq_open_cost_breakdown = function (rowName) {
 			const row = frm.doc.items.find((r) => r.name === rowName);
@@ -322,16 +322,21 @@ frappe.ui.form.on("BOQ", {
 						return;
 					}
 
-						const existingOtherComponents = (frm.doc.cost_components || [])
-							.filter((c) => !frm.boq_matches_item_component(c, itemRow))
-							.map((c) => ({
-								boq_item: c.boq_item,
-								component_type: c.component_type,
-								description: c.description,
-								qty: parseFloat(c.qty) || 1,
-								uom: c.uom || "Nos",
-								amount: parseFloat(c.amount) || 0,
-							}));
+					const existingOtherComponents = (frm.doc.cost_components || [])
+						.filter((c) => !frm.boq_matches_item_component(c, itemRow))
+						.map((c) => ({
+							boq_item: c.boq_item,
+							component_type: c.component_type,
+							description: c.description,
+							qty: parseFloat(c.qty) || 1,
+							uom: c.uom || "Nos",
+							currency:
+								getStoredRate(c, parseFloat(c.amount) || 0) ||
+								(parseFloat(c.qty)
+									? (parseFloat(c.amount) || 0) / parseFloat(c.qty)
+									: 0),
+							amount: parseFloat(c.amount) || 0,
+						}));
 
 					frm.clear_table("cost_components");
 
@@ -339,22 +344,24 @@ frappe.ui.form.on("BOQ", {
 						frm.add_child("cost_components", c);
 					});
 
-						components.forEach((c) => {
-							frm.add_child("cost_components", {
-								boq_item: rowComponentKey,
-								component_type: c.component_type,
-								description: c.description,
-								qty: parseFloat(c.qty) || 1,
-								uom: c.uom || "Nos",
-								amount: parseFloat(c.amount) || 0,
-							});
+					components.forEach((c) => {
+						frm.add_child("cost_components", {
+							boq_item: rowComponentKey,
+							component_type: c.component_type,
+							description: c.description,
+							qty: parseFloat(c.qty) || 1,
+							uom: c.uom || "Nos",
+							currency: parseFloat(c.rate) || 0,
+							amount: parseFloat(c.amount) || 0,
 						});
+					});
 
 					const newComponents = components.map((c) => ({
 						component_type: c.component_type,
 						description: c.description,
 						qty: parseFloat(c.qty) || 1,
 						uom: c.uom || "Nos",
+						currency: parseFloat(c.rate) || 0,
 						amount: parseFloat(c.amount) || 0,
 					}));
 
@@ -406,26 +413,98 @@ frappe.ui.form.on("BOQ", {
 						);
 
 						d.hide();
+						showAmountMismatchWarning(itemRow);
 					});
 				},
 			});
 
-				function getPersistedComponents() {
-					return (frm.doc.cost_components || [])
-						.filter((c) => frm.boq_matches_item_component(c, row))
-						.map((c) => ({
+			let dialogComponents = getPersistedComponents();
+
+			function getPersistedComponents() {
+				return (frm.doc.cost_components || [])
+					.filter((c) => frm.boq_matches_item_component(c, row))
+					.map((c) =>
+						normalizeComponent({
 							component_type: c.component_type || "Labour",
 							description: c.description || "",
 							qty: parseFloat(c.qty) || 1,
 							uom: c.uom || "Nos",
+							rate: c.rate,
+							currency: c.currency,
 							amount: parseFloat(c.amount) || 0,
-					}));
+						}),
+					);
 			}
 
-			function getRate(component) {
-				const qty = parseFloat(component.qty) || 1;
-				const amount = parseFloat(component.amount) || 0;
-				return qty ? amount / qty : 0;
+			function getComponentNumber(value, fallback) {
+				const parsed = parseFloat(value);
+				return isNaN(parsed) ? fallback : parsed;
+			}
+
+			function getStoredRate(component, amount) {
+				const rateValue =
+					component.rate !== undefined &&
+					component.rate !== null &&
+					component.rate !== ""
+						? component.rate
+						: component.currency;
+				const parsed = parseFloat(rateValue);
+
+				if (isNaN(parsed)) {
+					return null;
+				}
+
+				if (parsed === 0 && amount) {
+					return null;
+				}
+
+				return parsed;
+			}
+
+			function getItemBreakdownAmount(itemRow) {
+				return (frm.doc.cost_components || [])
+					.filter((component) => frm.boq_matches_item_component(component, itemRow))
+					.reduce((sum, component) => sum + (parseFloat(component.amount) || 0), 0);
+			}
+
+			function showAmountMismatchWarning(itemRow) {
+				const itemAmount = parseFloat(itemRow.amount) || 0;
+				const breakdownAmount = getItemBreakdownAmount(itemRow);
+
+				if (Math.abs(itemAmount - breakdownAmount) > 0.01) {
+					frappe.msgprint({
+						title: __("Amount Mismatch Warning"),
+						message: __(
+							"Item amount and Cost Breakdown total do not match. Please review before saving.",
+						),
+						indicator: "orange",
+					});
+				}
+			}
+
+			function normalizeComponent(component) {
+				const qty = getComponentNumber(component.qty, 1);
+				const savedAmount = getComponentNumber(component.amount, 0);
+				const storedRate = getStoredRate(component, savedAmount);
+				const rate = storedRate !== null ? storedRate : qty ? savedAmount / qty : 0;
+				const amount = qty * rate;
+
+				return {
+					component_type: component.component_type || "Labour",
+					description: component.description || "",
+					qty: qty,
+					uom: component.uom || "Nos",
+					rate: rate,
+					amount: amount,
+				};
+			}
+
+			function updateDialogComponent(idx, values) {
+				if (!dialogComponents[idx]) return;
+				dialogComponents[idx] = normalizeComponent({
+					...dialogComponents[idx],
+					...values,
+				});
 			}
 
 			function escapeHtml(value) {
@@ -444,19 +523,25 @@ frappe.ui.form.on("BOQ", {
 				const controlStyle =
 					"height:34px;font-size:13px;width:100%;min-width:0;box-sizing:border-box;border:1px solid #d1d5db;border-radius:6px;background:#ffffff;padding:6px 10px;color:#111827;";
 				const numberControlStyle = controlStyle + "text-align:right;";
-				const type = component.component_type || "Labour";
-				const qty = parseFloat(component.qty) || 1;
-				const uom = component.uom || "Nos";
-				const amount = parseFloat(component.amount) || 0;
-				const rate =
-					component.rate !== undefined
-						? parseFloat(component.rate) || 0
-						: getRate(component);
+				const normalized = normalizeComponent(component);
+				const type = normalized.component_type;
+				const qty = normalized.qty;
+				const uom = normalized.uom;
+				const rate = normalized.rate;
+				const amount = normalized.amount;
 				const disabledAttr = isReadOnlyBreakdown ? "disabled" : "";
 				const borderColor = typeColors[type] || "#6b7280";
+				const uomHtml = isReadOnlyBreakdown
+					? `<span style="display:block;width:100%;height:34px;box-sizing:border-box;text-align:center;font-size:13px;background:#ffffff !important;color:#111827;border:1px solid #d1d5db;border-radius:6px;padding:6px 10px;">${escapeHtml(uom || "Nos")}</span>`
+					: `<div class="uom-dropdown-field" style="position:relative;width:100%;min-width:0;">
+    <div class="comp-uom-control" data-idx="${idx}" data-value="${escapeHtml(uom)}" style="width:100%;min-width:0;"></div>
+    <span style="position:absolute;right:10px;top:50%;transform:translateY(-50%);color:#64748b;font-size:12px;pointer-events:none;z-index:2;">
+        <i class="fa fa-chevron-down"></i>
+    </span>
+</div>`;
 
 				return `
-<div class="comp-row" data-idx="${idx}" style="
+<div class="comp-row" data-idx="${idx}" data-uom="${escapeHtml(uom)}" style="
     display:grid;
     grid-template-columns:${componentGridColumns};
     gap:10px;
@@ -485,18 +570,19 @@ frappe.ui.form.on("BOQ", {
         value="${escapeHtml(component.description)}"
         placeholder="Description"
         style="${controlStyle}text-align:left;">
+
     <input type="number" class="form-control comp-qty" data-idx="${idx}" ${disabledAttr}
         value="${qty}"
         placeholder="Qty"
         style="${numberControlStyle}">
-    <input type="text" class="form-control comp-uom" data-idx="${idx}" ${disabledAttr}
-        value="${escapeHtml(uom)}"
-        placeholder="UOM"
-        style="${controlStyle}text-align:center;">
+
+    ${uomHtml}
+
     <input type="number" class="form-control comp-rate" data-idx="${idx}" ${disabledAttr}
         value="${rate}"
         placeholder="Rate"
         style="${numberControlStyle}">
+
     <input type="number" class="form-control comp-amount" data-idx="${idx}"
         value="${amount}"
         readonly
@@ -509,47 +595,38 @@ frappe.ui.form.on("BOQ", {
 			}
 
 			function updateDialogTotal() {
-				let total = 0;
 				const wrapper = d.fields_dict.components_html.$wrapper;
-				wrapper.find(".comp-row").each(function () {
-					total += parseFloat($(this).find(".comp-amount").val()) || 0;
-				});
+				const total = dialogComponents.reduce(
+					(sum, component) => sum + (parseFloat(component.amount) || 0),
+					0,
+				);
 				wrapper
 					.find(".comp-total-value")
 					.html(frappe.format(total, { fieldtype: "Currency" }));
 			}
 
 			function recalculateDialogRow(rowEl) {
+				const idx = parseInt(rowEl.attr("data-idx"));
 				const qty = parseFloat(rowEl.find(".comp-qty").val()) || 0;
 				const rate = parseFloat(rowEl.find(".comp-rate").val()) || 0;
-				rowEl.find(".comp-amount").val(qty * rate);
+				const amount = qty * rate;
+
+				updateDialogComponent(idx, { qty: qty, rate: rate, amount: amount });
+				rowEl.find(".comp-amount").val(dialogComponents[idx].amount);
 				updateDialogTotal();
 			}
 
 			function collectComponentsFromDialog() {
-				const wrapper = d.fields_dict.components_html.$wrapper;
-				const components = [];
-
-				wrapper.find(".comp-row").each(function () {
-					const rowEl = $(this);
-					const qty = parseFloat(rowEl.find(".comp-qty").val()) || 0;
-					const rate = parseFloat(rowEl.find(".comp-rate").val()) || 0;
-					components.push({
-						component_type: rowEl.find(".comp-type").val(),
-						description: rowEl.find(".comp-desc").val(),
-						qty: qty,
-						uom: rowEl.find(".comp-uom").val() || "Nos",
-						amount: qty * rate,
-					});
-				});
-
-				return components;
+				return dialogComponents.map((component) => normalizeComponent(component));
 			}
 
 			function bindComponentEvents() {
 				const wrapper = d.fields_dict.components_html.$wrapper;
 
-				wrapper.find("#add-component-btn").on("click", function () {
+				wrapper.off(".boq_cost_breakdown");
+				initializeUomControls();
+
+				wrapper.on("click.boq_cost_breakdown", "#add-component-btn", function () {
 					if (!frm.boq_is_draft()) {
 						frappe.msgprint({
 							title: __("Amend Required"),
@@ -561,26 +638,23 @@ frappe.ui.form.on("BOQ", {
 						return;
 					}
 
-					const body = wrapper.find("#comp-rows-body");
-					body.find(".empty-components").remove();
-					body.append(
-						buildComponentRow(
-							{
-								component_type: "Labour",
-								description: "",
-								qty: 1,
-								uom: "Nos",
-								rate: 0,
-								amount: 0,
-							},
-							body.find(".comp-row").length,
-						),
+					dialogComponents.push(
+						normalizeComponent({
+							component_type: "Labour",
+							description: "",
+							qty: 1,
+							uom: "Nos",
+							rate: 0,
+							amount: 0,
+						}),
 					);
-					updateDialogTotal();
-					body.find(".comp-desc").last().focus();
+					renderComponentsTable();
+					setTimeout(() => {
+						d.fields_dict.components_html.$wrapper.find(".comp-desc").last().focus();
+					}, 0);
 				});
 
-				wrapper.on("click", ".comp-remove", function () {
+				wrapper.on("click.boq_cost_breakdown", ".comp-remove", function () {
 					if (!frm.boq_is_draft()) {
 						frappe.msgprint({
 							title: __("Amend Required"),
@@ -592,19 +666,118 @@ frappe.ui.form.on("BOQ", {
 						return;
 					}
 
-					$(this).closest(".comp-row").remove();
-					if (!wrapper.find(".comp-row").length) {
-						wrapper
-							.find("#comp-rows-body")
-							.html(
-								'<div class="empty-components" style="text-align:center;color:var(--text-muted);font-size:13px;padding:28px 12px;border:1.5px dashed var(--border-color);border-radius:8px">No components yet. Click <b>+ Add Component</b> below to start.</div>',
-							);
-					}
-					updateDialogTotal();
+					const idx = parseInt($(this).closest(".comp-row").attr("data-idx"));
+					dialogComponents.splice(idx, 1);
+					renderComponentsTable();
 				});
 
-				wrapper.on("input change", ".comp-qty, .comp-rate", function () {
-					recalculateDialogRow($(this).closest(".comp-row"));
+				wrapper.on(
+					"input.boq_cost_breakdown change.boq_cost_breakdown",
+					".comp-type, .comp-desc",
+					function () {
+						const rowEl = $(this).closest(".comp-row");
+						const idx = parseInt(rowEl.attr("data-idx"));
+						updateDialogComponent(idx, {
+							component_type: rowEl.find(".comp-type").val(),
+							description: rowEl.find(".comp-desc").val(),
+						});
+					},
+				);
+
+				wrapper.on(
+					"input.boq_cost_breakdown change.boq_cost_breakdown",
+					".comp-qty, .comp-rate",
+					function () {
+						recalculateDialogRow($(this).closest(".comp-row"));
+					},
+				);
+			}
+
+			function initializeUomControls() {
+				if (isReadOnlyBreakdown) {
+					return;
+				}
+
+				const wrapper = d.fields_dict.components_html.$wrapper;
+
+				wrapper.find(".comp-uom-control").each(function () {
+					const parent = $(this);
+					const idx = parseInt(parent.data("idx"));
+					const rowEl = parent.closest(".comp-row");
+					const currentValue =
+						(dialogComponents[idx] && dialogComponents[idx].uom) ||
+						rowEl.attr("data-uom") ||
+						parent.attr("data-value") ||
+						"Nos";
+
+					parent.empty();
+					rowEl.attr("data-uom", currentValue);
+
+					const control = frappe.ui.form.make_control({
+						parent: parent,
+						df: {
+							fieldtype: "Link",
+							options: "UOM",
+							fieldname: "uom_" + idx,
+							placeholder: "UOM",
+							read_only: isReadOnlyBreakdown ? 1 : 0,
+							onchange: function () {
+								const value = control.get_value() || "Nos";
+								rowEl.attr("data-uom", value);
+								updateDialogComponent(idx, { uom: value });
+							},
+						},
+						render_input: true,
+					});
+
+					control.refresh();
+
+					control.$wrapper.css({
+						width: "100%",
+						minWidth: "0",
+					});
+
+					control.$input.css({
+						width: "100%",
+						height: "34px",
+						fontSize: "13px",
+						boxSizing: "border-box",
+						textAlign: "center",
+						border: "1px solid #d1d5db",
+						borderRadius: "6px",
+						background: "#ffffff",
+						padding: "6px 28px 6px 10px",
+						color: "#111827",
+					});
+
+					control.$input.attr(
+						"style",
+						(control.$input.attr("style") || "") +
+							";background:#ffffff !important;color:#111827;border:1px solid #d1d5db;border-radius:6px;",
+					);
+
+					control.$wrapper.find(".control-input").css({
+						display: "block",
+						width: "100%",
+					});
+
+					setTimeout(() => {
+						const value =
+							(dialogComponents[idx] && dialogComponents[idx].uom) ||
+							currentValue ||
+							"Nos";
+						const setValuePromise = control.set_value(value);
+						if (control.$input) {
+							control.$input.val(value);
+						}
+						Promise.resolve(setValuePromise).then(() => {
+							if (control.$input) {
+								control.$input.val(value);
+							}
+						});
+						rowEl.attr("data-uom", value);
+						updateDialogComponent(idx, { uom: value });
+					}, 0);
 				});
 			}
 
@@ -613,61 +786,73 @@ frappe.ui.form.on("BOQ", {
 				const componentGridColumns = "112px minmax(180px,1fr) 72px 82px 92px 104px 54px";
 				const headerStyle =
 					"font-size:10px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.05em;text-align:center;";
-				const components = getPersistedComponents();
+				dialogComponents = dialogComponents.map((c) => normalizeComponent(c));
+				const components = dialogComponents;
 				const rowsHtml = components.map((c, idx) => buildComponentRow(c, idx)).join("");
 				const total = components.reduce((sum, c) => sum + (parseFloat(c.amount) || 0), 0);
 
 				wrapper.html(`
-        <div style="margin-bottom:10px;width:100%;">
-            <div style="
-                display:grid;
-                grid-template-columns:${componentGridColumns};
-                gap:10px;
-                align-items:center;
-                padding:0 10px 10px 10px;
-                margin-bottom:6px;
-            ">
-                <div style="${headerStyle}">TYPE</div>
-                <div style="${headerStyle}">DESCRIPTION</div>
-                <div style="${headerStyle}">QTY</div>
-                <div style="${headerStyle}">UOM</div>
-                <div style="${headerStyle}">RATE</div>
-                <div style="${headerStyle}">AMOUNT</div>
-                <div style="${headerStyle}">REMOVE</div>
-            </div>
+	        <style>
+	            .boq-cost-breakdown-wrapper .control-input {
+	                display: block !important;
+	                width: 100% !important;
+	            }
+	            .boq-cost-breakdown-wrapper .frappe-control {
+	                margin-bottom: 0 !important;
+	            }
+	        </style>
+	        <div class="boq-cost-breakdown-wrapper">
+	            <div style="margin-bottom:10px;width:100%;">
+	                <div style="
+	                    display:grid;
+	                    grid-template-columns:${componentGridColumns};
+	                    gap:10px;
+	                    align-items:center;
+	                    padding:0 10px 10px 10px;
+	                    margin-bottom:6px;
+	                ">
+	                    <div style="${headerStyle}">TYPE</div>
+	                    <div style="${headerStyle}">DESCRIPTION</div>
+	                    <div style="${headerStyle}">QTY</div>
+	                    <div style="${headerStyle}">UOM</div>
+	                    <div style="${headerStyle}">RATE</div>
+	                    <div style="${headerStyle}">AMOUNT</div>
+	                    <div style="${headerStyle}">REMOVE</div>
+	                </div>
 
-            <div id="comp-rows-body">
-                ${rowsHtml || '<div class="empty-components" style="text-align:center;color:var(--text-muted);font-size:13px;padding:28px 12px;border:1.5px dashed var(--border-color);border-radius:8px">No components yet. Click <b>+ Add Component</b> below to start.</div>'}
-            </div>
-        </div>
+	                <div id="comp-rows-body">
+	                    ${rowsHtml || '<div class="empty-components" style="text-align:center;color:var(--text-muted);font-size:13px;padding:28px 12px;border:1.5px dashed var(--border-color);border-radius:8px">No components yet. Click <b>+ Add Component</b> below to start.</div>'}
+	                </div>
+	            </div>
 
-        <div style="margin-top:12px;">
-            <button class="btn btn-sm btn-default" id="add-component-btn" ${isReadOnlyBreakdown ? "disabled" : ""}
-                style="${isReadOnlyBreakdown ? "cursor:not-allowed;opacity:.55;" : ""}">
-                <i class="fa fa-plus"></i>&nbsp; Add Component
-            </button>
-        </div>
+	            <div style="margin-top:12px;">
+	                <button class="btn btn-sm btn-default" id="add-component-btn" ${isReadOnlyBreakdown ? "disabled" : ""}
+	                    style="${isReadOnlyBreakdown ? "cursor:not-allowed;opacity:.55;" : ""}">
+	                    <i class="fa fa-plus"></i>&nbsp; Add Component
+	                </button>
+	            </div>
 
-        <div style="
-            margin-top:14px;
-            padding:10px 14px;
-            background:var(--control-bg, #f5f6f8);
-            border-radius:6px;
-            display:flex;
-            justify-content:space-between;
-            align-items:center;
-        ">
-            <span style="font-size:12px;color:var(--text-muted)">Total Unit Cost</span>
-            <span class="comp-total-value" style="font-size:16px;font-weight:600;color:var(--text-color)">
-                ${frappe.format(total, { fieldtype: "Currency" })}
-            </span>
-        </div>
-    `);
+	            <div style="
+	                margin-top:14px;
+	                padding:10px 14px;
+	                background:var(--control-bg, #f5f6f8);
+	                border-radius:6px;
+	                display:flex;
+	                justify-content:space-between;
+	                align-items:center;
+	            ">
+	                <span style="font-size:12px;color:var(--text-muted)">Total Unit Cost</span>
+	                <span class="comp-total-value" style="font-size:16px;font-weight:600;color:var(--text-color)">
+	                    ${frappe.format(total, { fieldtype: "Currency" })}
+	                </span>
+	            </div>
+	        </div>
+	    `);
+				setTimeout(() => bindComponentEvents(), 0);
 			}
 
 			d.show();
 			renderComponentsTable();
-			bindComponentEvents();
 		};
 
 		// ── Main grid render ──────────────────────────────────────────
@@ -792,6 +977,68 @@ frappe.ui.form.on("BOQ", {
 						return lines.join("\n");
 					}
 
+					const inlineNumberInputStyle =
+						"width:80px;max-width:90%;height:26px;text-align:center;font-size:11px;padding:2px 4px;box-sizing:border-box;border:2px solid var(--border-color);border-radius:4px;background:var(--input-bg,#fff);color:var(--text-color);margin-left:13px";
+
+					function getNumberValue(value) {
+						const parsed = parseFloat(value);
+						return isNaN(parsed) ? 0 : parsed;
+					}
+
+					function renderInlineNumber(row, className, value) {
+						return `
+    <input type="number"
+        class="form-control ${className}"
+        data-name="${row.name}"
+        value="${getNumberValue(value)}"
+        step="any"
+        inputmode="decimal"
+        style="${inlineNumberInputStyle}">`;
+					}
+
+					function renderQty(row) {
+						if (!isDraft) {
+							return fmt2(row.qty);
+						}
+
+						return renderInlineNumber(row, "boq-inline-qty", row.qty);
+					}
+
+					function renderUnitCost(row) {
+						if (!isDraft) {
+							return fmt2(row.unit_cost);
+						}
+
+						return renderInlineNumber(row, "boq-inline-unit-cost", row.unit_cost);
+					}
+
+					function renderMargin(row) {
+						if (!isDraft) {
+							return `${fmt2(row.margin_percent)}%`;
+						}
+
+						return renderInlineNumber(row, "boq-inline-margin", row.margin_percent);
+					}
+
+					function showInlineUpdateAlert() {
+						frappe.show_alert(
+							{
+								message: __("Changes updated. Click Save to keep changes."),
+								indicator: "blue",
+							},
+							5,
+						);
+					}
+
+					function recalculateInlineRow(row) {
+						const unitCost = parseFloat(row.unit_cost) || 0;
+						const margin = parseFloat(row.margin_percent) || 0;
+						const qty = parseFloat(row.qty) || 0;
+
+						row.unit_rate = unitCost * (1 + margin / 100);
+						row.amount = qty * row.unit_rate;
+					}
+
 					// ── Build HTML ──────────────────────────────────────────
 					let html = `<div style="border:1px solid var(--border-color);border-radius:var(--border-radius);overflow:hidden;font-family:var(--font-stack);font-size:12px">`;
 
@@ -909,7 +1156,7 @@ frappe.ui.form.on("BOQ", {
 </td>
 
 <td style="text-align:center;white-space:nowrap;">
-    ${fmt2(row.qty)}
+    ${renderQty(row)}
 </td>
 
 <td style="text-align:center;white-space:nowrap;">
@@ -931,7 +1178,7 @@ title="${buildCostTooltip(row).replace(/"/g, "&quot;")}">
         align-items:center;
         gap:6px;
     ">
-        ${fmt2(row.unit_cost)}
+        ${renderUnitCost(row)}
 
 	        ${
 				frm.boq_has_cost_breakdown(row)
@@ -950,7 +1197,7 @@ title="${buildCostTooltip(row).replace(/"/g, "&quot;")}">
     overflow:hidden;
     text-overflow:ellipsis;
 ">
-    ${fmt2(row.margin_percent)}%
+    ${renderMargin(row)}
 </td>
 
 <td style="
@@ -1070,6 +1317,69 @@ title="${buildCostTooltip(row).replace(/"/g, "&quot;")}">
 
 					container.html(html);
 
+					container
+						.find(".boq-inline-qty, .boq-inline-unit-cost, .boq-inline-margin")
+						.on("click", function (e) {
+							e.stopPropagation();
+						});
+
+					container.find(".boq-inline-qty").on("change", function (e) {
+						e.stopPropagation();
+						if (!frm.boq_is_draft()) return;
+
+						const rowName = $(this).data("name");
+						const row = (frm.doc.items || []).find((r) => r.name === rowName);
+						if (!row) return;
+
+						row.qty = getNumberValue($(this).val());
+						row.amount = row.qty * (parseFloat(row.unit_rate) || 0);
+
+						if (frm.dirty) {
+							frm.dirty();
+						}
+						frm.refresh_field("items");
+						frm.boq_render_grid();
+						showInlineUpdateAlert();
+					});
+
+					container.find(".boq-inline-unit-cost").on("change", function (e) {
+						e.stopPropagation();
+						if (!frm.boq_is_draft()) return;
+
+						const rowName = $(this).data("name");
+						const row = (frm.doc.items || []).find((r) => r.name === rowName);
+						if (!row) return;
+
+						row.unit_cost = getNumberValue($(this).val());
+						recalculateInlineRow(row);
+
+						if (frm.dirty) {
+							frm.dirty();
+						}
+						frm.refresh_field("items");
+						frm.boq_render_grid();
+						showInlineUpdateAlert();
+					});
+
+					container.find(".boq-inline-margin").on("change", function (e) {
+						e.stopPropagation();
+						if (!frm.boq_is_draft()) return;
+
+						const rowName = $(this).data("name");
+						const row = (frm.doc.items || []).find((r) => r.name === rowName);
+						if (!row) return;
+
+						row.margin_percent = getNumberValue($(this).val());
+						recalculateInlineRow(row);
+
+						if (frm.dirty) {
+							frm.dirty();
+						}
+						frm.refresh_field("items");
+						frm.boq_render_grid();
+						showInlineUpdateAlert();
+					});
+
 					// ── Toggle category ───────────────────────────────────
 					container.find(".boq-cat-hd").on("click", function () {
 						const pkey = $(this).data("pkey");
@@ -1086,50 +1396,50 @@ title="${buildCostTooltip(row).replace(/"/g, "&quot;")}">
 						frm.boq_render_grid();
 					});
 
-						// ── Delete row ────────────────────────────────────────
-						container.find(".boq-del-btn").on("click", function (e) {
-							if (!frm.boq_is_draft()) {
-								frappe.msgprint({
-									title: __("Amend Required"),
-									indicator: "orange",
-									message: __(
-										"Please cancel and amend this BOQ before removing items.",
-									),
-								});
-								return;
-							}
-
-							e.stopPropagation();
-							const name = $(this).data("name");
-							frappe.confirm("Remove this item?", () => {
-								const index = (frm.doc.items || []).findIndex((r) => r.name === name);
-								if (index > -1) {
-									const row = frm.doc.items[index];
-									frm.doc.items.splice(index, 1);
-
-									if (row) {
-										const otherComponents = (frm.doc.cost_components || [])
-											.filter((c) => !frm.boq_matches_item_component(c, row))
-											.map((c) => ({
-												boq_item: c.boq_item,
-												component_type: c.component_type,
-												description: c.description,
-												qty: parseFloat(c.qty) || 1,
-												uom: c.uom || "Nos",
-												amount: parseFloat(c.amount) || 0,
-											}));
-
-										frm.clear_table("cost_components");
-										otherComponents.forEach((c) =>
-											frm.add_child("cost_components", c),
-										);
-									}
-									frm.refresh_field("items");
-									frm.refresh_field("cost_components");
-									frm.boq_render_grid();
-								}
+					// ── Delete row ────────────────────────────────────────
+					container.find(".boq-del-btn").on("click", function (e) {
+						if (!frm.boq_is_draft()) {
+							frappe.msgprint({
+								title: __("Amend Required"),
+								indicator: "orange",
+								message: __(
+									"Please cancel and amend this BOQ before removing items.",
+								),
 							});
+							return;
+						}
+
+						e.stopPropagation();
+						const name = $(this).data("name");
+						frappe.confirm("Remove this item?", () => {
+							const index = (frm.doc.items || []).findIndex((r) => r.name === name);
+							if (index > -1) {
+								const row = frm.doc.items[index];
+								frm.doc.items.splice(index, 1);
+
+								if (row) {
+									const otherComponents = (frm.doc.cost_components || [])
+										.filter((c) => !frm.boq_matches_item_component(c, row))
+										.map((c) => ({
+											boq_item: c.boq_item,
+											component_type: c.component_type,
+											description: c.description,
+											qty: parseFloat(c.qty) || 1,
+											uom: c.uom || "Nos",
+											amount: parseFloat(c.amount) || 0,
+										}));
+
+									frm.clear_table("cost_components");
+									otherComponents.forEach((c) =>
+										frm.add_child("cost_components", c),
+									);
+								}
+								frm.refresh_field("items");
+								frm.refresh_field("cost_components");
+								frm.boq_render_grid();
+							}
 						});
+					});
 
 					// ── Cost breakdown (click on unit cost cell) ──────────
 					container.find(".boq-cost-breakdown-trigger").on("click", function (e) {
