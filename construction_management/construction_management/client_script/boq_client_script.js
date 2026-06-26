@@ -379,7 +379,12 @@ frappe.ui.form.on("BOQ", {
 						});
 					}
 
-					const totals = frm.boq_recalculate_item_row(itemRow, total);
+                    const oldAmount = parseFloat(itemRow.amount) || 0;
+
+                    const totals = frm.boq_recalculate_item_row(itemRow, total);
+                    
+                   
+                    
 					Promise.all([
 						frappe.model.set_value(
 							itemRow.doctype,
@@ -413,7 +418,9 @@ frappe.ui.form.on("BOQ", {
 						);
 
 						d.hide();
-						showAmountMismatchWarning(itemRow);
+
+						// 🔥 FIXED CALL
+						showAmountMismatchWarning(oldAmount, total);
 					});
 				},
 			});
@@ -467,16 +474,20 @@ frappe.ui.form.on("BOQ", {
 					.reduce((sum, component) => sum + (parseFloat(component.amount) || 0), 0);
 			}
 
-			function showAmountMismatchWarning(itemRow) {
-				const itemAmount = parseFloat(itemRow.amount) || 0;
-				const breakdownAmount = getItemBreakdownAmount(itemRow);
+			function showAmountMismatchWarning(oldItemAmount, breakdownAmount) {
+				const itemAmount = parseFloat(oldItemAmount) || 0;
 
-				if (Math.abs(itemAmount - breakdownAmount) > 0.01) {
+				const bdAmount = parseFloat(breakdownAmount) || 0;
+
+				if (Math.abs(itemAmount - bdAmount) > 0.01) {
 					frappe.msgprint({
-						title: __("Amount Mismatch Warning"),
-						message: __(
-							"Item amount and Cost Breakdown total do not match. Please review before saving.",
-						),
+						title: "Amount Mismatch Warning",
+						message:
+							"Previous Item Amount: " +
+							itemAmount +
+							"<br>New Breakdown Amount: " +
+							bdAmount +
+							"<br><br>Please review Cost Breakdown.",
 						indicator: "orange",
 					});
 				}
@@ -978,7 +989,7 @@ frappe.ui.form.on("BOQ", {
 					}
 
 					const inlineNumberInputStyle =
-						"width:80px;max-width:90%;height:26px;text-align:center;font-size:11px;padding:2px 4px;box-sizing:border-box;border:2px solid var(--border-color);border-radius:4px;background:var(--input-bg,#fff);color:var(--text-color);margin-left:13px";
+						"width:70px;max-width:90%;height:26px;text-align:center;font-size:11px;padding:2px 4px;box-sizing:border-box;border:2px solid var(--border-color);border-radius:4px;background:var(--input-bg,#fff);color:var(--text-color);margin-left:13px";
 
 					function getNumberValue(value) {
 						const parsed = parseFloat(value);
