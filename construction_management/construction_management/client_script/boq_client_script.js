@@ -1020,7 +1020,7 @@ frappe.ui.form.on("BOQ", {
 							return fmt2(row.unit_cost);
 						}
 
-						return renderInlineNumber(row, "boq-inline-unit-cost", row.unit_cost);
+						return renderInlineNumber(row, "boq-unit-cost", row.unit_cost);
 					}
 
 					function renderMargin(row) {
@@ -1329,7 +1329,7 @@ title="${buildCostTooltip(row).replace(/"/g, "&quot;")}">
 					container.html(html);
 
 					container
-						.find(".boq-inline-qty, .boq-inline-unit-cost, .boq-inline-margin")
+						.find(".boq-inline-qty, .boq-unit-cost, .boq-inline-margin")
 						.on("click", function (e) {
 							e.stopPropagation();
 						});
@@ -1353,7 +1353,7 @@ title="${buildCostTooltip(row).replace(/"/g, "&quot;")}">
 						showInlineUpdateAlert();
 					});
 
-					container.find(".boq-inline-unit-cost").on("change", function (e) {
+					container.find(".boq-unit-cost").on("change", function (e) {
 						e.stopPropagation();
 						if (!frm.boq_is_draft()) return;
 
