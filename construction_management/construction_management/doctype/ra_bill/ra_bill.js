@@ -335,7 +335,7 @@ frappe.ui.form.on("RA Bill", {
 			row.item_name = null;
 			row.boq_qty = 0;
 			row.boq_rate = 0;
-			row.uom = null;
+			row.uom = "Nos";
 			row.current_amount = 0;
 		};
 
@@ -410,8 +410,11 @@ frappe.ui.form.on("RA Bill", {
 			return control;
 		};
 
-		frm.ra_bill_apply_boq_item = function (row, boqItemName) {
+		frm.ra_bill_apply_boq_item = async function (row, boqItemName) {
 			if (!boqItemName) return Promise.resolve();
+
+			console.log("Selected BOQ Item:", boqItemName);
+			console.log("Current RA row before fetch:", row);
 
 			if (
 				boqItemName === row.boq_item &&
@@ -429,47 +432,50 @@ frappe.ui.form.on("RA Bill", {
 			);
 			const selectedBoqItemName = cachedBoqItem ? cachedBoqItem.name : boqItemName;
 
-			return frappe.db
-				.get_value("BOQ Item", selectedBoqItemName, [
-					"name",
-					"item_name",
-					"item",
-					"qty",
-					"unit_rate",
-					"uom",
-					"boq_category",
-				])
-				.then((r) => {
-					const boqItem = {
-						...(cachedBoqItem || {}),
-						...((r && r.message) || {}),
-					};
+			const doc = await frappe.db.get_doc("BOQ Item", selectedBoqItemName);
+			console.log("Fetched BOQ Item doc:", doc);
+			console.log("RA Bill fetched BOQ Item:", doc);
 
-					if (!boqItem.name && !cachedBoqItem) return;
+			const boqItem = {
+				...(cachedBoqItem || {}),
+				...(doc || {}),
+			};
 
-					boqItemLabels[selectedBoqItemName] =
-						boqItem.item_name || boqItem.item || selectedBoqItemName;
+			if (!boqItem.name && !cachedBoqItem) return;
 
-					const existingState = frm.ra_bill_get_row_category_state(row);
-					frm._ra_bill_row_state[row.name] = {
-						category:
-							existingState.category ||
-							(frm._ra_bill_category_map[boqItem.boq_category] || {}).parent_node ||
-							null,
-						subcategory: existingState.subcategory || boqItem.boq_category,
-					};
+			boqItemLabels[selectedBoqItemName] =
+				boqItem.item_name || boqItem.item || boqItem.description || selectedBoqItemName;
 
-					row.boq_item = selectedBoqItemName;
-					row.item_name = boqItem.item_name || boqItem.item;
-					row.boq_qty = frm.ra_bill_get_number(boqItem.qty);
-					row.boq_rate = frm.ra_bill_get_number(boqItem.unit_rate);
-					row.uom = boqItem.uom || "Nos";
-					frm.ra_bill_recalculate_row(row, workPercent);
-					frm.ra_bill_set_dirty();
-					frm.refresh_field("items");
-					frm.trigger("recalculate_totals");
-					frm.ra_bill_schedule_render();
-				});
+			const existingState = frm.ra_bill_get_row_category_state(row);
+			frm._ra_bill_row_state[row.name] = {
+				category:
+					existingState.category ||
+					(frm._ra_bill_category_map[boqItem.boq_category] || {}).parent_node ||
+					null,
+				subcategory: existingState.subcategory || boqItem.boq_category,
+			};
+
+			row.boq_item = selectedBoqItemName;
+			row.item_name = boqItem.item_name || boqItem.item || boqItem.description || selectedBoqItemName;
+			row.boq_qty = frm.ra_bill_get_number(boqItem.qty || boqItem.quantity || 0);
+			row.boq_rate = frm.ra_bill_get_number(
+				boqItem.unit_rate || boqItem.rate || boqItem.unit_cost || 0,
+			);
+			row.uom = boqItem.uom || boqItem.stock_uom || "Nos";
+
+			row.current_qty = (row.boq_qty * workPercent) / 100;
+			row.current_amount = row.current_qty * row.boq_rate;
+			row.completion_pct = workPercent;
+
+			frm.ra_bill_set_dirty();
+			frm.refresh_field("items");
+			frm.trigger("recalculate_totals");
+
+			if (frm.ra_bill_schedule_render) {
+				frm.ra_bill_schedule_render();
+			} else {
+				frm.ra_bill_render_items_grid();
+			}
 		};
 
 		frm.ra_bill_render_items_grid = function () {
@@ -869,6 +875,7 @@ frappe.ui.form.on("RA Bill", {
 						current_qty: 0,
 						current_amount: 0,
 						completion_pct: 0,
+						uom: "Nos",
 					});
 					frm._ra_bill_row_state[row.name] = {
 						category: null,
