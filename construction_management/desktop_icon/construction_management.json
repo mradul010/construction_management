@@ -1,0 +1,22 @@
+{
+ "app": "construction_management",
+ "creation": "2026-06-27 00:00:00.000000",
+ "docstatus": 0,
+ "doctype": "Desktop Icon",
+ "hidden": 0,
+ "icon": "project",
+ "icon_type": "Link",
+ "idx": 11,
+ "label": "Construction Management",
+ "link_to": "Construction Management",
+ "link_type": "Workspace Sidebar",
+ "logo_url": "/assets/construction_management/techsolvo_logo.jpeg",
+ "modified": "2026-06-27 18:59:42.636089",
+ "modified_by": "Administrator",
+ "name": "Construction Management",
+ "owner": "Administrator",
+ "parent_icon": "",
+ "restrict_removal": 0,
+ "roles": [],
+ "standard": 1
+}

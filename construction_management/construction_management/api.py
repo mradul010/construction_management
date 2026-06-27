@@ -101,3 +101,6 @@ def boq_item_search(doctype, txt, searchfield, start, page_len, filters, **kwarg
 			"page_len": page_len,
 		},
 	)
+ 
+ 
+ 
