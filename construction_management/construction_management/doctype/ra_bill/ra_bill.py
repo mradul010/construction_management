@@ -179,3 +179,149 @@ class RABill(Document):
 			indicator="green",
 		)
 		return si.name
+
+
+@frappe.whitelist()
+@frappe.validate_and_sanitize_search_inputs
+def search_ra_bill_categories(doctype, txt, searchfield, start, page_len, filters, **kwargs):
+	if isinstance(filters, str):
+		filters = frappe.parse_json(filters)
+	filters = filters or {}
+	boq = filters.get("boq")
+
+	if not boq:
+		return []
+
+	txt = txt or ""
+	like_txt = f"%{txt}%"
+	prefix_txt = f"{txt}%"
+
+	return frappe.db.sql(
+		"""
+		SELECT DISTINCT parent_cat.name, parent_cat.category_name
+		FROM `tabBOQ Item` item
+		JOIN `tabBOQ Category` sub_cat ON sub_cat.name = item.boq_category
+		JOIN `tabBOQ Category` parent_cat
+		  ON parent_cat.name = COALESCE(NULLIF(sub_cat.parent_node, ''), sub_cat.name)
+		WHERE item.parent = %(boq)s
+		  AND item.parenttype = 'BOQ'
+		  AND item.parentfield = 'items'
+		  AND (%(txt)s = ''
+		    OR parent_cat.category_name LIKE %(like_txt)s
+		    OR parent_cat.name LIKE %(like_txt)s)
+		ORDER BY
+		  CASE
+		    WHEN parent_cat.category_name LIKE %(prefix_txt)s THEN 0
+		    WHEN parent_cat.category_name LIKE %(like_txt)s THEN 1
+		    WHEN parent_cat.name LIKE %(prefix_txt)s THEN 2
+		    ELSE 3
+		  END,
+		  parent_cat.category_name ASC
+		LIMIT %(start)s, %(page_len)s
+		""",
+		{
+			"boq": boq,
+			"txt": txt,
+			"like_txt": like_txt,
+			"prefix_txt": prefix_txt,
+			"start": start,
+			"page_len": page_len,
+		},
+	)
+
+
+@frappe.whitelist()
+@frappe.validate_and_sanitize_search_inputs
+def search_ra_bill_subcategories(doctype, txt, searchfield, start, page_len, filters, **kwargs):
+	if isinstance(filters, str):
+		filters = frappe.parse_json(filters)
+	filters = filters or {}
+	boq = filters.get("boq")
+	category = filters.get("category")
+
+	if not boq or not category:
+		return []
+
+	txt = txt or ""
+	like_txt = f"%{txt}%"
+	prefix_txt = f"{txt}%"
+
+	return frappe.db.sql(
+		"""
+		SELECT DISTINCT sub_cat.name, sub_cat.category_name
+		FROM `tabBOQ Item` item
+		JOIN `tabBOQ Category` sub_cat ON sub_cat.name = item.boq_category
+		WHERE item.parent = %(boq)s
+		  AND item.parenttype = 'BOQ'
+		  AND item.parentfield = 'items'
+		  AND (sub_cat.parent_node = %(category)s OR sub_cat.name = %(category)s)
+		  AND (%(txt)s = ''
+		    OR sub_cat.category_name LIKE %(like_txt)s
+		    OR sub_cat.name LIKE %(like_txt)s)
+		ORDER BY
+		  CASE
+		    WHEN sub_cat.category_name LIKE %(prefix_txt)s THEN 0
+		    WHEN sub_cat.category_name LIKE %(like_txt)s THEN 1
+		    WHEN sub_cat.name LIKE %(prefix_txt)s THEN 2
+		    ELSE 3
+		  END,
+		  sub_cat.category_name ASC
+		LIMIT %(start)s, %(page_len)s
+		""",
+		{
+			"boq": boq,
+			"category": category,
+			"txt": txt,
+			"like_txt": like_txt,
+			"prefix_txt": prefix_txt,
+			"start": start,
+			"page_len": page_len,
+		},
+	)
+
+
+@frappe.whitelist()
+@frappe.validate_and_sanitize_search_inputs
+def search_boq_items_for_ra_bill(doctype, txt, searchfield, start, page_len, filters, **kwargs):
+	if isinstance(filters, str):
+		filters = frappe.parse_json(filters)
+	filters = filters or {}
+	boq = filters.get("boq")
+	subcategory = filters.get("subcategory")
+
+	if not boq or not subcategory:
+		return []
+
+	txt = txt or ""
+	like_txt = f"%{txt}%"
+	prefix_txt = f"{txt}%"
+
+	return frappe.db.sql(
+		"""
+		SELECT name, item_name, qty, unit_rate, uom
+		FROM `tabBOQ Item`
+		WHERE parent = %(boq)s
+		  AND parenttype = 'BOQ'
+		  AND parentfield = 'items'
+		  AND boq_category = %(subcategory)s
+		  AND (%(txt)s = '' OR item_name LIKE %(like_txt)s OR name LIKE %(like_txt)s)
+		ORDER BY
+		  CASE
+		    WHEN item_name LIKE %(prefix_txt)s THEN 0
+		    WHEN item_name LIKE %(like_txt)s THEN 1
+		    WHEN name LIKE %(prefix_txt)s THEN 2
+		    ELSE 3
+		  END,
+		  item_name ASC
+		LIMIT %(start)s, %(page_len)s
+		""",
+		{
+			"boq": boq,
+			"subcategory": subcategory,
+			"txt": txt,
+			"like_txt": like_txt,
+			"prefix_txt": prefix_txt,
+			"start": start,
+			"page_len": page_len,
+		},
+	)

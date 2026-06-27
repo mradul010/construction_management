@@ -26,6 +26,17 @@ if (frappe.ui.form.ControlLink && !frappe.ui.form.ControlLink.prototype.boq_item
 			if (!d.label) {
 				d.label = d.value;
 			}
+			const readableLabel = d.label || d.description;
+			if (control.get_options() === "BOQ Item" && readableLabel && readableLabel !== d.value) {
+				boqItemLabels[d.value] = readableLabel;
+			}
+			if (
+				control.get_options() === "BOQ Category" &&
+				readableLabel &&
+				readableLabel !== d.value
+			) {
+				boqCategoryLabels[d.value] = readableLabel;
+			}
 			if (control.get_options() === "BOQ Item" && boqItemLabels[d.value]) {
 				d.label = boqItemLabels[d.value];
 				d.html = `<strong>${frappe.utils.escape_html(d.label)}</strong>`;
@@ -72,9 +83,15 @@ function setBoqItemDetails(frm, cdt, cdn, options = {}) {
 
 			boqItemLabels[row.boq_item] = r.message.item_name || row.boq_item;
 			frm._ra_bill_row_state = frm._ra_bill_row_state || {};
+			const existingState = frm._ra_bill_row_state[row.name] || {};
+			const subcategoryDoc =
+				frm._ra_bill_category_map && frm._ra_bill_category_map[r.message.boq_category];
 			frm._ra_bill_row_state[row.name] = {
-				category: null,
-				subcategory: r.message.boq_category,
+				category:
+					existingState.category ||
+					(subcategoryDoc && subcategoryDoc.parent_node) ||
+					null,
+				subcategory: existingState.subcategory || r.message.boq_category,
 			};
 
 			frappe.model.set_value(cdt, cdn, "item_name", r.message.item_name);
@@ -175,6 +192,12 @@ frappe.ui.form.on("RA Bill", {
 				frm.dirty();
 			}
 		};
+
+		frm.ra_bill_schedule_render = frappe.utils.debounce(function () {
+			if (frm.ra_bill_render_items_grid) {
+				frm.ra_bill_render_items_grid();
+			}
+		}, 100);
 
 		frm.ra_bill_load_boq_context = function () {
 			if (!frm.doc.boq) {
@@ -283,7 +306,7 @@ frappe.ui.form.on("RA Bill", {
 			frm._ra_bill_row_state = frm._ra_bill_row_state || {};
 			const state = frm._ra_bill_row_state[row.name] || {};
 
-			if (row.boq_item) {
+			if (row.boq_item && !state.subcategory) {
 				const boqItem = (frm._ra_bill_boq_items || []).find(
 					(item) => item.name === row.boq_item,
 				);
@@ -307,6 +330,15 @@ frappe.ui.form.on("RA Bill", {
 			return frm._ra_bill_row_state[row.name];
 		};
 
+		frm.ra_bill_clear_item_fields = function (row) {
+			row.boq_item = null;
+			row.item_name = null;
+			row.boq_qty = 0;
+			row.boq_rate = 0;
+			row.uom = null;
+			row.current_amount = 0;
+		};
+
 		frm.ra_bill_get_subcategories_for_category = function (category) {
 			return (frm._ra_bill_subcategory_names || []).filter((name) => {
 				const subcategory = frm._ra_bill_category_map[name];
@@ -321,8 +353,21 @@ frappe.ui.form.on("RA Bill", {
 			);
 		};
 
+		frm.ra_bill_get_link_label = function (options, value) {
+			if (!value) return "";
+			if (options === "BOQ Item") {
+				return boqItemLabels[value] || value;
+			}
+			if (options === "BOQ Category") {
+				return boqCategoryLabels[value] || value;
+			}
+			return value;
+		};
+
 		frm.ra_bill_make_link_control = function (parent, fieldname, options, value, getQuery, onChange) {
-			let isInitializing = true;
+			const initialValue = value || "";
+			let previousValue = initialValue;
+			let suppressChange = true;
 			const control = frappe.ui.form.make_control({
 				parent: parent.get ? parent.get(0) : parent,
 				df: {
@@ -332,8 +377,19 @@ frappe.ui.form.on("RA Bill", {
 					placeholder: __("Select"),
 					get_query: getQuery,
 					onchange: function () {
-						if (isInitializing) return;
-						onChange(control.get_value());
+						if (frm._ra_bill_rendering_grid || suppressChange) return;
+
+						const newValue = control.get_value() || "";
+						if (newValue === previousValue) return;
+
+						previousValue = newValue;
+						const result = onChange(newValue, initialValue, control);
+						Promise.resolve(result).then(() => {
+							const label = frm.ra_bill_get_link_label(options, newValue);
+							if (label && control.set_input) {
+								control.set_input(label);
+							}
+						});
 					},
 				},
 				render_input: true,
@@ -342,38 +398,85 @@ frappe.ui.form.on("RA Bill", {
 
 			control.get_query = getQuery;
 			control.refresh();
-			control.set_value(value || "");
-			setTimeout(() => {
-				isInitializing = false;
-			}, 0);
+			Promise.resolve(control.set_value(initialValue)).then(() => {
+				const label = frm.ra_bill_get_link_label(options, initialValue);
+				if (label && control.set_input) {
+					control.set_input(label);
+				}
+				setTimeout(() => {
+					suppressChange = false;
+				}, 0);
+			});
 			return control;
 		};
 
 		frm.ra_bill_apply_boq_item = function (row, boqItemName) {
-			const boqItem = (frm._ra_bill_boq_items || []).find((item) => item.name === boqItemName);
+			if (!boqItemName) return Promise.resolve();
 
-			if (!boqItem) return;
+			if (
+				boqItemName === row.boq_item &&
+				row.item_name &&
+				frm.ra_bill_get_number(row.boq_qty) &&
+				frm.ra_bill_get_number(row.boq_rate)
+			) {
+				return Promise.resolve();
+			}
 
-			frm._ra_bill_row_state[row.name] = {
-				category:
-					(frm._ra_bill_category_map[boqItem.boq_category] || {}).parent_node || null,
-				subcategory: boqItem.boq_category,
-			};
+			const workPercent =
+				frm.ra_bill_get_row_completion(row) || frm.ra_bill_get_number(row.completion_pct);
+			const cachedBoqItem = (frm._ra_bill_boq_items || []).find(
+				(item) => item.name === boqItemName || item.item_name === boqItemName,
+			);
+			const selectedBoqItemName = cachedBoqItem ? cachedBoqItem.name : boqItemName;
 
-			row.boq_item = boqItem.name;
-			row.item_name = boqItem.item_name || boqItem.item;
-			row.boq_qty = boqItem.qty;
-			row.boq_rate = boqItem.unit_rate;
-			row.uom = boqItem.uom;
-			frm.ra_bill_recalculate_row(row, frm.ra_bill_get_row_completion(row));
-			frm.ra_bill_set_dirty();
-			frm.refresh_field("items");
-			frm.trigger("recalculate_totals");
-			frm.ra_bill_render_items_grid();
+			return frappe.db
+				.get_value("BOQ Item", selectedBoqItemName, [
+					"name",
+					"item_name",
+					"item",
+					"qty",
+					"unit_rate",
+					"uom",
+					"boq_category",
+				])
+				.then((r) => {
+					const boqItem = {
+						...(cachedBoqItem || {}),
+						...((r && r.message) || {}),
+					};
+
+					if (!boqItem.name && !cachedBoqItem) return;
+
+					boqItemLabels[selectedBoqItemName] =
+						boqItem.item_name || boqItem.item || selectedBoqItemName;
+
+					const existingState = frm.ra_bill_get_row_category_state(row);
+					frm._ra_bill_row_state[row.name] = {
+						category:
+							existingState.category ||
+							(frm._ra_bill_category_map[boqItem.boq_category] || {}).parent_node ||
+							null,
+						subcategory: existingState.subcategory || boqItem.boq_category,
+					};
+
+					row.boq_item = selectedBoqItemName;
+					row.item_name = boqItem.item_name || boqItem.item;
+					row.boq_qty = frm.ra_bill_get_number(boqItem.qty);
+					row.boq_rate = frm.ra_bill_get_number(boqItem.unit_rate);
+					row.uom = boqItem.uom || "Nos";
+					frm.ra_bill_recalculate_row(row, workPercent);
+					frm.ra_bill_set_dirty();
+					frm.refresh_field("items");
+					frm.trigger("recalculate_totals");
+					frm.ra_bill_schedule_render();
+				});
 		};
 
 		frm.ra_bill_render_items_grid = function () {
 			if (!frm.fields_dict.items || !frm.fields_dict.items.$wrapper) return;
+			if (frm._ra_bill_rendering_grid) return;
+
+			frm._ra_bill_rendering_grid = true;
 
 			frm.fields_dict.items.$wrapper.hide();
 
@@ -398,6 +501,7 @@ frappe.ui.form.on("RA Bill", {
 						Select a BOQ to add billed items.
 					</div>
 				`);
+				frm._ra_bill_rendering_grid = false;
 				return;
 			}
 
@@ -446,7 +550,7 @@ frappe.ui.form.on("RA Bill", {
 						#ra-bill-custom-items-grid td {
 							height: 48px;
 							padding: 7px 4px;
-							overflow: hidden;
+							overflow: visible;
 							text-overflow: ellipsis;
 							font-size: 12px;
 							font-weight: 500;
@@ -490,7 +594,8 @@ frappe.ui.form.on("RA Bill", {
 							text-align: center;
 						}
 						#ra-bill-custom-items-grid .awesomplete > ul {
-							z-index: 1060;
+							z-index: 9999;
+							position: absolute;
 							text-align: left;
 							white-space: normal;
 						}
@@ -622,6 +727,9 @@ frappe.ui.form.on("RA Bill", {
 				container.html(html);
 
 				rows.forEach((row) => {
+					if (row.boq_item && row.item_name) {
+						boqItemLabels[row.boq_item] = row.item_name;
+					}
 					const state = frm.ra_bill_get_row_category_state(row);
 					const categoryCell = container.find(`.ra-category-cell[data-row-name="${row.name}"]`);
 					const subcategoryCell = container.find(`.ra-subcategory-cell[data-row-name="${row.name}"]`);
@@ -641,7 +749,11 @@ frappe.ui.form.on("RA Bill", {
 						state.category,
 						function () {
 							return {
-								filters: [["BOQ Category", "name", "in", frm._ra_bill_parent_category_names || ["__none__"]]],
+								query:
+									"construction_management.construction_management.doctype.ra_bill.ra_bill.search_ra_bill_categories",
+								filters: {
+									boq: frm.doc.boq,
+								},
 							};
 						},
 						function (value) {
@@ -649,16 +761,12 @@ frappe.ui.form.on("RA Bill", {
 								category: value,
 								subcategory: null,
 							};
-							row.boq_item = null;
-							row.item_name = null;
-							row.boq_qty = 0;
-							row.boq_rate = 0;
-							row.uom = null;
+							frm.ra_bill_clear_item_fields(row);
 							frm.ra_bill_recalculate_row(row, 0);
 							frm.ra_bill_set_dirty();
 							frm.refresh_field("items");
 							frm.trigger("recalculate_totals");
-							frm.ra_bill_render_items_grid();
+							frm.ra_bill_schedule_render();
 						},
 					);
 
@@ -672,7 +780,13 @@ frappe.ui.form.on("RA Bill", {
 								? frm.ra_bill_get_subcategories_for_category(state.category)
 								: frm._ra_bill_subcategory_names || [];
 							return {
-								filters: [["BOQ Category", "name", "in", subcategories.length ? subcategories : ["__none__"]]],
+								query:
+									"construction_management.construction_management.doctype.ra_bill.ra_bill.search_ra_bill_subcategories",
+								filters: {
+									boq: frm.doc.boq,
+									category: state.category || "__none__",
+									allowed_subcategories: subcategories,
+								},
 							};
 						},
 						function (value) {
@@ -681,16 +795,12 @@ frappe.ui.form.on("RA Bill", {
 								category: subcategoryDoc.parent_node || state.category || value,
 								subcategory: value,
 							};
-							row.boq_item = null;
-							row.item_name = null;
-							row.boq_qty = 0;
-							row.boq_rate = 0;
-							row.uom = null;
+							frm.ra_bill_clear_item_fields(row);
 							frm.ra_bill_recalculate_row(row, 0);
 							frm.ra_bill_set_dirty();
 							frm.refresh_field("items");
 							frm.trigger("recalculate_totals");
-							frm.ra_bill_render_items_grid();
+							frm.ra_bill_schedule_render();
 						},
 					);
 
@@ -703,29 +813,37 @@ frappe.ui.form.on("RA Bill", {
 							const subcategory =
 								(frm._ra_bill_row_state[row.name] || {}).subcategory || state.subcategory;
 							return {
-								filters: [
-									["BOQ Item", "parent", "=", frm.doc.boq],
-									["BOQ Item", "parenttype", "=", "BOQ"],
-									["BOQ Item", "parentfield", "=", "items"],
-									["BOQ Item", "boq_category", "=", subcategory || "__none__"],
-								],
+								query:
+									"construction_management.construction_management.doctype.ra_bill.ra_bill.search_boq_items_for_ra_bill",
+								filters: {
+									boq: frm.doc.boq,
+									category:
+										(frm._ra_bill_row_state[row.name] || {}).category ||
+										state.category,
+									subcategory: subcategory || "__none__",
+								},
 							};
 						},
 						function (value) {
+							if (
+								value === row.boq_item &&
+								row.item_name &&
+								frm.ra_bill_get_number(row.boq_qty) &&
+								frm.ra_bill_get_number(row.boq_rate)
+							) {
+								return Promise.resolve();
+							}
+
 							if (!value) {
-								row.boq_item = null;
-								row.item_name = null;
-								row.boq_qty = 0;
-								row.boq_rate = 0;
-								row.uom = null;
+								frm.ra_bill_clear_item_fields(row);
 								frm.ra_bill_recalculate_row(row, 0);
 								frm.ra_bill_set_dirty();
 								frm.refresh_field("items");
 								frm.trigger("recalculate_totals");
-								frm.ra_bill_render_items_grid();
+								frm.ra_bill_schedule_render();
 								return;
 							}
-							frm.ra_bill_apply_boq_item(row, value);
+							return frm.ra_bill_apply_boq_item(row, value);
 						},
 					);
 				});
@@ -741,7 +859,7 @@ frappe.ui.form.on("RA Bill", {
 					frm.ra_bill_set_dirty();
 					frm.refresh_field("items");
 					frm.trigger("recalculate_totals");
-					frm.ra_bill_render_items_grid();
+					frm.ra_bill_schedule_render();
 				});
 
 				container.find(".ra-add-row").on("click", function () {
@@ -756,10 +874,10 @@ frappe.ui.form.on("RA Bill", {
 						category: null,
 						subcategory: null,
 					};
-					frm.ra_bill_set_dirty();
-					frm.refresh_field("items");
-					frm.ra_bill_render_items_grid();
-				});
+						frm.ra_bill_set_dirty();
+						frm.refresh_field("items");
+						frm.ra_bill_render_items_grid();
+					});
 
 				container.find(".ra-row-delete").on("click", function () {
 					if (!frm.ra_bill_is_editable()) return;
@@ -773,7 +891,7 @@ frappe.ui.form.on("RA Bill", {
 					frm.ra_bill_set_dirty();
 					frm.refresh_field("items");
 					frm.trigger("recalculate_totals");
-					frm.ra_bill_render_items_grid();
+					frm.ra_bill_schedule_render();
 				});
 
 				container.find(".ra-row-edit").on("click", function () {
@@ -785,6 +903,10 @@ frappe.ui.form.on("RA Bill", {
 						gridRow.toggle_view(true);
 					}
 				});
+
+				setTimeout(() => {
+					frm._ra_bill_rendering_grid = false;
+				}, 0);
 			});
 		};
 	},
@@ -890,7 +1012,11 @@ frappe.ui.form.on("RA Bill", {
 		frappe.model.set_value(frm.doctype, frm.docname, "gross_amount", gross);
 		frappe.model.set_value(frm.doctype, frm.docname, "retention_amount", retention);
 		frappe.model.set_value(frm.doctype, frm.docname, "net_payable", gross - retention);
-		frm.ra_bill_render_items_grid();
+		if (frm.ra_bill_schedule_render) {
+			frm.ra_bill_schedule_render();
+		} else {
+			frm.ra_bill_render_items_grid();
+		}
 	},
 });
 
