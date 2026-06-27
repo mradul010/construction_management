@@ -356,7 +356,10 @@ frappe.ui.form.on("RA Bill", {
 		frm.ra_bill_get_link_label = function (options, value) {
 			if (!value) return "";
 			if (options === "BOQ Item") {
-				return boqItemLabels[value] || value;
+				const boqItem = (frm._ra_bill_boq_items || []).find(
+					(item) => item.name === value || item.item_name === value,
+				);
+				return boqItemLabels[value] || (boqItem && boqItem.item_name) || value;
 			}
 			if (options === "BOQ Category") {
 				return boqCategoryLabels[value] || value;
@@ -364,7 +367,15 @@ frappe.ui.form.on("RA Bill", {
 			return value;
 		};
 
-		frm.ra_bill_make_link_control = function (parent, fieldname, options, value, getQuery, onChange) {
+		frm.ra_bill_make_link_control = function (
+			parent,
+			fieldname,
+			options,
+			value,
+			getQuery,
+			onChange,
+			displayLabel,
+		) {
 			const initialValue = value || "";
 			let previousValue = initialValue;
 			let suppressChange = true;
@@ -398,15 +409,23 @@ frappe.ui.form.on("RA Bill", {
 
 			control.get_query = getQuery;
 			control.refresh();
-			Promise.resolve(control.set_value(initialValue)).then(() => {
-				const label = frm.ra_bill_get_link_label(options, initialValue);
-				if (label && control.set_input) {
-					control.set_input(label);
-				}
-				setTimeout(() => {
-					suppressChange = false;
-				}, 0);
-			});
+
+			const label = displayLabel || frm.ra_bill_get_link_label(options, initialValue);
+			control.value = initialValue;
+			control.last_value = initialValue;
+			control.title_value_map = control.title_value_map || {};
+
+			if (initialValue && label) {
+				control.title_value_map[label] = initialValue;
+				frappe.utils.add_link_title(options, initialValue, label);
+				control.set_input(label);
+			} else {
+				control.set_input("");
+			}
+
+			setTimeout(() => {
+				suppressChange = false;
+			}, 0);
 			return control;
 		};
 
@@ -810,48 +829,67 @@ frappe.ui.form.on("RA Bill", {
 						},
 					);
 
-					frm.ra_bill_make_link_control(
-						itemCell,
-						`ra_item_${row.name}`,
-						"BOQ Item",
-						row.boq_item,
-						function () {
-							const subcategory =
-								(frm._ra_bill_row_state[row.name] || {}).subcategory || state.subcategory;
-							return {
-								query:
-									"construction_management.construction_management.doctype.ra_bill.ra_bill.search_boq_items_for_ra_bill",
-								filters: {
-									boq: frm.doc.boq,
-									category:
-										(frm._ra_bill_row_state[row.name] || {}).category ||
-										state.category,
-									subcategory: subcategory || "__none__",
-								},
-							};
-						},
-						function (value) {
-							if (
-								value === row.boq_item &&
-								row.item_name &&
-								frm.ra_bill_get_number(row.boq_qty) &&
-								frm.ra_bill_get_number(row.boq_rate)
-							) {
-								return Promise.resolve();
-							}
+					const makeItemControl = () =>
+						frm.ra_bill_make_link_control(
+							itemCell,
+							`ra_item_${row.name}`,
+							"BOQ Item",
+							row.boq_item,
+							function () {
+								const subcategory =
+									(frm._ra_bill_row_state[row.name] || {}).subcategory || state.subcategory;
+								return {
+									query:
+										"construction_management.construction_management.doctype.ra_bill.ra_bill.search_boq_items_for_ra_bill",
+									filters: {
+										boq: frm.doc.boq,
+										category:
+											(frm._ra_bill_row_state[row.name] || {}).category ||
+											state.category,
+										subcategory: subcategory || "__none__",
+									},
+								};
+							},
+							function (value) {
+								if (
+									value === row.boq_item &&
+									row.item_name &&
+									frm.ra_bill_get_number(row.boq_qty) &&
+									frm.ra_bill_get_number(row.boq_rate)
+								) {
+									return Promise.resolve();
+								}
 
-							if (!value) {
-								frm.ra_bill_clear_item_fields(row);
-								frm.ra_bill_recalculate_row(row, 0);
-								frm.ra_bill_set_dirty();
-								frm.refresh_field("items");
-								frm.trigger("recalculate_totals");
-								frm.ra_bill_schedule_render();
-								return;
-							}
-							return frm.ra_bill_apply_boq_item(row, value);
-						},
-					);
+								if (!value) {
+									frm.ra_bill_clear_item_fields(row);
+									frm.ra_bill_recalculate_row(row, 0);
+									frm.ra_bill_set_dirty();
+									frm.refresh_field("items");
+									frm.trigger("recalculate_totals");
+									frm.ra_bill_schedule_render();
+									return;
+								}
+								return frm.ra_bill_apply_boq_item(row, value);
+							},
+							row.item_name,
+						);
+
+					if (row.boq_item && row.item_name) {
+						itemCell.html(`
+							<div class="ra-item-display"
+								data-row-name="${row.name}"
+								title="${frappe.utils.escape_html(row.item_name)}"
+								style="width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer">
+								${frappe.utils.escape_html(row.item_name)}
+							</div>
+						`);
+						itemCell.find(".ra-item-display").on("click", function () {
+							itemCell.empty();
+							makeItemControl();
+						});
+					} else {
+						makeItemControl();
+					}
 				});
 
 				container.find(".ra-work-complete").on("change", function () {
