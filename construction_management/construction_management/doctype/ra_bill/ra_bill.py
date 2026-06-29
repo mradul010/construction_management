@@ -1,5 +1,6 @@
 import frappe
 from frappe.model.document import Document
+from frappe.utils import flt
 
 
 class RABill(Document):
@@ -149,10 +150,10 @@ class RABill(Document):
 	def create_sales_invoice(self):
 		"""
 		Creates a draft Sales Invoice from this approved RA Bill.
-		2 lines:
-		  1. RA Bill Services     -> gross_amount (positive)
-		  2. Retention Deduction  -> -retention_amount (negative)
-		Net total = net_payable
+		Detailed lines:
+		  1. One line per RA Bill Item current_amount (positive)
+		  2. Retention Deduction -> -retention_amount (negative)
+		Net total = net_payable.
 		Status set to Invoiced after creation.
 		"""
 		if self.status != "Approved":
@@ -200,26 +201,78 @@ class RABill(Document):
 				f"{frappe.format(self.billing_period_to, {'fieldtype': 'Date'})}"
 			)
 
-		main_description = (
-			f"RA Bill #{self.bill_no}\n"
-			f"Project: {self.project}\n"
-			f"BOQ: {self.boq}\n"
-		)
-		if period_str:
-			main_description += f"Billing Period: {period_str}\n"
-		main_description += f"Items billed: {len(self.items)}"
+		category_labels = {}
+		boq_item_codes = {}
 
-		invoice_items = [
-			{
-				"item_code": "RA Bill Services",
-				"item_name": "RA Bill Services",
-				"description": main_description,
-				"qty": 1,
-				"rate": self.gross_amount,
-				"uom": "Nos",
-				"income_account": income_account,
-			}
-		]
+		def get_category_label(category):
+			if not category:
+				return ""
+			if category not in category_labels:
+				category_labels[category] = (
+					frappe.db.get_value("BOQ Category", category, "category_name") or category
+				)
+			return category_labels[category]
+
+		def get_invoice_item_code(row):
+			if not row.boq_item:
+				return "RA Bill Services"
+
+			if row.boq_item not in boq_item_codes:
+				boq_item_code = frappe.db.get_value("BOQ Item", row.boq_item, "item")
+				if boq_item_code and frappe.db.exists("Item", boq_item_code):
+					boq_item_codes[row.boq_item] = boq_item_code
+				else:
+					boq_item_codes[row.boq_item] = "RA Bill Services"
+
+			return boq_item_codes[row.boq_item]
+
+		invoice_items = []
+		for row in self.items:
+			if not row.current_amount or row.current_amount <= 0:
+				continue
+
+			description_lines = [
+				f"Category: {get_category_label(row.category_name)}",
+				f"Sub Category: {get_category_label(row.sub_category)}",
+				f"Item: {row.item_name or ''}",
+				f"BOQ Qty: {flt(row.boq_qty)} {row.uom or ''}".strip(),
+				f"BOQ Rate: {flt(row.boq_rate)}",
+				f"Work Completed: {flt(row.completion_pct)}%",
+				f"Current Qty: {flt(row.current_qty)}",
+				f"Amount: {flt(row.current_amount)}",
+			]
+			if period_str:
+				description_lines.append(f"Billing Period: {period_str}")
+			description_lines.extend(
+				[
+					f"RA Bill #{self.bill_no}",
+					f"Project: {self.project}",
+					f"BOQ: {self.boq}",
+				]
+			)
+
+			invoice_items.append(
+				{
+					"item_code": get_invoice_item_code(row),
+					"item_name": row.item_name or "RA Bill Services",
+					"description": "\n".join(description_lines),
+					"qty": 1,
+					"rate": row.current_amount,
+					"uom": "Nos",
+					"income_account": income_account,
+				}
+			)
+
+		if not invoice_items:
+			frappe.throw("No RA Bill Items with a positive current amount were found to invoice.")
+
+		invoice_gross = sum(flt(item.get("rate")) for item in invoice_items)
+		if flt(invoice_gross, 2) != flt(self.gross_amount, 2):
+			frappe.throw(
+				"Detailed RA Bill Item total does not match the RA Bill gross amount. "
+				f"Item total: {frappe.format(invoice_gross, {'fieldtype': 'Currency'})}, "
+				f"Gross amount: {frappe.format(self.gross_amount, {'fieldtype': 'Currency'})}."
+			)
 
 		if self.retention_amount and self.retention_amount > 0:
 			retention_description = (
@@ -237,6 +290,16 @@ class RABill(Document):
 					"uom": "Nos",
 					"income_account": income_account,
 				}
+			)
+
+		invoice_net_total = sum(
+			flt(item.get("qty")) * flt(item.get("rate")) for item in invoice_items
+		)
+		if flt(invoice_net_total, 2) != flt(self.net_payable, 2):
+			frappe.throw(
+				"Sales Invoice item total does not match the RA Bill net payable. "
+				f"Invoice total: {frappe.format(invoice_net_total, {'fieldtype': 'Currency'})}, "
+				f"Net payable: {frappe.format(self.net_payable, {'fieldtype': 'Currency'})}."
 			)
 
 		si_data = {

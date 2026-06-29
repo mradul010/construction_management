@@ -572,7 +572,8 @@ frappe.ui.form.on("RA Bill", {
 							width: 100%;
 							max-width: 100%;
 							box-sizing: border-box;
-							overflow: visible;
+							overflow-x: visible;
+							overflow-y: visible;
 						}
 						#ra-bill-custom-items-grid table {
 							width: 100%;
@@ -584,7 +585,9 @@ frappe.ui.form.on("RA Bill", {
 						#ra-bill-custom-items-grid td {
 							text-align: center;
 							vertical-align: middle;
-							white-space: nowrap;
+							white-space: normal;
+							overflow-wrap: anywhere;
+							word-break: break-word;
 							box-sizing: border-box;
 						}
 
@@ -592,6 +595,7 @@ frappe.ui.form.on("RA Bill", {
 							padding: 8px 4px;
 							font-size: 10px;
 							font-weight: 700;
+							line-height: 1.2;
 							text-transform: uppercase;
 							color: #374151;
 							background: var(--control-bg);
@@ -599,13 +603,14 @@ frappe.ui.form.on("RA Bill", {
 						}
 
 						#ra-bill-custom-items-grid td {
-							height: 48px;
-							padding: 7px 4px;
+							min-height: 48px;
+							height: auto;
+							padding: 8px 5px;
 							overflow: visible;
-							text-overflow: ellipsis;
 							font-size: 12px;
 							font-weight: 500;
 							color: #374151;
+							line-height: 1.35;
 						}
 
 						#ra-bill-custom-items-grid .frappe-control,
@@ -622,6 +627,7 @@ frappe.ui.form.on("RA Bill", {
 						#ra-bill-custom-items-grid .form-control {
 							width: 100%;
 							max-width: 100%;
+							min-width: 0;
 							min-height: 32px;
 							height: 32px;
 							font-size: 13px;
@@ -630,8 +636,35 @@ frappe.ui.form.on("RA Bill", {
 							color: #374151;
 							box-sizing: border-box;
 						}
+						#ra-bill-custom-items-grid .ra-item-cell,
+						#ra-bill-custom-items-grid .ra-item-cell .form-control,
+						#ra-bill-custom-items-grid .ra-item-cell .awesomplete > input {
+							text-align: left;
+						}
+						#ra-bill-custom-items-grid .ra-item-cell {
+							white-space: normal;
+							overflow-wrap: anywhere;
+							word-break: break-word;
+							line-height: 1.35;
+						}
+						#ra-bill-custom-items-grid .ra-item-display {
+							width: 100%;
+							max-width: 100%;
+							white-space: normal;
+							overflow-wrap: anywhere;
+							word-break: break-word;
+							line-height: 1.35;
+							text-align: left;
+							cursor: pointer;
+						}
+						#ra-bill-custom-items-grid .ra-category-cell,
+						#ra-bill-custom-items-grid .ra-subcategory-cell,
+						#ra-bill-custom-items-grid .ra-item-cell {
+							min-width: 0;
+							max-width: 100%;
+						}
 						#ra-bill-custom-items-grid .ra-work-complete {
-							width: 70px;
+							width: 100%;
 							max-width: 100%;
 							margin: 0 auto;
 							text-align: center;
@@ -683,20 +716,86 @@ frappe.ui.form.on("RA Bill", {
 							align-items: center;
 							justify-content: center;
 						}
+						#ra-bill-custom-items-grid .ra-bill-table-footer {
+							display: grid;
+							grid-template-columns: 5% 14% 14% 24% 8% 9% 6% 8% 9% 3%;
+							align-items: center;
+							gap: 0;
+							padding: 10px 0;
+							background: #0F1E38;
+							color: #fff;
+							border-top: 2px solid #c9a520;
+							box-sizing: border-box;
+						}
+						#ra-bill-custom-items-grid .ra-add-row {
+							grid-column: 1 / 4;
+							justify-self: start;
+							margin-left: 12px;
+							display: inline-flex;
+							align-items: center;
+							gap: 6px;
+						}
+						#ra-bill-custom-items-grid .ra-total-label {
+							grid-column: 8;
+							justify-self: center;
+							color: #a0b0c8;
+							font-size: 11px;
+							font-weight: 600;
+							text-transform: uppercase;
+							text-align: center;
+							white-space: normal;
+						}
+						#ra-bill-custom-items-grid .ra-total-value {
+							grid-column: 9;
+							justify-self: stretch;
+							font-size: 14px;
+							font-weight: 700;
+							color: #fff;
+							text-align: center;
+							font-variant-numeric: tabular-nums;
+							overflow-wrap: anywhere;
+						}
+						@media (max-width: 1199px) {
+							#ra-bill-custom-items-grid th {
+								font-size: 9px;
+								padding: 7px 3px;
+							}
+							#ra-bill-custom-items-grid td {
+								font-size: 11px;
+								padding: 7px 4px;
+							}
+							#ra-bill-custom-items-grid .link-field,
+							#ra-bill-custom-items-grid .form-control {
+								font-size: 12px;
+							}
+						}
+						@media (max-width: 991px) {
+							#ra-bill-custom-items-grid {
+								overflow: hidden;
+							}
+							#ra-bill-custom-items-grid .ra-bill-table-shell {
+								overflow-x: auto;
+								overflow-y: visible;
+							}
+							#ra-bill-custom-items-grid table,
+							#ra-bill-custom-items-grid .ra-bill-table-footer {
+								min-width: 980px;
+							}
+						}
 					</style>
 					<div class="ra-bill-table-shell">
 						<table>
 							<colgroup>
 								<col style="width:5%">
-								<col style="width:16%">
-								<col style="width:16%">
-								<col style="width:17%">
+								<col style="width:14%">
+								<col style="width:14%">
+								<col style="width:24%">
 								<col style="width:8%">
-								<col style="width:10%">
+								<col style="width:9%">
 								<col style="width:6%">
 								<col style="width:8%">
-								<col style="width:10%">
-								<col style="width:4%">
+								<col style="width:9%">
+								<col style="width:3%">
 							</colgroup>
 							<thead>
 								<tr>
@@ -734,7 +833,7 @@ frappe.ui.form.on("RA Bill", {
 							<td>${index + 1}</td>
 							<td><div class="ra-category-cell" data-row-name="${row.name}"></div></td>
 							<td><div class="ra-subcategory-cell" data-row-name="${row.name}"></div></td>
-							<td><div class="ra-item-cell" data-row-name="${row.name}"></div></td>
+							<td class="ra-item-cell" data-row-name="${row.name}"></td>
 							<td>${frm.ra_bill_format_number(row.boq_qty)}</td>
 							<td class="ra-currency-cell">
 								<span class="ra-currency-value">${frm.ra_bill_format_currency(row.boq_rate)}</span>
@@ -763,14 +862,12 @@ frappe.ui.form.on("RA Bill", {
 				html += `
 							</tbody>
 						</table>
-						<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 12px;background:#0F1E38;color:#fff;border-top:2px solid #c9a520">
-							<button class="btn btn-xs btn-default ra-add-row" ${isEditable ? "" : "disabled"} style="display:inline-flex;align-items:center;gap:6px">
+						<div class="ra-bill-table-footer">
+							<button class="btn btn-xs btn-default ra-add-row" ${isEditable ? "" : "disabled"}>
 								<i class="fa fa-plus"></i> Add Row
 							</button>
-							<div style="display:flex;align-items:center;gap:12px;font-weight:600">
-								<span style="color:#a0b0c8;font-size:11px;text-transform:uppercase">Total Amount</span>
-								<span style="font-size:14px;color:#fff">${frm.ra_bill_format_currency(total)}</span>
-							</div>
+							<span class="ra-total-label">Total Amount</span>
+							<span class="ra-total-value">${frm.ra_bill_format_currency(total)}</span>
 						</div>
 					</div>
 				`;
@@ -922,8 +1019,7 @@ frappe.ui.form.on("RA Bill", {
 						itemCell.html(`
 							<div class="ra-item-display"
 								data-row-name="${row.name}"
-								title="${frappe.utils.escape_html(row.item_name)}"
-								style="width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer">
+								title="${frappe.utils.escape_html(row.item_name)}">
 								${frappe.utils.escape_html(row.item_name)}
 							</div>
 						`);
