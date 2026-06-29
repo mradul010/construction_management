@@ -59,9 +59,10 @@
   },
   {
    "fieldname": "client",
-   "fieldtype": "Data",
+   "fieldtype": "Link",
    "in_list_view": 1,
-   "label": "Client"
+   "label": "Client",
+   "options": "Customer"
   },
   {
    "fieldname": "consultant",

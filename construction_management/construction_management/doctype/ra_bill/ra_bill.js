@@ -84,14 +84,22 @@ function setBoqItemDetails(frm, cdt, cdn, options = {}) {
 			boqItemLabels[row.boq_item] = r.message.item_name || row.boq_item;
 			frm._ra_bill_row_state = frm._ra_bill_row_state || {};
 			const existingState = frm._ra_bill_row_state[row.name] || {};
+			const subcategory =
+				row.sub_category || existingState.subcategory || r.message.boq_category || null;
 			const subcategoryDoc =
-				frm._ra_bill_category_map && frm._ra_bill_category_map[r.message.boq_category];
+				frm._ra_bill_category_map && frm._ra_bill_category_map[subcategory];
+			const category =
+				row.category_name ||
+				existingState.category ||
+				(subcategoryDoc && subcategoryDoc.parent_node) ||
+				r.message.boq_parent_category ||
+				null;
+
+			row.category_name = category;
+			row.sub_category = subcategory;
 			frm._ra_bill_row_state[row.name] = {
-				category:
-					existingState.category ||
-					(subcategoryDoc && subcategoryDoc.parent_node) ||
-					null,
-				subcategory: existingState.subcategory || r.message.boq_category,
+				category: category,
+				subcategory: subcategory,
 			};
 
 			frappe.model.set_value(cdt, cdn, "item_name", r.message.item_name);
@@ -304,23 +312,27 @@ frappe.ui.form.on("RA Bill", {
 
 		frm.ra_bill_get_row_category_state = function (row) {
 			frm._ra_bill_row_state = frm._ra_bill_row_state || {};
-			const state = frm._ra_bill_row_state[row.name] || {};
+			const existingState = frm._ra_bill_row_state[row.name] || {};
+			let subcategory = row.sub_category || existingState.subcategory || null;
 
-			if (row.boq_item && !state.subcategory) {
+			if (row.boq_item && !subcategory) {
 				const boqItem = (frm._ra_bill_boq_items || []).find(
 					(item) => item.name === row.boq_item,
 				);
 
 				if (boqItem) {
-					state.subcategory = boqItem.boq_category || state.subcategory;
+					subcategory = boqItem.boq_category || subcategory;
 				}
 			}
 
-			const subcategory = state.subcategory;
 			const subcategoryDoc = frm._ra_bill_category_map
 				? frm._ra_bill_category_map[subcategory]
 				: null;
-			const category = state.category || (subcategoryDoc && subcategoryDoc.parent_node) || null;
+			const category =
+				row.category_name ||
+				existingState.category ||
+				(subcategoryDoc && subcategoryDoc.parent_node) ||
+				null;
 
 			frm._ra_bill_row_state[row.name] = {
 				category: category,
@@ -353,6 +365,15 @@ frappe.ui.form.on("RA Bill", {
 			);
 		};
 
+		frm.ra_bill_get_category_label = function (value) {
+			if (!value) return "";
+
+			const category = frm._ra_bill_category_map && frm._ra_bill_category_map[value];
+			const label = boqCategoryLabels[value] || (category && category.category_name) || value;
+			boqCategoryLabels[value] = label;
+			return label;
+		};
+
 		frm.ra_bill_get_link_label = function (options, value) {
 			if (!value) return "";
 			if (options === "BOQ Item") {
@@ -362,7 +383,7 @@ frappe.ui.form.on("RA Bill", {
 				return boqItemLabels[value] || (boqItem && boqItem.item_name) || value;
 			}
 			if (options === "BOQ Category") {
-				return boqCategoryLabels[value] || value;
+				return frm.ra_bill_get_category_label(value);
 			}
 			return value;
 		};
@@ -466,12 +487,17 @@ frappe.ui.form.on("RA Bill", {
 				boqItem.item_name || boqItem.item || boqItem.description || selectedBoqItemName;
 
 			const existingState = frm.ra_bill_get_row_category_state(row);
+			const selectedSubcategory = existingState.subcategory || boqItem.boq_category || null;
+			const selectedCategory =
+				existingState.category ||
+				((frm._ra_bill_category_map || {})[selectedSubcategory] || {}).parent_node ||
+				null;
+
+			row.category_name = selectedCategory;
+			row.sub_category = selectedSubcategory;
 			frm._ra_bill_row_state[row.name] = {
-				category:
-					existingState.category ||
-					(frm._ra_bill_category_map[boqItem.boq_category] || {}).parent_node ||
-					null,
-				subcategory: existingState.subcategory || boqItem.boq_category,
+				category: selectedCategory,
+				subcategory: selectedSubcategory,
 			};
 
 			row.boq_item = selectedBoqItemName;
@@ -756,6 +782,14 @@ frappe.ui.form.on("RA Bill", {
 						boqItemLabels[row.boq_item] = row.item_name;
 					}
 					const state = frm.ra_bill_get_row_category_state(row);
+					if (state.category) {
+						boqCategoryLabels[state.category] = frm.ra_bill_get_category_label(state.category);
+					}
+					if (state.subcategory) {
+						boqCategoryLabels[state.subcategory] = frm.ra_bill_get_category_label(
+							state.subcategory,
+						);
+					}
 					const categoryCell = container.find(`.ra-category-cell[data-row-name="${row.name}"]`);
 					const subcategoryCell = container.find(`.ra-subcategory-cell[data-row-name="${row.name}"]`);
 					const itemCell = container.find(`.ra-item-cell[data-row-name="${row.name}"]`);
@@ -782,8 +816,11 @@ frappe.ui.form.on("RA Bill", {
 							};
 						},
 						function (value) {
+							const category = value || null;
+							row.category_name = category;
+							row.sub_category = null;
 							frm._ra_bill_row_state[row.name] = {
-								category: value,
+								category: category,
 								subcategory: null,
 							};
 							frm.ra_bill_clear_item_fields(row);
@@ -793,6 +830,7 @@ frappe.ui.form.on("RA Bill", {
 							frm.trigger("recalculate_totals");
 							frm.ra_bill_schedule_render();
 						},
+						frm.ra_bill_get_category_label(state.category),
 					);
 
 					frm.ra_bill_make_link_control(
@@ -815,10 +853,15 @@ frappe.ui.form.on("RA Bill", {
 							};
 						},
 						function (value) {
-							const subcategoryDoc = frm._ra_bill_category_map[value] || {};
+							const subcategory = value || null;
+							const subcategoryDoc = (frm._ra_bill_category_map || {})[subcategory] || {};
+							const category =
+								subcategoryDoc.parent_node || row.category_name || state.category || null;
+							row.category_name = category;
+							row.sub_category = subcategory;
 							frm._ra_bill_row_state[row.name] = {
-								category: subcategoryDoc.parent_node || state.category || value,
-								subcategory: value,
+								category: category,
+								subcategory: subcategory,
 							};
 							frm.ra_bill_clear_item_fields(row);
 							frm.ra_bill_recalculate_row(row, 0);
@@ -827,6 +870,7 @@ frappe.ui.form.on("RA Bill", {
 							frm.trigger("recalculate_totals");
 							frm.ra_bill_schedule_render();
 						},
+						frm.ra_bill_get_category_label(state.subcategory),
 					);
 
 					const makeItemControl = () =>
@@ -910,6 +954,8 @@ frappe.ui.form.on("RA Bill", {
 					if (!frm.ra_bill_is_editable()) return;
 
 					const row = frm.add_child("items", {
+						category_name: null,
+						sub_category: null,
 						current_qty: 0,
 						current_amount: 0,
 						completion_pct: 0,
@@ -965,15 +1011,25 @@ frappe.ui.form.on("RA Bill", {
 				"Approve",
 				function () {
 					frappe.confirm("Are you sure you want to approve this RA Bill?", function () {
-						frappe.db.set_value("RA Bill", frm.doc.name, "status", "Approved").then(() => {
-							frm.reload_doc();
-							frappe.show_alert(
-								{
-									message: "RA Bill Approved",
-									indicator: "green",
-								},
-								3,
-							);
+						frappe.call({
+							method: "approve",
+							doc: frm.doc,
+							freeze: true,
+							freeze_message: "Approving RA Bill...",
+							callback: function () {
+								frm.reload_doc();
+								frappe.show_alert(
+									{
+										message: "RA Bill Approved",
+										indicator: "green",
+									},
+									3,
+								);
+							},
+							error: function (err) {
+								frappe.dom.unfreeze();
+								console.error(err);
+							},
 						});
 					});
 				},
@@ -985,23 +1041,51 @@ frappe.ui.form.on("RA Bill", {
 			frm.add_custom_button(
 				"Create Sales Invoice",
 				function () {
-					frappe.confirm(
-						`Create Sales Invoice for ${frappe.format(frm.doc.net_payable, {
-							fieldtype: "Currency",
-							options: frm.doc.currency,
-						})}?`,
-						function () {
-							frappe.call({
-								method: "create_sales_invoice",
-								doc: frm.doc,
-								callback: function (r) {
-									if (r.message) {
-										frm.reload_doc();
-									}
-								},
-							});
-						},
-					);
+					const currency = frm.doc.currency || "AED";
+					const gross = frm.ra_bill_format_number(frm.doc.gross_amount);
+					const retention = frm.ra_bill_format_number(frm.doc.retention_amount);
+					const net = frm.ra_bill_format_number(frm.doc.net_payable);
+					const retPct = frm.doc.retention_percent || 0;
+
+					let msg = `
+						<table style="width:100%;font-size:13px;border-collapse:collapse">
+							<tr>
+								<td style="padding:6px 0;color:#6b7280">Gross Amount</td>
+								<td style="padding:6px 0;text-align:right;font-weight:500">${currency} ${gross}</td>
+							</tr>
+							<tr>
+								<td style="padding:6px 0;color:#6b7280">Retention (${retPct}%)</td>
+								<td style="padding:6px 0;text-align:right;color:#dc2626">- ${currency} ${retention}</td>
+							</tr>
+							<tr style="border-top:1px solid #e5e7eb">
+								<td style="padding:8px 0;font-weight:600">Net Payable</td>
+								<td style="padding:8px 0;text-align:right;font-weight:600;color:#185FA5">${currency} ${net}</td>
+							</tr>
+						</table>
+						<p style="margin-top:10px;font-size:12px;color:#6b7280">
+							A draft Sales Invoice will be created.
+							The accounts team will review and submit it.
+						</p>
+					`;
+
+					frappe.confirm(msg, function () {
+						frappe.call({
+							method: "create_sales_invoice",
+							doc: frm.doc,
+							freeze: true,
+							freeze_message: "Creating Sales Invoice...",
+							callback: function (r) {
+								if (r.message) {
+									frm.reload_doc();
+									frappe.set_route("Form", "Sales Invoice", r.message);
+								}
+							},
+							error: function (err) {
+								frappe.dom.unfreeze();
+								console.error(err);
+							},
+						});
+					});
 				},
 				"Actions",
 			);
@@ -1028,6 +1112,16 @@ frappe.ui.form.on("RA Bill", {
 	},
 
 	boq: function (frm) {
+		if (frm.doc.boq) {
+			const selectedBoq = frm.doc.boq;
+
+			frappe.db.get_value("BOQ", selectedBoq, "client").then((r) => {
+				if (frm.doc.boq === selectedBoq && r.message && r.message.client) {
+					frm.set_value("customer", r.message.client);
+				}
+			});
+		}
+
 		if (frm.doc.items && frm.doc.items.length > 0) {
 			frappe.confirm("Changing the BOQ will clear all current items. Continue?", function () {
 				frm.clear_table("items");

@@ -125,59 +125,166 @@ class RABill(Document):
 		self.db_set("status", "Cancelled")
 
 	@frappe.whitelist()
+	def approve(self):
+		"""
+		Approve a submitted RA Bill without saving the submitted document.
+		The Create Sales Invoice flow depends on this status.
+		"""
+		if self.docstatus != 1:
+			frappe.throw("Only submitted RA Bills can be approved.")
+
+		if self.status == "Approved":
+			return self.name
+
+		if self.status != "Submitted":
+			frappe.throw(
+				"RA Bill must have status 'Submitted' before approval. "
+				f"Current status: {self.status}"
+			)
+
+		self.db_set("status", "Approved")
+		return self.name
+
+	@frappe.whitelist()
 	def create_sales_invoice(self):
 		"""
-		Called when PM clicks the "Create Sales Invoice" button.
-		Creates a Sales Invoice with one line for net_payable amount.
-		Sets status to Invoiced and links the Sales Invoice back.
+		Creates a draft Sales Invoice from this approved RA Bill.
+		2 lines:
+		  1. RA Bill Services     -> gross_amount (positive)
+		  2. Retention Deduction  -> -retention_amount (negative)
+		Net total = net_payable
+		Status set to Invoiced after creation.
 		"""
 		if self.status != "Approved":
-			frappe.throw("RA Bill must be Approved before creating a Sales Invoice.")
+			frappe.throw(
+				"RA Bill must have status 'Approved' before creating a Sales Invoice. "
+				f"Current status: {self.status}"
+			)
 
 		if self.sales_invoice:
-			frappe.throw(f"Sales Invoice {self.sales_invoice} already exists for this RA Bill.")
+			frappe.throw(
+				f"Sales Invoice {self.sales_invoice} already exists for this RA Bill. "
+				"Cannot create another one."
+			)
 
-		if not frappe.db.exists("Item", "RA Bill Services"):
-			item = frappe.get_doc({
-				"doctype": "Item",
+		if not self.customer:
+			frappe.throw("Please set the Customer on this RA Bill before creating a Sales Invoice.")
+
+		if not frappe.db.exists("Customer", self.customer):
+			frappe.throw(f"Customer {self.customer} does not exist.")
+
+		if not self.gross_amount or self.gross_amount <= 0:
+			frappe.throw("Gross amount must be greater than 0 to create a Sales Invoice.")
+
+		from construction_management.construction_management.setup import (
+			ensure_ra_bill_items,
+			get_or_create_ra_bill_receivable_account,
+		)
+
+		ensure_ra_bill_items()
+
+		company = frappe.defaults.get_user_default("Company") or frappe.defaults.get_global_default("company")
+		if not company:
+			frappe.throw("Please set default Company before creating Sales Invoice.")
+
+		company_currency = frappe.get_cached_value("Company", company, "default_currency")
+		income_account = frappe.db.get_value("Company", company, "default_income_account")
+		invoice_currency = self.currency or company_currency or "AED"
+		conversion_rate = 1.0
+		receivable_account = get_or_create_ra_bill_receivable_account(company, invoice_currency)
+
+		period_str = ""
+		if self.billing_period_from and self.billing_period_to:
+			period_str = (
+				f"{frappe.format(self.billing_period_from, {'fieldtype': 'Date'})} to "
+				f"{frappe.format(self.billing_period_to, {'fieldtype': 'Date'})}"
+			)
+
+		main_description = (
+			f"RA Bill #{self.bill_no}\n"
+			f"Project: {self.project}\n"
+			f"BOQ: {self.boq}\n"
+		)
+		if period_str:
+			main_description += f"Billing Period: {period_str}\n"
+		main_description += f"Items billed: {len(self.items)}"
+
+		invoice_items = [
+			{
 				"item_code": "RA Bill Services",
 				"item_name": "RA Bill Services",
-				"item_group": "Services",
-				"stock_uom": "Nos",
-				"is_stock_item": 0,
-			})
-			item.insert(ignore_permissions=True)
-
-		si = frappe.get_doc({
-			"doctype": "Sales Invoice",
-			"customer": self.customer,
-			"project": self.project,
-			"currency": self.currency,
-			"due_date": frappe.utils.add_days(frappe.utils.today(), 30),
-			"items": [{
-				"item_code": "RA Bill Services",
-				"item_name": "RA Bill Services",
-				"description": (
-					f"RA Bill #{self.bill_no} | "
-					f"{self.billing_period_from} to {self.billing_period_to} | "
-					f"Project: {self.project} | BOQ: {self.boq}"
-				),
+				"description": main_description,
 				"qty": 1,
-				"rate": self.net_payable,
+				"rate": self.gross_amount,
 				"uom": "Nos",
-			}],
-		})
+				"income_account": income_account,
+			}
+		]
 
-		si.insert(ignore_permissions=True)
+		if self.retention_amount and self.retention_amount > 0:
+			retention_description = (
+				f"Retention held @ {self.retention_percent}%\n"
+				f"To be released at project completion\n"
+				f"RA Bill #{self.bill_no} | {self.project}"
+			)
+			invoice_items.append(
+				{
+					"item_code": "Retention Deduction",
+					"item_name": "Retention Deduction",
+					"description": retention_description,
+					"qty": 1,
+					"rate": -self.retention_amount,
+					"uom": "Nos",
+					"income_account": income_account,
+				}
+			)
+
+		si_data = {
+			"doctype": "Sales Invoice",
+			"company": company,
+			"customer": self.customer,
+			"debit_to": receivable_account,
+			"project": self.project,
+			"currency": invoice_currency,
+			"conversion_rate": conversion_rate,
+			"due_date": frappe.utils.add_days(frappe.utils.today(), 30),
+			"remarks": f"Created from RA Bill {self.name}",
+			"items": invoice_items,
+		}
+
+		try:
+			si = frappe.get_doc(si_data)
+			si.insert(ignore_permissions=True)
+		except Exception as negative_rate_error:
+			if not (self.retention_amount and self.retention_amount > 0):
+				raise
+
+			fallback_items = []
+			for item in invoice_items:
+				item = item.copy()
+				if item["item_code"] == "Retention Deduction":
+					item["qty"] = -1
+					item["rate"] = self.retention_amount
+				fallback_items.append(item)
+
+			si_data["items"] = fallback_items
+			try:
+				si = frappe.get_doc(si_data)
+				si.insert(ignore_permissions=True)
+			except Exception:
+				raise negative_rate_error
 
 		self.db_set("sales_invoice", si.name)
 		self.db_set("status", "Invoiced")
 
 		frappe.msgprint(
-			f"Sales Invoice {si.name} created successfully.",
-			alert=True,
+			f"Draft Sales Invoice <b>{si.name}</b> created successfully. "
+			f"Net payable: {frappe.format(self.net_payable, {'fieldtype': 'Currency'})}. "
+			f"Please review and submit from the Accounts module.",
+			title="Sales Invoice Created",
 			indicator="green",
 		)
+
 		return si.name
 
 

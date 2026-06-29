@@ -5,6 +5,8 @@
  "editable_grid": 1,
  "engine": "InnoDB",
  "field_order": [
+  "category_name",
+  "sub_category",
   "boq_item",
   "item_name",
   "boq_qty",
@@ -17,6 +19,20 @@
   "current_amount"
  ],
  "fields": [
+  {
+   "fieldname": "category_name",
+   "fieldtype": "Link",
+   "hidden": 1,
+   "label": "Category Name",
+   "options": "BOQ Category"
+  },
+  {
+   "fieldname": "sub_category",
+   "fieldtype": "Link",
+   "hidden": 1,
+   "label": "Sub Category",
+   "options": "BOQ Category"
+  },
   {
    "description": "Pick a BOQ item from the selected BOQ",
    "fieldname": "boq_item",
