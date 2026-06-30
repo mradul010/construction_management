@@ -11,7 +11,10 @@
   "boq_qty",
   "boq_rate",
   "uom",
+  "prev_cumulative_qty",
   "work_percent",
+  "current_qty",
+  "cumulative_qty",
   "current_amount"
  ],
  "fields": [
@@ -65,11 +68,35 @@
   },
   {
    "default": "0",
+   "fieldname": "prev_cumulative_qty",
+   "fieldtype": "Float",
+   "hidden": 1,
+   "label": "Previously Billed Qty",
+   "read_only": 1
+  },
+  {
+   "default": "0",
    "description": "Current billing period work completed percentage",
    "fieldname": "work_percent",
    "fieldtype": "Percent",
    "in_list_view": 1,
    "label": "Work %"
+  },
+  {
+   "default": "0",
+   "description": "BOQ Qty * Work %",
+   "fieldname": "current_qty",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "Current Qty"
+  },
+  {
+   "default": "0",
+   "fieldname": "cumulative_qty",
+   "fieldtype": "Float",
+   "hidden": 1,
+   "label": "Cumulative Qty",
+   "read_only": 1
   },
   {
    "description": "current_qty * boq_rate",

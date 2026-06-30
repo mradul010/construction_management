@@ -1,6 +1,10 @@
 import frappe
+from frappe import _
 from frappe.model.document import Document
-from frappe.utils import flt
+from frappe.utils import flt, getdate, today
+
+
+OVERBILLING_TOLERANCE = 0.0001
 
 
 class RABill(Document):
@@ -9,6 +13,8 @@ class RABill(Document):
 		self._fetch_boq_item_details()
 		self._fill_prev_cumulative_qty()
 		self._calculate_row_totals()
+		self._validate_no_duplicate_items()
+		self._validate_not_overbilling()
 		self._calculate_header_totals()
 
 	def _set_bill_no(self):
@@ -64,38 +70,86 @@ class RABill(Document):
 
 	def _fill_prev_cumulative_qty(self):
 		"""
-		For each row, sum current_qty from all previous submitted
-		RA Bills for the same project + boq + boq_item.
-		Excludes the current document being saved.
+		For each row, read previous submitted billing from RA Bill Transaction.
+		If transaction history has not been backfilled yet, the helper falls
+		back to submitted RA Bill Items.
 		"""
 		for row in self.items:
 			if not row.boq_item:
 				continue
 
-			result = frappe.db.sql(
-				"""
-				SELECT COALESCE(SUM(rbi.current_qty), 0) AS total
-				FROM `tabRA Bill Item` rbi
-				JOIN `tabRA Bill` rb ON rb.name = rbi.parent
-				WHERE rb.project = %s
-				  AND rb.boq = %s
-				  AND rbi.boq_item = %s
-				  AND rb.docstatus = 1
-				  AND rb.name != %s
-				""",
-				(self.project, self.boq, row.boq_item, self.name or "__new__"),
+			row.prev_cumulative_qty = _get_previous_billed_qty(
+				self.boq,
+				row.boq_item,
+				self.name,
 			)
-
-			row.prev_cumulative_qty = result[0][0] if result else 0
 
 	def _calculate_row_totals(self):
 		"""
 		Calculate current_qty and current_amount for each row from Work %.
 		"""
 		for row in self.items:
-			row.work_percent = row.work_percent or 0
-			row.current_qty = (row.boq_qty or 0) * (row.work_percent / 100)
-			row.current_amount = (row.current_qty or 0) * (row.boq_rate or 0)
+			row.work_percent = flt(row.work_percent)
+			row.current_qty = flt(row.boq_qty) * (row.work_percent / 100)
+			row.current_amount = flt(row.current_qty) * flt(row.boq_rate)
+			row.cumulative_qty = flt(row.prev_cumulative_qty) + flt(row.current_qty)
+
+	def _validate_no_duplicate_items(self):
+		seen_items = set()
+
+		for row in self.items:
+			if not row.boq_item:
+				continue
+
+			if row.boq_item in seen_items:
+				frappe.throw(
+					_(
+						"Duplicate BOQ Item found: {0}. "
+						"This BOQ Item is already selected in this RA Bill."
+					).format(row.item_name or row.boq_item)
+				)
+
+			seen_items.add(row.boq_item)
+
+	def _validate_not_overbilling(self):
+		for row in self.items:
+			if not row.boq_item:
+				continue
+
+			boq_qty = flt(row.boq_qty)
+			current_qty = flt(row.current_qty)
+			previous_qty = _get_previous_billed_qty(self.boq, row.boq_item, self.name)
+			remaining_qty = boq_qty - previous_qty
+			previous_pct = _qty_to_percent(previous_qty, boq_qty)
+			remaining_pct = 100 - previous_pct if boq_qty else 0
+
+			row.prev_cumulative_qty = previous_qty
+			row.cumulative_qty = previous_qty + current_qty
+
+			if current_qty > remaining_qty + OVERBILLING_TOLERANCE:
+				frappe.throw(
+					_(
+						"Item: {item}<br>"
+						"BOQ Qty: {boq_qty}<br>"
+						"Previously Billed Qty: {previous_qty}<br>"
+						"Previously Billed %: {previous_pct}<br>"
+						"Remaining Qty: {remaining_qty}<br>"
+						"Remaining %: {remaining_pct}<br>"
+						"You Entered Qty: {current_qty}<br>"
+						"You Entered %: {work_percent}<br><br>"
+						"Please reduce Work % / Current Qty."
+					).format(
+						item=row.item_name or row.boq_item,
+						boq_qty=flt(boq_qty, 4),
+						previous_qty=flt(previous_qty, 4),
+						previous_pct=flt(previous_pct, 4),
+						remaining_qty=flt(remaining_qty, 4),
+						remaining_pct=flt(remaining_pct, 4),
+						current_qty=flt(current_qty, 4),
+						work_percent=flt(row.work_percent, 4),
+					),
+					title=_("Overbilling Not Allowed"),
+				)
 
 	def _calculate_header_totals(self):
 		"""
@@ -123,10 +177,29 @@ class RABill(Document):
 		self.cumulative_billed = (prev_billed[0][0] if prev_billed else 0) + self.gross_amount
 
 	def on_submit(self):
+		self._validate_no_duplicate_items()
+		self._validate_not_overbilling()
+		self._create_ra_bill_transactions()
 		self.db_set("status", "Submitted")
 
 	def on_cancel(self):
+		self._delete_ra_bill_transactions()
 		self.db_set("status", "Cancelled")
+
+	def _delete_ra_bill_transactions(self):
+		_delete_ra_bill_transactions(self.name)
+
+	def _create_ra_bill_transactions(self):
+		self._delete_ra_bill_transactions()
+
+		for row in self.items:
+			current_qty = _get_row_current_qty(row)
+			current_amount = _get_row_current_amount(row)
+			if current_qty <= 0 or current_amount <= 0:
+				continue
+
+			previous_qty = _get_previous_billed_qty(self.boq, row.boq_item, self.name)
+			_create_ra_bill_transaction(self, row, previous_qty)
 
 	@frappe.whitelist()
 	def approve(self):
@@ -357,6 +430,221 @@ class RABill(Document):
 		return si.name
 
 
+def _has_ra_bill_transaction_table():
+	try:
+		return frappe.db.table_exists("RA Bill Transaction")
+	except Exception:
+		return False
+
+
+def _delete_ra_bill_transactions(ra_bill):
+	if not ra_bill or not _has_ra_bill_transaction_table():
+		return
+
+	for transaction in frappe.get_all(
+		"RA Bill Transaction",
+		filters={"ra_bill": ra_bill},
+		pluck="name",
+	):
+		frappe.delete_doc(
+			"RA Bill Transaction",
+			transaction,
+			force=True,
+			ignore_permissions=True,
+		)
+
+
+def _get_previous_billed_qty(boq, boq_item, current_ra_bill=None):
+	if not boq or not boq_item:
+		return 0
+
+	transaction_qty = 0
+	transaction_count = 0
+	if _has_ra_bill_transaction_table():
+		transaction_rows = frappe.db.sql(
+			"""
+			SELECT COALESCE(SUM(current_qty), 0) AS qty, COUNT(*) AS transaction_count
+			FROM `tabRA Bill Transaction`
+			WHERE boq = %(boq)s
+			  AND boq_item = %(boq_item)s
+			  AND (%(current_ra_bill)s = '' OR ra_bill != %(current_ra_bill)s)
+			""",
+			{
+				"boq": boq,
+				"boq_item": boq_item,
+				"current_ra_bill": current_ra_bill or "",
+			},
+			as_dict=True,
+		)
+		if transaction_rows:
+			transaction_qty = flt(transaction_rows[0].qty)
+			transaction_count = transaction_rows[0].transaction_count or 0
+
+	fallback_qty = _get_previous_billed_qty_from_submitted_ra_bills(
+		boq,
+		boq_item,
+		current_ra_bill,
+	)
+
+	if transaction_count:
+		return max(transaction_qty, fallback_qty)
+
+	return fallback_qty
+
+
+def _get_previous_billed_qty_from_submitted_ra_bills(boq, boq_item, current_ra_bill=None):
+	result = frappe.db.sql(
+		"""
+		SELECT COALESCE(
+			SUM(
+				CASE
+					WHEN COALESCE(rbi.current_qty, 0) > 0 THEN rbi.current_qty
+					ELSE COALESCE(NULLIF(rbi.boq_qty, 0), bi.qty, 0)
+						* COALESCE(rbi.work_percent, 0) / 100
+				END
+			),
+			0
+		) AS qty
+		FROM `tabRA Bill Item` rbi
+		JOIN `tabRA Bill` rb ON rb.name = rbi.parent
+		LEFT JOIN `tabBOQ Item` bi ON bi.name = rbi.boq_item
+		WHERE rb.boq = %(boq)s
+		  AND rbi.boq_item = %(boq_item)s
+		  AND rb.docstatus = 1
+		  AND (%(current_ra_bill)s = '' OR rb.name != %(current_ra_bill)s)
+		""",
+		{
+			"boq": boq,
+			"boq_item": boq_item,
+			"current_ra_bill": current_ra_bill or "",
+		},
+	)
+	return flt(result[0][0]) if result else 0
+
+
+def _get_boq_item_qty(boq, boq_item):
+	if not boq_item:
+		return 0
+
+	filters = {"name": boq_item}
+	if boq:
+		filters["parent"] = boq
+
+	qty = frappe.db.get_value("BOQ Item", filters, "qty")
+	if qty is None and boq:
+		qty = frappe.db.get_value("BOQ Item", boq_item, "qty")
+
+	return flt(qty)
+
+
+def _qty_to_percent(qty, boq_qty):
+	boq_qty = flt(boq_qty)
+	return (flt(qty) / boq_qty * 100) if boq_qty else 0
+
+
+def _get_row_boq_qty(row, boq=None):
+	return flt(row.get("boq_qty")) or _get_boq_item_qty(boq, row.get("boq_item"))
+
+
+def _get_row_current_qty(row):
+	current_qty = flt(row.get("current_qty"))
+	if current_qty:
+		return current_qty
+
+	return _get_row_boq_qty(row) * flt(row.get("work_percent")) / 100
+
+
+def _get_row_current_amount(row):
+	current_amount = flt(row.get("current_amount"))
+	if current_amount:
+		return current_amount
+
+	return _get_row_current_qty(row) * flt(row.get("boq_rate"))
+
+
+def _get_transaction_date(ra_bill):
+	date_value = (
+		ra_bill.get("billing_period_to")
+		or ra_bill.get("billing_period_from")
+		or ra_bill.get("creation")
+	)
+	return getdate(date_value) if date_value else today()
+
+
+def _create_ra_bill_transaction(ra_bill, row, previous_qty=0):
+	boq_qty = _get_row_boq_qty(row, ra_bill.boq)
+	current_qty = _get_row_current_qty(row)
+	current_amount = _get_row_current_amount(row)
+	cumulative_qty = flt(previous_qty) + current_qty
+	cumulative_percent = _qty_to_percent(cumulative_qty, boq_qty)
+	remaining_qty = boq_qty - cumulative_qty
+	remaining_percent = 100 - cumulative_percent if boq_qty else 0
+
+	transaction = frappe.get_doc(
+		{
+			"doctype": "RA Bill Transaction",
+			"ra_bill": ra_bill.name,
+			"project": ra_bill.project,
+			"boq": ra_bill.boq,
+			"boq_item": row.boq_item,
+			"item_name": row.item_name,
+			"category_name": row.category_name,
+			"sub_category": row.sub_category,
+			"boq_qty": boq_qty,
+			"boq_rate": flt(row.boq_rate),
+			"uom": row.uom,
+			"work_percent": flt(row.work_percent),
+			"current_qty": current_qty,
+			"current_amount": current_amount,
+			"cumulative_qty_after_bill": cumulative_qty,
+			"cumulative_percent_after_bill": cumulative_percent,
+			"remaining_qty_after_bill": remaining_qty,
+			"remaining_percent_after_bill": remaining_percent,
+			"transaction_date": _get_transaction_date(ra_bill),
+			"docstatus_source": ra_bill.docstatus or 1,
+		}
+	)
+	transaction.insert(ignore_permissions=True)
+	return transaction
+
+
+def _get_boq_item_billing_summary(boq, boq_item, current_ra_bill=None):
+	boq_qty = _get_boq_item_qty(boq, boq_item)
+	previous_qty = _get_previous_billed_qty(boq, boq_item, current_ra_bill)
+	previous_percent = _qty_to_percent(previous_qty, boq_qty)
+	remaining_qty = boq_qty - previous_qty
+	remaining_percent = 100 - previous_percent if boq_qty else 0
+
+	return {
+		"boq_qty": boq_qty,
+		"previous_qty": previous_qty,
+		"previous_percent": previous_percent,
+		"remaining_qty": remaining_qty,
+		"remaining_percent": remaining_percent,
+	}
+
+
+def _coerce_list(value):
+	if not value:
+		return []
+
+	if isinstance(value, str):
+		try:
+			value = frappe.parse_json(value)
+		except Exception:
+			value = [item.strip() for item in value.split(",")]
+
+	if isinstance(value, (list, tuple, set)):
+		return [item for item in value if item]
+
+	return [value]
+
+
+@frappe.whitelist()
+def get_boq_item_billing_summary(boq, boq_item, current_ra_bill=None):
+	return _get_boq_item_billing_summary(boq, boq_item, current_ra_bill)
+
+
 @frappe.whitelist()
 @frappe.validate_and_sanitize_search_inputs
 def search_ra_bill_categories(doctype, txt, searchfield, start, page_len, filters, **kwargs):
@@ -464,6 +752,8 @@ def search_boq_items_for_ra_bill(doctype, txt, searchfield, start, page_len, fil
 	filters = filters or {}
 	boq = filters.get("boq")
 	subcategory = filters.get("subcategory")
+	exclude_items = set(_coerce_list(filters.get("exclude_items")))
+	current_ra_bill = filters.get("current_ra_bill")
 
 	if not boq or not subcategory:
 		return []
@@ -471,8 +761,11 @@ def search_boq_items_for_ra_bill(doctype, txt, searchfield, start, page_len, fil
 	txt = txt or ""
 	like_txt = f"%{txt}%"
 	prefix_txt = f"{txt}%"
+	start = int(start or 0)
+	page_len = int(page_len or 20)
+	candidate_limit = max(start + page_len + len(exclude_items) + 50, page_len)
 
-	return frappe.db.sql(
+	candidates = frappe.db.sql(
 		"""
 		SELECT name, item_name, qty, unit_rate, uom
 		FROM `tabBOQ Item`
@@ -489,7 +782,7 @@ def search_boq_items_for_ra_bill(doctype, txt, searchfield, start, page_len, fil
 		    ELSE 3
 		  END,
 		  item_name ASC
-		LIMIT %(start)s, %(page_len)s
+		LIMIT %(candidate_limit)s
 		""",
 		{
 			"boq": boq,
@@ -497,7 +790,19 @@ def search_boq_items_for_ra_bill(doctype, txt, searchfield, start, page_len, fil
 			"txt": txt,
 			"like_txt": like_txt,
 			"prefix_txt": prefix_txt,
-			"start": start,
-			"page_len": page_len,
+			"candidate_limit": candidate_limit,
 		},
 	)
+
+	available_items = []
+	for name, item_name, qty, unit_rate, uom in candidates:
+		if name in exclude_items:
+			continue
+
+		previous_qty = _get_previous_billed_qty(boq, name, current_ra_bill)
+		if previous_qty >= flt(qty) - OVERBILLING_TOLERANCE:
+			continue
+
+		available_items.append((name, item_name, qty, unit_rate, uom))
+
+	return available_items[start : start + page_len]
