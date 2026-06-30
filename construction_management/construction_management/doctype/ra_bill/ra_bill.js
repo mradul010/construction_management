@@ -1,130 +1,253 @@
 const boqItemLabels = {};
 const boqCategoryLabels = {};
 
+const RA_BILL_METHOD =
+	"construction_management.construction_management.doctype.ra_bill.ra_bill";
+
 frappe.form.link_formatters["BOQ Item"] = function (value, doc) {
-	return (doc && doc.item_name) || boqItemLabels[value] || value;
+	if (!value) return "";
+	if (doc && doc.item_name && (doc.boq_item === value || doc.name === value)) {
+		return doc.item_name;
+	}
+	return boqItemLabels[value] || value;
 };
 
 frappe.form.link_formatters["BOQ Category"] = function (value, doc) {
-	return (doc && doc.category_name) || boqCategoryLabels[value] || value;
+	if (!value) return "";
+	if (doc && doc.name === value && doc.category_name) {
+		return doc.category_name;
+	}
+	return boqCategoryLabels[value] || value;
 };
 
-if (frappe.ui.form.ControlLink && !frappe.ui.form.ControlLink.prototype.boq_item_label_only) {
-	const originalAwesompleteFilter = frappe.ui.form.ControlLink.prototype.custom_awesomplete_filter;
-
-	frappe.ui.form.ControlLink.prototype.custom_awesomplete_filter = function (awesomplete) {
-		if (originalAwesompleteFilter) {
-			originalAwesompleteFilter.call(this, awesomplete);
-		}
-
-		if (!["BOQ Item", "BOQ Category"].includes(this.get_options())) return;
-
-		const control = this;
-
-		awesomplete.item = function (item) {
-			const d = this.get_item(item.value);
-			if (!d.label) {
-				d.label = d.value;
-			}
-			const readableLabel = d.label || d.description;
-			if (control.get_options() === "BOQ Item" && readableLabel && readableLabel !== d.value) {
-				boqItemLabels[d.value] = readableLabel;
-			}
-			if (
-				control.get_options() === "BOQ Category" &&
-				readableLabel &&
-				readableLabel !== d.value
-			) {
-				boqCategoryLabels[d.value] = readableLabel;
-			}
-			if (control.get_options() === "BOQ Item" && boqItemLabels[d.value]) {
-				d.label = boqItemLabels[d.value];
-				d.html = `<strong>${frappe.utils.escape_html(d.label)}</strong>`;
-			}
-			if (control.get_options() === "BOQ Category" && boqCategoryLabels[d.value]) {
-				d.label = boqCategoryLabels[d.value];
-				d.html = `<strong>${frappe.utils.escape_html(d.label)}</strong>`;
-			}
-
-			const label = frappe.utils.escape_html(control.get_translated(d.label));
-			const html = d.html || `<strong>${label}</strong>`;
-
-			return $(`<div role="option">`)
-				.on("click", (event) => {
-					control.awesomplete.select(event.currentTarget, event.currentTarget);
-					control.show_link_and_clear_buttons();
-				})
-				.data("item.autocomplete", d)
-				.prop("aria-selected", "false")
-				.html(`<p title="${label}">${html}</p>`)
-				.get(0);
-		};
-	};
-
-	frappe.ui.form.ControlLink.prototype.boq_item_label_only = true;
+function getNumber(value) {
+	const parsed = parseFloat(value);
+	return isNaN(parsed) ? 0 : parsed;
 }
 
-function setBoqItemDetails(frm, cdt, cdn, options = {}) {
-	const row = locals[cdt][cdn];
+function clampPercent(value) {
+	return Math.max(0, Math.min(100, getNumber(value)));
+}
 
-	if (!row || !row.boq_item) return Promise.resolve();
+function formatNumber(value, digits = 2) {
+	return getNumber(value).toLocaleString("en-AE", {
+		minimumFractionDigits: digits,
+		maximumFractionDigits: digits,
+	});
+}
 
-	return frappe.db
-		.get_value("BOQ Item", row.boq_item, [
-			"item_name",
-			"qty",
-			"unit_rate",
-			"uom",
-			"boq_category",
-			"boq_parent_category",
-		])
-		.then((r) => {
-			if (!r.message) return;
+function showStandardItemsGrid(frm) {
+	$(frm.wrapper).find("#ra-bill-custom-items-grid").remove();
+	if (frm.fields_dict.items && frm.fields_dict.items.$wrapper) {
+		frm.fields_dict.items.$wrapper.show();
+	}
+}
 
-			boqItemLabels[row.boq_item] = r.message.item_name || row.boq_item;
-			frm._ra_bill_row_state = frm._ra_bill_row_state || {};
-			const existingState = frm._ra_bill_row_state[row.name] || {};
-			const subcategory =
-				row.sub_category || existingState.subcategory || r.message.boq_category || null;
-			const subcategoryDoc =
-				frm._ra_bill_category_map && frm._ra_bill_category_map[subcategory];
-			const category =
-				row.category_name ||
-				existingState.category ||
-				(subcategoryDoc && subcategoryDoc.parent_node) ||
-				r.message.boq_parent_category ||
-				null;
+function isSettingChildValues(frm, cdn) {
+	return Boolean(frm._ra_bill_setting_child_values && frm._ra_bill_setting_child_values[cdn]);
+}
 
-			row.category_name = category;
-			row.sub_category = subcategory;
-			frm._ra_bill_row_state[row.name] = {
-				category: category,
-				subcategory: subcategory,
-			};
+function childFieldExists(cdt, fieldname) {
+	return Boolean(frappe.meta.get_docfield(cdt, fieldname));
+}
 
-			frappe.model.set_value(cdt, cdn, "item_name", r.message.item_name);
+function setChildValues(frm, cdt, cdn, values) {
+	frm._ra_bill_setting_child_values = frm._ra_bill_setting_child_values || {};
+	frm._ra_bill_setting_child_values[cdn] = true;
 
-			if (!options.labelOnly) {
-				frappe.model.set_value(cdt, cdn, "boq_qty", r.message.qty);
-				frappe.model.set_value(cdt, cdn, "boq_rate", r.message.unit_rate);
-				frappe.model.set_value(cdt, cdn, "uom", r.message.uom);
-			}
+	const setters = Object.keys(values)
+		.filter((fieldname) => childFieldExists(cdt, fieldname))
+		.map((fieldname) =>
+			Promise.resolve(frappe.model.set_value(cdt, cdn, fieldname, values[fieldname])),
+		);
 
+	return Promise.all(setters)
+		.then(() => {
+			delete frm._ra_bill_setting_child_values[cdn];
 			frm.refresh_field("items");
+		})
+		.catch((error) => {
+			delete frm._ra_bill_setting_child_values[cdn];
+			throw error;
 		});
 }
 
-function hydrateBoqItemLabels(frm) {
-	const rows = (frm.doc.items || []).filter((row) => row.boq_item);
+function getCurrentWorkPercent(row) {
+	if (getNumber(row.work_percent)) {
+		return getNumber(row.work_percent);
+	}
 
-	rows.forEach((row) => {
-		if (row.item_name) {
+	const boqQty = getNumber(row.boq_qty);
+	if (boqQty) {
+		return (getNumber(row.current_qty) / boqQty) * 100;
+	}
+	return 0;
+}
+
+function getRowTotals(row, workPercent) {
+	const pct = clampPercent(workPercent);
+	const boqQty = getNumber(row.boq_qty);
+	const boqRate = getNumber(row.boq_rate);
+	const prevQty = getNumber(row.prev_cumulative_qty);
+	const currentQty = boqQty ? (boqQty * pct) / 100 : 0;
+
+	return {
+		work_percent: pct,
+		current_qty: currentQty,
+		cumulative_qty: prevQty + currentQty,
+		current_amount: currentQty * boqRate,
+	};
+}
+
+function getRowTotalsFromCurrentQty(row) {
+	const currentQty = getNumber(row.current_qty);
+	const boqQty = getNumber(row.boq_qty);
+	const boqRate = getNumber(row.boq_rate);
+	const prevQty = getNumber(row.prev_cumulative_qty);
+
+	return {
+		work_percent: boqQty ? (currentQty / boqQty) * 100 : 0,
+		current_qty: currentQty,
+		cumulative_qty: prevQty + currentQty,
+		current_amount: currentQty * boqRate,
+	};
+}
+
+function clearItemDetailFields(frm, cdt, cdn, options = {}) {
+	const values = {
+		item_name: "",
+		boq_qty: 0,
+		boq_rate: 0,
+		uom: "Nos",
+		work_percent: 0,
+		current_qty: 0,
+		cumulative_qty: getNumber(locals[cdt][cdn].prev_cumulative_qty),
+		current_amount: 0,
+	};
+
+	if (!options.keep_sub_category) {
+		values.sub_category = "";
+	}
+	if (!options.keep_boq_item) {
+		values.boq_item = "";
+	}
+
+	return setChildValues(frm, cdt, cdn, values).then(() => frm.trigger("recalculate_totals"));
+}
+
+function hasDuplicateBoqItem(frm, row) {
+	if (!row || !row.boq_item) return false;
+
+	return (frm.doc.items || []).some(
+		(item) => item.name !== row.name && item.boq_item === row.boq_item,
+	);
+}
+
+function cacheCategoryLabel(category) {
+	if (!category || boqCategoryLabels[category]) return Promise.resolve();
+
+	return frappe.db
+		.get_value("BOQ Category", category, "category_name")
+		.then((r) => {
+			if (r.message) {
+				boqCategoryLabels[category] = r.message.category_name || category;
+			}
+		});
+}
+
+function hydrateBoqLabels(frm) {
+	(frm.doc.items || []).forEach((row) => {
+		if (row.boq_item && row.item_name) {
 			boqItemLabels[row.boq_item] = row.item_name;
-			return;
 		}
-
-		setBoqItemDetails(frm, row.doctype, row.name, { labelOnly: true });
+		if (row.category_name) {
+			cacheCategoryLabel(row.category_name);
+		}
+		if (row.sub_category) {
+			cacheCategoryLabel(row.sub_category);
+		}
 	});
+
+	if (frm.ra_bill_load_boq_context) {
+		frm.ra_bill_load_boq_context().then(() => frm.refresh_field("items"));
+	}
+}
+
+function getParentCategoryFromSubcategory(category) {
+	if (!category) return Promise.resolve("");
+
+	return frappe.db
+		.get_value("BOQ Category", category, ["category_name", "parent_node"])
+		.then((r) => {
+			const categoryInfo = r.message || {};
+			if (categoryInfo.category_name) {
+				boqCategoryLabels[category] = categoryInfo.category_name;
+			}
+			return categoryInfo.parent_node || "";
+		});
+}
+
+async function setBoqItemDetails(frm, cdt, cdn) {
+	const row = locals[cdt][cdn];
+	if (!row || !row.boq_item) return Promise.resolve();
+
+	if (hasDuplicateBoqItem(frm, row)) {
+		frappe.msgprint({
+			title: __("Duplicate BOQ Item"),
+			indicator: "orange",
+			message: __("This BOQ Item is already selected in another RA Bill Item row."),
+		});
+		return clearItemDetailFields(frm, cdt, cdn, {
+			keep_sub_category: true,
+			keep_boq_item: false,
+		});
+	}
+
+	const doc = await frappe.db.get_doc("BOQ Item", row.boq_item);
+	console.log("Fetched BOQ Item full doc:", doc);
+	console.log("Applying BOQ Item to RA Bill row:", doc);
+
+	if (!doc) {
+		frappe.msgprint("Unable to fetch BOQ Item details.");
+		return Promise.resolve();
+	}
+
+	const qty = getNumber(doc.qty || doc.quantity || 0);
+	const rate = getNumber(doc.unit_rate || doc.rate || doc.unit_cost || 0);
+	const uom = doc.uom || doc.stock_uom || "Nos";
+	const itemName = doc.item_name || doc.item || row.boq_item;
+	const subCategory = doc.boq_category || "";
+	const parentCategoryFromTree = await getParentCategoryFromSubcategory(subCategory);
+	const parentCategory = parentCategoryFromTree || doc.boq_parent_category || row.category_name || "";
+	const workPercent = getCurrentWorkPercent(row);
+	const values = {
+		item_name: itemName,
+		boq_qty: qty,
+		boq_rate: rate,
+		uom: uom,
+		sub_category: subCategory || row.sub_category || "",
+		category_name: parentCategory || row.category_name || "",
+		...getRowTotals(
+			{
+				...row,
+				boq_qty: qty,
+				boq_rate: rate,
+			},
+			workPercent,
+		),
+	};
+
+	boqItemLabels[row.boq_item] = itemName;
+	if (subCategory) {
+		cacheCategoryLabel(subCategory);
+	}
+	if (parentCategory) {
+		cacheCategoryLabel(parentCategory);
+	}
+
+	await setChildValues(frm, cdt, cdn, values);
+	frm.trigger("recalculate_totals");
+	console.log("RA Bill row after BOQ item apply:", locals[cdt][cdn]);
 }
 
 frappe.ui.form.on("RA Bill", {
@@ -138,86 +261,50 @@ frappe.ui.form.on("RA Bill", {
 			};
 		});
 
-		frm.set_query("boq_item", "items", function () {
+		frm.set_query("category_name", "items", function () {
 			return {
+				query: `${RA_BILL_METHOD}.search_ra_bill_categories`,
 				filters: {
-					parent: frm.doc.boq,
+					boq: frm.doc.boq,
 				},
 			};
 		});
 
-		frm._ra_bill_row_state = {};
+		frm.set_query("sub_category", "items", function (doc, cdt, cdn) {
+			const row = locals[cdt][cdn];
+			return {
+				query: `${RA_BILL_METHOD}.search_ra_bill_subcategories`,
+				filters: {
+					boq: frm.doc.boq,
+					category: row.category_name,
+				},
+			};
+		});
 
-		frm.ra_bill_is_editable = function () {
-			return frm.doc.docstatus === 0;
+		frm.set_query("boq_item", "items", function (doc, cdt, cdn) {
+			const row = locals[cdt][cdn];
+			return {
+				query: `${RA_BILL_METHOD}.search_boq_items_for_ra_bill`,
+				filters: {
+					boq: frm.doc.boq,
+					category: row.category_name,
+					subcategory: row.sub_category,
+				},
+			};
+		});
+
+		frm.ra_bill_format_number = formatNumber;
+		frm.ra_bill_apply_selected_boq_item = async function (cdt, cdn) {
+			return setBoqItemDetails(frm, cdt, cdn);
 		};
-
-		frm.ra_bill_get_number = function (value) {
-			const parsed = parseFloat(value);
-			return isNaN(parsed) ? 0 : parsed;
-		};
-
-		frm.ra_bill_format_number = function (value, digits = 2) {
-			return frm.ra_bill_get_number(value).toLocaleString("en-AE", {
-				minimumFractionDigits: digits,
-				maximumFractionDigits: digits,
-			});
-		};
-
-		frm.ra_bill_format_currency = function (value) {
-			return frappe.format(frm.ra_bill_get_number(value), {
-				fieldtype: "Currency",
-				options: frm.doc.currency,
-			});
-		};
-
-		frm.ra_bill_get_row_completion = function (row) {
-			const boqQty = frm.ra_bill_get_number(row.boq_qty);
-			const currentQty = frm.ra_bill_get_number(row.current_qty);
-
-			if (boqQty) {
-				return (currentQty / boqQty) * 100;
-			}
-
-			return currentQty * 100;
-		};
-
-		frm.ra_bill_recalculate_row = function (row, completionPct) {
-			const pct = Math.max(0, Math.min(100, frm.ra_bill_get_number(completionPct)));
-			const boqQty = frm.ra_bill_get_number(row.boq_qty);
-			const boqRate = frm.ra_bill_get_number(row.boq_rate);
-			const prevQty = frm.ra_bill_get_number(row.prev_cumulative_qty);
-			const currentQty = boqQty ? (boqQty * pct) / 100 : pct / 100;
-
-			row.current_qty = currentQty;
-			row.cumulative_qty = prevQty + currentQty;
-			row.completion_pct = boqQty ? (row.cumulative_qty / boqQty) * 100 : pct;
-			row.current_amount = currentQty * boqRate;
-		};
-
-		frm.ra_bill_set_dirty = function () {
-			if (frm.dirty) {
-				frm.dirty();
-			}
-		};
-
-		frm.ra_bill_schedule_render = frappe.utils.debounce(function () {
-			if (frm.ra_bill_render_items_grid) {
-				frm.ra_bill_render_items_grid();
-			}
-		}, 100);
 
 		frm.ra_bill_load_boq_context = function () {
 			if (!frm.doc.boq) {
-				frm._ra_bill_boq_items = [];
-				frm._ra_bill_category_map = {};
-				frm._ra_bill_parent_category_names = [];
-				frm._ra_bill_subcategory_names = [];
 				frm._ra_bill_context_boq = null;
 				return Promise.resolve();
 			}
 
-			if (frm._ra_bill_context_boq === frm.doc.boq && frm._ra_bill_boq_items) {
+			if (frm._ra_bill_context_boq === frm.doc.boq) {
 				return Promise.resolve();
 			}
 
@@ -228,44 +315,27 @@ frappe.ui.form.on("RA Bill", {
 						parenttype: "BOQ",
 						parentfield: "items",
 					},
-					fields: [
-						"name",
-						"boq_category",
-						"boq_parent_category",
-						"item",
-						"item_name",
-						"qty",
-						"unit_rate",
-						"uom",
-					],
+					fields: ["name", "boq_category", "item", "item_name"],
 					limit: 1000,
 					order_by: "idx asc",
 				})
 				.then((items) => {
-					frm._ra_bill_boq_items = items || [];
-					frm._ra_bill_boq_items.forEach((item) => {
+					const categoryNames = [
+						...new Set((items || []).map((item) => item.boq_category).filter(Boolean)),
+					];
+
+					(items || []).forEach((item) => {
 						boqItemLabels[item.name] = item.item_name || item.item || item.name;
 					});
 
-					const subcategoryNames = [
-						...new Set(
-							frm._ra_bill_boq_items
-								.map((item) => item.boq_category)
-								.filter(Boolean),
-						),
-					];
-
-					if (!subcategoryNames.length) {
-						frm._ra_bill_category_map = {};
-						frm._ra_bill_parent_category_names = [];
-						frm._ra_bill_subcategory_names = [];
+					if (!categoryNames.length) {
 						frm._ra_bill_context_boq = frm.doc.boq;
 						return [];
 					}
 
 					return frappe.db
 						.get_list("BOQ Category", {
-							filters: [["name", "in", subcategoryNames]],
+							filters: [["name", "in", categoryNames]],
 							fields: ["name", "category_name", "parent_node"],
 							limit: 1000,
 						})
@@ -277,830 +347,29 @@ frappe.ui.form.on("RA Bill", {
 										.filter(Boolean),
 								),
 							];
-
 							const parentPromise = parentNames.length
 								? frappe.db.get_list("BOQ Category", {
 										filters: [["name", "in", parentNames]],
-										fields: ["name", "category_name", "parent_node"],
+										fields: ["name", "category_name"],
 										limit: 1000,
-									})
+								  })
 								: Promise.resolve([]);
 
 							return parentPromise.then((parents) => {
-								const categoryMap = {};
-
 								[...(subcategories || []), ...(parents || [])].forEach((category) => {
-									categoryMap[category.name] = category;
 									boqCategoryLabels[category.name] =
 										category.category_name || category.name;
 								});
-
-								frm._ra_bill_category_map = categoryMap;
-								frm._ra_bill_parent_category_names = [
-									...new Set(
-										(subcategories || []).map(
-											(category) => category.parent_node || category.name,
-										),
-									),
-								];
-								frm._ra_bill_subcategory_names = subcategoryNames;
 								frm._ra_bill_context_boq = frm.doc.boq;
 							});
 						});
 				});
 		};
-
-		frm.ra_bill_get_row_category_state = function (row) {
-			frm._ra_bill_row_state = frm._ra_bill_row_state || {};
-			const existingState = frm._ra_bill_row_state[row.name] || {};
-			let subcategory = row.sub_category || existingState.subcategory || null;
-
-			if (row.boq_item && !subcategory) {
-				const boqItem = (frm._ra_bill_boq_items || []).find(
-					(item) => item.name === row.boq_item,
-				);
-
-				if (boqItem) {
-					subcategory = boqItem.boq_category || subcategory;
-				}
-			}
-
-			const subcategoryDoc = frm._ra_bill_category_map
-				? frm._ra_bill_category_map[subcategory]
-				: null;
-			const category =
-				row.category_name ||
-				existingState.category ||
-				(subcategoryDoc && subcategoryDoc.parent_node) ||
-				null;
-
-			frm._ra_bill_row_state[row.name] = {
-				category: category,
-				subcategory: subcategory,
-			};
-
-			return frm._ra_bill_row_state[row.name];
-		};
-
-		frm.ra_bill_clear_item_fields = function (row) {
-			row.boq_item = null;
-			row.item_name = null;
-			row.boq_qty = 0;
-			row.boq_rate = 0;
-			row.uom = "Nos";
-			row.current_amount = 0;
-		};
-
-		frm.ra_bill_get_subcategories_for_category = function (category) {
-			return (frm._ra_bill_subcategory_names || []).filter((name) => {
-				const subcategory = frm._ra_bill_category_map[name];
-				if (!subcategory) return false;
-				return (subcategory.parent_node || subcategory.name) === category;
-			});
-		};
-
-		frm.ra_bill_get_items_for_subcategory = function (subcategory) {
-			return (frm._ra_bill_boq_items || []).filter(
-				(item) => item.boq_category === subcategory,
-			);
-		};
-
-		frm.ra_bill_get_category_label = function (value) {
-			if (!value) return "";
-
-			const category = frm._ra_bill_category_map && frm._ra_bill_category_map[value];
-			const label = boqCategoryLabels[value] || (category && category.category_name) || value;
-			boqCategoryLabels[value] = label;
-			return label;
-		};
-
-		frm.ra_bill_get_link_label = function (options, value) {
-			if (!value) return "";
-			if (options === "BOQ Item") {
-				const boqItem = (frm._ra_bill_boq_items || []).find(
-					(item) => item.name === value || item.item_name === value,
-				);
-				return boqItemLabels[value] || (boqItem && boqItem.item_name) || value;
-			}
-			if (options === "BOQ Category") {
-				return frm.ra_bill_get_category_label(value);
-			}
-			return value;
-		};
-
-		frm.ra_bill_make_link_control = function (
-			parent,
-			fieldname,
-			options,
-			value,
-			getQuery,
-			onChange,
-			displayLabel,
-		) {
-			const initialValue = value || "";
-			let previousValue = initialValue;
-			let suppressChange = true;
-			const control = frappe.ui.form.make_control({
-				parent: parent.get ? parent.get(0) : parent,
-				df: {
-					fieldtype: "Link",
-					fieldname: fieldname,
-					options: options,
-					placeholder: __("Select"),
-					get_query: getQuery,
-					onchange: function () {
-						if (frm._ra_bill_rendering_grid || suppressChange) return;
-
-						const newValue = control.get_value() || "";
-						if (newValue === previousValue) return;
-
-						previousValue = newValue;
-						const result = onChange(newValue, initialValue, control);
-						Promise.resolve(result).then(() => {
-							const label = frm.ra_bill_get_link_label(options, newValue);
-							if (label && control.set_input) {
-								control.set_input(label);
-							}
-						});
-					},
-				},
-				render_input: true,
-				only_input: true,
-			});
-
-			control.get_query = getQuery;
-			control.refresh();
-
-			const label = displayLabel || frm.ra_bill_get_link_label(options, initialValue);
-			control.value = initialValue;
-			control.last_value = initialValue;
-			control.title_value_map = control.title_value_map || {};
-
-			if (initialValue && label) {
-				control.title_value_map[label] = initialValue;
-				frappe.utils.add_link_title(options, initialValue, label);
-				control.set_input(label);
-			} else {
-				control.set_input("");
-			}
-
-			setTimeout(() => {
-				suppressChange = false;
-			}, 0);
-			return control;
-		};
-
-		frm.ra_bill_apply_boq_item = async function (row, boqItemName) {
-			if (!boqItemName) return Promise.resolve();
-
-			console.log("Selected BOQ Item:", boqItemName);
-			console.log("Current RA row before fetch:", row);
-
-			if (
-				boqItemName === row.boq_item &&
-				row.item_name &&
-				frm.ra_bill_get_number(row.boq_qty) &&
-				frm.ra_bill_get_number(row.boq_rate)
-			) {
-				return Promise.resolve();
-			}
-
-			const workPercent =
-				frm.ra_bill_get_row_completion(row) || frm.ra_bill_get_number(row.completion_pct);
-			const cachedBoqItem = (frm._ra_bill_boq_items || []).find(
-				(item) => item.name === boqItemName || item.item_name === boqItemName,
-			);
-			const selectedBoqItemName = cachedBoqItem ? cachedBoqItem.name : boqItemName;
-
-			const doc = await frappe.db.get_doc("BOQ Item", selectedBoqItemName);
-			console.log("Fetched BOQ Item doc:", doc);
-			console.log("RA Bill fetched BOQ Item:", doc);
-
-			const boqItem = {
-				...(cachedBoqItem || {}),
-				...(doc || {}),
-			};
-
-			if (!boqItem.name && !cachedBoqItem) return;
-
-			boqItemLabels[selectedBoqItemName] =
-				boqItem.item_name || boqItem.item || boqItem.description || selectedBoqItemName;
-
-			const existingState = frm.ra_bill_get_row_category_state(row);
-			const selectedSubcategory = existingState.subcategory || boqItem.boq_category || null;
-			const selectedCategory =
-				existingState.category ||
-				((frm._ra_bill_category_map || {})[selectedSubcategory] || {}).parent_node ||
-				null;
-
-			row.category_name = selectedCategory;
-			row.sub_category = selectedSubcategory;
-			frm._ra_bill_row_state[row.name] = {
-				category: selectedCategory,
-				subcategory: selectedSubcategory,
-			};
-
-			row.boq_item = selectedBoqItemName;
-			row.item_name = boqItem.item_name || boqItem.item || boqItem.description || selectedBoqItemName;
-			row.boq_qty = frm.ra_bill_get_number(boqItem.qty || boqItem.quantity || 0);
-			row.boq_rate = frm.ra_bill_get_number(
-				boqItem.unit_rate || boqItem.rate || boqItem.unit_cost || 0,
-			);
-			row.uom = boqItem.uom || boqItem.stock_uom || "Nos";
-
-			row.current_qty = (row.boq_qty * workPercent) / 100;
-			row.current_amount = row.current_qty * row.boq_rate;
-			row.completion_pct = workPercent;
-
-			frm.ra_bill_set_dirty();
-			frm.refresh_field("items");
-			frm.trigger("recalculate_totals");
-
-			if (frm.ra_bill_schedule_render) {
-				frm.ra_bill_schedule_render();
-			} else {
-				frm.ra_bill_render_items_grid();
-			}
-		};
-
-		frm.ra_bill_render_items_grid = function () {
-			if (!frm.fields_dict.items || !frm.fields_dict.items.$wrapper) return;
-			if (frm._ra_bill_rendering_grid) return;
-
-			frm._ra_bill_rendering_grid = true;
-
-			frm.fields_dict.items.$wrapper.hide();
-
-			let container = $(frm.wrapper).find("#ra-bill-custom-items-grid");
-			if (!container.length) {
-				frm.fields_dict.items.$wrapper
-					.closest(".form-column")
-					.append('<div id="ra-bill-custom-items-grid" style="margin-top:16px"></div>');
-				container = $(frm.wrapper).find("#ra-bill-custom-items-grid");
-			}
-
-			const isEditable = frm.ra_bill_is_editable();
-			const rows = frm.doc.items || [];
-			const total = rows.reduce(
-				(sum, row) => sum + frm.ra_bill_get_number(row.current_amount),
-				0,
-			);
-
-			if (!frm.doc.boq) {
-				container.html(`
-					<div style="border:1px solid var(--border-color);border-radius:6px;padding:14px;color:var(--text-muted);font-size:13px">
-						Select a BOQ to add billed items.
-					</div>
-				`);
-				frm._ra_bill_rendering_grid = false;
-				return;
-			}
-
-			frm.ra_bill_load_boq_context().then(() => {
-				let html = `
-					<style>
-						#ra-bill-custom-items-grid {
-							width: 100%;
-							max-width: 100%;
-							overflow: visible;
-						}
-						#ra-bill-custom-items-grid .ra-bill-table-shell {
-							border: 1px solid var(--border-color);
-							border-radius: 6px;
-							font-family: var(--font-stack);
-							font-size: 13px;
-							width: 100%;
-							max-width: 100%;
-							box-sizing: border-box;
-							overflow-x: visible;
-							overflow-y: visible;
-						}
-						#ra-bill-custom-items-grid table {
-							width: 100%;
-							border-collapse: collapse;
-							table-layout: fixed;
-							box-sizing: border-box;
-						}
-						#ra-bill-custom-items-grid th,
-						#ra-bill-custom-items-grid td {
-							text-align: center;
-							vertical-align: middle;
-							white-space: normal;
-							overflow-wrap: anywhere;
-							word-break: break-word;
-							box-sizing: border-box;
-						}
-
-						#ra-bill-custom-items-grid th {
-							padding: 8px 4px;
-							font-size: 10px;
-							font-weight: 700;
-							line-height: 1.2;
-							text-transform: uppercase;
-							color: #374151;
-							background: var(--control-bg);
-							border-bottom: 1px solid var(--border-color);
-						}
-
-						#ra-bill-custom-items-grid td {
-							min-height: 48px;
-							height: auto;
-							padding: 8px 5px;
-							overflow: visible;
-							font-size: 12px;
-							font-weight: 500;
-							color: #374151;
-							line-height: 1.35;
-						}
-
-						#ra-bill-custom-items-grid .frappe-control,
-						#ra-bill-custom-items-grid .form-group {
-							margin-bottom: 0;
-						}
-						#ra-bill-custom-items-grid .control-label {
-							display: none;
-						}
-						#ra-bill-custom-items-grid .control-input-wrapper {
-							margin-top: 0;
-						}
-						#ra-bill-custom-items-grid .link-field,
-						#ra-bill-custom-items-grid .form-control {
-							width: 100%;
-							max-width: 100%;
-							min-width: 0;
-							min-height: 32px;
-							height: 32px;
-							font-size: 13px;
-							font-weight: 500;
-							text-align: center;
-							color: #374151;
-							box-sizing: border-box;
-						}
-						#ra-bill-custom-items-grid .ra-item-cell,
-						#ra-bill-custom-items-grid .ra-item-cell .form-control,
-						#ra-bill-custom-items-grid .ra-item-cell .awesomplete > input {
-							text-align: left;
-						}
-						#ra-bill-custom-items-grid .ra-item-cell {
-							white-space: normal;
-							overflow-wrap: anywhere;
-							word-break: break-word;
-							line-height: 1.35;
-						}
-						#ra-bill-custom-items-grid .ra-item-display {
-							width: 100%;
-							max-width: 100%;
-							white-space: normal;
-							overflow-wrap: anywhere;
-							word-break: break-word;
-							line-height: 1.35;
-							text-align: left;
-							cursor: pointer;
-						}
-						#ra-bill-custom-items-grid .ra-category-cell,
-						#ra-bill-custom-items-grid .ra-subcategory-cell,
-						#ra-bill-custom-items-grid .ra-item-cell {
-							min-width: 0;
-							max-width: 100%;
-						}
-						#ra-bill-custom-items-grid .ra-work-complete {
-							width: 100%;
-							max-width: 100%;
-							margin: 0 auto;
-							text-align: center;
-							display: block;
-						}
-						#ra-bill-custom-items-grid .awesomplete,
-						#ra-bill-custom-items-grid .awesomplete > input {
-							width: 100%;
-							max-width: 100%;
-							box-sizing: border-box;
-							text-align: center;
-						}
-						#ra-bill-custom-items-grid .awesomplete > ul {
-							z-index: 9999;
-							position: absolute;
-							text-align: left;
-							white-space: normal;
-						}
-						#ra-bill-custom-items-grid td.ra-currency-cell {
-							text-align: center;
-							padding-left: 0;
-							padding-right: 0;
-						}
-						#ra-bill-custom-items-grid .ra-currency-value {
-							display: flex;
-							align-items: center;
-							justify-content: center;
-							width: 100%;
-							font-variant-numeric: tabular-nums;
-							text-align: center;
-						}
-						#ra-bill-custom-items-grid td.ra-amount-cell {
-							font-weight: 700;
-							color: var(--primary);
-						}
-
-						#ra-bill-custom-items-grid td.ra-action-cell {
-							text-align: center;
-							padding: 0;
-							overflow: hidden;
-						}
-
-						#ra-bill-custom-items-grid .ra-action-btn {
-							width: 22px;
-							height: 22px;
-							padding: 0;
-							margin: 0 auto;
-							display: inline-flex;
-							align-items: center;
-							justify-content: center;
-						}
-						#ra-bill-custom-items-grid .ra-bill-table-footer {
-							display: grid;
-							grid-template-columns: 5% 14% 14% 24% 8% 9% 6% 8% 9% 3%;
-							align-items: center;
-							gap: 0;
-							padding: 10px 0;
-							background: #0F1E38;
-							color: #fff;
-							border-top: 2px solid #c9a520;
-							box-sizing: border-box;
-						}
-						#ra-bill-custom-items-grid .ra-add-row {
-							grid-column: 1 / 4;
-							justify-self: start;
-							margin-left: 12px;
-							display: inline-flex;
-							align-items: center;
-							gap: 6px;
-						}
-						#ra-bill-custom-items-grid .ra-total-label {
-							grid-column: 8;
-							justify-self: center;
-							color: #a0b0c8;
-							font-size: 11px;
-							font-weight: 600;
-							text-transform: uppercase;
-							text-align: center;
-							white-space: normal;
-						}
-						#ra-bill-custom-items-grid .ra-total-value {
-							grid-column: 9;
-							justify-self: stretch;
-							font-size: 14px;
-							font-weight: 700;
-							color: #fff;
-							text-align: center;
-							font-variant-numeric: tabular-nums;
-							overflow-wrap: anywhere;
-						}
-						@media (max-width: 1199px) {
-							#ra-bill-custom-items-grid th {
-								font-size: 9px;
-								padding: 7px 3px;
-							}
-							#ra-bill-custom-items-grid td {
-								font-size: 11px;
-								padding: 7px 4px;
-							}
-							#ra-bill-custom-items-grid .link-field,
-							#ra-bill-custom-items-grid .form-control {
-								font-size: 12px;
-							}
-						}
-						@media (max-width: 991px) {
-							#ra-bill-custom-items-grid {
-								overflow: hidden;
-							}
-							#ra-bill-custom-items-grid .ra-bill-table-shell {
-								overflow-x: auto;
-								overflow-y: visible;
-							}
-							#ra-bill-custom-items-grid table,
-							#ra-bill-custom-items-grid .ra-bill-table-footer {
-								min-width: 980px;
-							}
-						}
-					</style>
-					<div class="ra-bill-table-shell">
-						<table>
-							<colgroup>
-								<col style="width:5%">
-								<col style="width:14%">
-								<col style="width:14%">
-								<col style="width:24%">
-								<col style="width:8%">
-								<col style="width:9%">
-								<col style="width:6%">
-								<col style="width:8%">
-								<col style="width:9%">
-								<col style="width:3%">
-							</colgroup>
-							<thead>
-								<tr>
-									<th>S.NO</th>
-									<th>CATEGORY NAME</th>
-									<th>SUB CATEGORY</th>
-									<th>ITEM</th>
-									<th>BOQ QTY</th>
-									<th>BOQ RATE</th>
-									<th>UOM</th>
-									<th>WORK %</th>
-									<th>AMOUNT</th>
-									<th>ACTION</th>
-								</tr>
-							</thead>
-							<tbody>
-				`;
-
-				if (!rows.length) {
-					html += `
-						<tr>
-							<td colspan="10" style="padding:14px;text-align:center;color:var(--text-muted)">
-								No billed items yet.
-							</td>
-						</tr>
-					`;
-				}
-
-				rows.forEach((row, index) => {
-					const completion = frm.ra_bill_get_row_completion(row);
-					const categoryState = frm.ra_bill_get_row_category_state(row);
-
-					html += `
-						<tr data-row-name="${row.name}" style="border-bottom:1px solid var(--border-color);background:${index % 2 === 0 ? "var(--bg-color)" : "var(--control-bg)"}">
-							<td>${index + 1}</td>
-							<td><div class="ra-category-cell" data-row-name="${row.name}"></div></td>
-							<td><div class="ra-subcategory-cell" data-row-name="${row.name}"></div></td>
-							<td class="ra-item-cell" data-row-name="${row.name}"></td>
-							<td>${frm.ra_bill_format_number(row.boq_qty)}</td>
-							<td class="ra-currency-cell">
-								<span class="ra-currency-value">${frm.ra_bill_format_currency(row.boq_rate)}</span>
-							</td>
-							<td>${row.uom || "Nos"}</td>
-							<td>
-								${
-									isEditable
-										? `<input type="number" class="form-control ra-work-complete" data-row-name="${row.name}" value="${frm.ra_bill_format_number(completion)}" min="0" max="100" step="any" style="padding:2px 4px">`
-									: `${frm.ra_bill_format_number(completion)}%`
-								}
-							</td>
-							<td class="ra-currency-cell ra-amount-cell">
-								<span class="ra-currency-value">${frm.ra_bill_format_currency(row.current_amount)}</span>
-							</td>
-							<td class="ra-action-cell">
-								<button class="btn btn-xs btn-default ra-row-delete ra-action-btn" data-row-name="${row.name}" title="Delete" ${isEditable ? "" : "disabled"}>
-									<i class="fa fa-trash" style="color:#ef4444"></i>
-								</button>
-							</td>
-						</tr>
-					`;
-
-				});
-
-				html += `
-							</tbody>
-						</table>
-						<div class="ra-bill-table-footer">
-							<button class="btn btn-xs btn-default ra-add-row" ${isEditable ? "" : "disabled"}>
-								<i class="fa fa-plus"></i> Add Row
-							</button>
-							<span class="ra-total-label">Total Amount</span>
-							<span class="ra-total-value">${frm.ra_bill_format_currency(total)}</span>
-						</div>
-					</div>
-				`;
-
-				container.html(html);
-
-				rows.forEach((row) => {
-					if (row.boq_item && row.item_name) {
-						boqItemLabels[row.boq_item] = row.item_name;
-					}
-					const state = frm.ra_bill_get_row_category_state(row);
-					if (state.category) {
-						boqCategoryLabels[state.category] = frm.ra_bill_get_category_label(state.category);
-					}
-					if (state.subcategory) {
-						boqCategoryLabels[state.subcategory] = frm.ra_bill_get_category_label(
-							state.subcategory,
-						);
-					}
-					const categoryCell = container.find(`.ra-category-cell[data-row-name="${row.name}"]`);
-					const subcategoryCell = container.find(`.ra-subcategory-cell[data-row-name="${row.name}"]`);
-					const itemCell = container.find(`.ra-item-cell[data-row-name="${row.name}"]`);
-
-					if (!isEditable) {
-						categoryCell.text(boqCategoryLabels[state.category] || "");
-						subcategoryCell.text(boqCategoryLabels[state.subcategory] || "");
-						itemCell.text(boqItemLabels[row.boq_item] || row.item_name || "");
-						return;
-					}
-
-					frm.ra_bill_make_link_control(
-						categoryCell,
-						`ra_category_${row.name}`,
-						"BOQ Category",
-						state.category,
-						function () {
-							return {
-								query:
-									"construction_management.construction_management.doctype.ra_bill.ra_bill.search_ra_bill_categories",
-								filters: {
-									boq: frm.doc.boq,
-								},
-							};
-						},
-						function (value) {
-							const category = value || null;
-							row.category_name = category;
-							row.sub_category = null;
-							frm._ra_bill_row_state[row.name] = {
-								category: category,
-								subcategory: null,
-							};
-							frm.ra_bill_clear_item_fields(row);
-							frm.ra_bill_recalculate_row(row, 0);
-							frm.ra_bill_set_dirty();
-							frm.refresh_field("items");
-							frm.trigger("recalculate_totals");
-							frm.ra_bill_schedule_render();
-						},
-						frm.ra_bill_get_category_label(state.category),
-					);
-
-					frm.ra_bill_make_link_control(
-						subcategoryCell,
-						`ra_subcategory_${row.name}`,
-						"BOQ Category",
-						state.subcategory,
-						function () {
-							const subcategories = state.category
-								? frm.ra_bill_get_subcategories_for_category(state.category)
-								: frm._ra_bill_subcategory_names || [];
-							return {
-								query:
-									"construction_management.construction_management.doctype.ra_bill.ra_bill.search_ra_bill_subcategories",
-								filters: {
-									boq: frm.doc.boq,
-									category: state.category || "__none__",
-									allowed_subcategories: subcategories,
-								},
-							};
-						},
-						function (value) {
-							const subcategory = value || null;
-							const subcategoryDoc = (frm._ra_bill_category_map || {})[subcategory] || {};
-							const category =
-								subcategoryDoc.parent_node || row.category_name || state.category || null;
-							row.category_name = category;
-							row.sub_category = subcategory;
-							frm._ra_bill_row_state[row.name] = {
-								category: category,
-								subcategory: subcategory,
-							};
-							frm.ra_bill_clear_item_fields(row);
-							frm.ra_bill_recalculate_row(row, 0);
-							frm.ra_bill_set_dirty();
-							frm.refresh_field("items");
-							frm.trigger("recalculate_totals");
-							frm.ra_bill_schedule_render();
-						},
-						frm.ra_bill_get_category_label(state.subcategory),
-					);
-
-					const makeItemControl = () =>
-						frm.ra_bill_make_link_control(
-							itemCell,
-							`ra_item_${row.name}`,
-							"BOQ Item",
-							row.boq_item,
-							function () {
-								const subcategory =
-									(frm._ra_bill_row_state[row.name] || {}).subcategory || state.subcategory;
-								return {
-									query:
-										"construction_management.construction_management.doctype.ra_bill.ra_bill.search_boq_items_for_ra_bill",
-									filters: {
-										boq: frm.doc.boq,
-										category:
-											(frm._ra_bill_row_state[row.name] || {}).category ||
-											state.category,
-										subcategory: subcategory || "__none__",
-									},
-								};
-							},
-							function (value) {
-								if (
-									value === row.boq_item &&
-									row.item_name &&
-									frm.ra_bill_get_number(row.boq_qty) &&
-									frm.ra_bill_get_number(row.boq_rate)
-								) {
-									return Promise.resolve();
-								}
-
-								if (!value) {
-									frm.ra_bill_clear_item_fields(row);
-									frm.ra_bill_recalculate_row(row, 0);
-									frm.ra_bill_set_dirty();
-									frm.refresh_field("items");
-									frm.trigger("recalculate_totals");
-									frm.ra_bill_schedule_render();
-									return;
-								}
-								return frm.ra_bill_apply_boq_item(row, value);
-							},
-							row.item_name,
-						);
-
-					if (row.boq_item && row.item_name) {
-						itemCell.html(`
-							<div class="ra-item-display"
-								data-row-name="${row.name}"
-								title="${frappe.utils.escape_html(row.item_name)}">
-								${frappe.utils.escape_html(row.item_name)}
-							</div>
-						`);
-						itemCell.find(".ra-item-display").on("click", function () {
-							itemCell.empty();
-							makeItemControl();
-						});
-					} else {
-						makeItemControl();
-					}
-				});
-
-				container.find(".ra-work-complete").on("change", function () {
-					if (!frm.ra_bill_is_editable()) return;
-
-					const rowName = $(this).data("row-name");
-					const row = (frm.doc.items || []).find((item) => item.name === rowName);
-					if (!row) return;
-
-					frm.ra_bill_recalculate_row(row, $(this).val());
-					frm.ra_bill_set_dirty();
-					frm.refresh_field("items");
-					frm.trigger("recalculate_totals");
-					frm.ra_bill_schedule_render();
-				});
-
-				container.find(".ra-add-row").on("click", function () {
-					if (!frm.ra_bill_is_editable()) return;
-
-					const row = frm.add_child("items", {
-						category_name: null,
-						sub_category: null,
-						current_qty: 0,
-						current_amount: 0,
-						completion_pct: 0,
-						uom: "Nos",
-					});
-					frm._ra_bill_row_state[row.name] = {
-						category: null,
-						subcategory: null,
-					};
-						frm.ra_bill_set_dirty();
-						frm.refresh_field("items");
-						frm.ra_bill_render_items_grid();
-					});
-
-				container.find(".ra-row-delete").on("click", function () {
-					if (!frm.ra_bill_is_editable()) return;
-
-					const rowName = $(this).data("row-name");
-					const index = (frm.doc.items || []).findIndex((item) => item.name === rowName);
-					if (index === -1) return;
-
-					frm.doc.items.splice(index, 1);
-					delete frm._ra_bill_row_state[rowName];
-					frm.ra_bill_set_dirty();
-					frm.refresh_field("items");
-					frm.trigger("recalculate_totals");
-					frm.ra_bill_schedule_render();
-				});
-
-				container.find(".ra-row-edit").on("click", function () {
-					if (!frm.ra_bill_is_editable()) return;
-
-					const rowName = $(this).data("row-name");
-					const gridRow = frm.fields_dict.items.grid.grid_rows_by_docname[rowName];
-					if (gridRow) {
-						gridRow.toggle_view(true);
-					}
-				});
-
-				setTimeout(() => {
-					frm._ra_bill_rendering_grid = false;
-				}, 0);
-			});
-		};
 	},
 
 	refresh: function (frm) {
-		hydrateBoqItemLabels(frm);
-		frm.ra_bill_render_items_grid();
+		showStandardItemsGrid(frm);
+		hydrateBoqLabels(frm);
 
 		if (frm.doc.status === "Submitted" && frm.doc.docstatus === 1) {
 			frm.add_custom_button(
@@ -1138,12 +407,12 @@ frappe.ui.form.on("RA Bill", {
 				"Create Sales Invoice",
 				function () {
 					const currency = frm.doc.currency || "AED";
-					const gross = frm.ra_bill_format_number(frm.doc.gross_amount);
-					const retention = frm.ra_bill_format_number(frm.doc.retention_amount);
-					const net = frm.ra_bill_format_number(frm.doc.net_payable);
+					const gross = formatNumber(frm.doc.gross_amount);
+					const retention = formatNumber(frm.doc.retention_amount);
+					const net = formatNumber(frm.doc.net_payable);
 					const retPct = frm.doc.retention_percent || 0;
 
-					let msg = `
+					const msg = `
 						<table style="width:100%;font-size:13px;border-collapse:collapse">
 							<tr>
 								<td style="padding:6px 0;color:#6b7280">Gross Amount</td>
@@ -1198,16 +467,22 @@ frappe.ui.form.on("RA Bill", {
 		}
 	},
 
+	validate: function (frm) {
+		frm.trigger("recalculate_totals");
+	},
+
 	project: function (frm) {
 		if (frm.doc.boq) {
 			frm.set_value("boq", null);
 			frm.clear_table("items");
 			frm.refresh_field("items");
-			frm.ra_bill_render_items_grid();
+			frm.trigger("recalculate_totals");
 		}
 	},
 
 	boq: function (frm) {
+		frm._ra_bill_context_boq = null;
+
 		if (frm.doc.boq) {
 			const selectedBoq = frm.doc.boq;
 
@@ -1222,13 +497,11 @@ frappe.ui.form.on("RA Bill", {
 			frappe.confirm("Changing the BOQ will clear all current items. Continue?", function () {
 				frm.clear_table("items");
 				frm.refresh_field("items");
-				frm.ra_bill_render_items_grid();
+				frm.trigger("recalculate_totals");
 			});
 		}
-		frm._ra_bill_boq_items = null;
-		frm._ra_bill_category_map = {};
-		frm._ra_bill_row_state = {};
-		frm.ra_bill_render_items_grid();
+
+		hydrateBoqLabels(frm);
 	},
 
 	retention_percent: function (frm) {
@@ -1239,44 +512,84 @@ frappe.ui.form.on("RA Bill", {
 		let gross = 0;
 
 		(frm.doc.items || []).forEach((row) => {
-			gross += row.current_amount || 0;
+			gross += getNumber(row.current_amount);
 		});
 
-		const retention = gross * ((frm.doc.retention_percent || 0) / 100);
+		const retention = gross * (getNumber(frm.doc.retention_percent) / 100);
 
 		frappe.model.set_value(frm.doctype, frm.docname, "gross_amount", gross);
 		frappe.model.set_value(frm.doctype, frm.docname, "retention_amount", retention);
 		frappe.model.set_value(frm.doctype, frm.docname, "net_payable", gross - retention);
-		if (frm.ra_bill_schedule_render) {
-			frm.ra_bill_schedule_render();
-		} else {
-			frm.ra_bill_render_items_grid();
-		}
 	},
 });
 
 frappe.ui.form.on("RA Bill Item", {
+	items_add: function (frm, cdt, cdn) {
+		setChildValues(frm, cdt, cdn, {
+			uom: "Nos",
+			work_percent: 0,
+			current_qty: 0,
+			current_amount: 0,
+			cumulative_qty: getNumber(locals[cdt][cdn].prev_cumulative_qty),
+		});
+	},
+
+	category_name: function (frm, cdt, cdn) {
+		if (isSettingChildValues(frm, cdn)) return;
+
+		clearItemDetailFields(frm, cdt, cdn, {
+			keep_sub_category: false,
+			keep_boq_item: false,
+		});
+	},
+
+	sub_category: function (frm, cdt, cdn) {
+		if (isSettingChildValues(frm, cdn)) return;
+
+		clearItemDetailFields(frm, cdt, cdn, {
+			keep_sub_category: true,
+			keep_boq_item: false,
+		});
+	},
+
 	boq_item: function (frm, cdt, cdn) {
-		setBoqItemDetails(frm, cdt, cdn).then(() => frm.ra_bill_render_items_grid());
+		if (isSettingChildValues(frm, cdn)) return;
+
+		const row = locals[cdt][cdn];
+		console.log("RA Bill Item boq_item triggered");
+		console.log("Selected boq_item:", row && row.boq_item);
+		console.log("Current row before fetch:", row);
+
+		if (!row.boq_item) {
+			clearItemDetailFields(frm, cdt, cdn, {
+				keep_sub_category: true,
+				keep_boq_item: true,
+			});
+			return;
+		}
+
+		frm.ra_bill_apply_selected_boq_item(cdt, cdn);
+	},
+
+	work_percent: function (frm, cdt, cdn) {
+		if (isSettingChildValues(frm, cdn)) return;
+
+		const row = locals[cdt][cdn];
+		setChildValues(frm, cdt, cdn, getRowTotals(row, row.work_percent)).then(() =>
+			frm.trigger("recalculate_totals"),
+		);
 	},
 
 	current_qty: function (frm, cdt, cdn) {
-		const row = locals[cdt][cdn];
-		const currentQty = row.current_qty || 0;
-		const prevQty = row.prev_cumulative_qty || 0;
-		const boqQty = row.boq_qty || 0;
-		const cumulativeQty = prevQty + currentQty;
-		const amount = currentQty * (row.boq_rate || 0);
+		if (isSettingChildValues(frm, cdn)) return;
 
-		frappe.model.set_value(cdt, cdn, "cumulative_qty", cumulativeQty);
-		frappe.model.set_value(cdt, cdn, "completion_pct", boqQty ? (cumulativeQty / boqQty) * 100 : 0);
-		frappe.model.set_value(cdt, cdn, "current_amount", amount);
-		frm.trigger("recalculate_totals");
-		frm.ra_bill_render_items_grid();
+		const row = locals[cdt][cdn];
+		setChildValues(frm, cdt, cdn, getRowTotalsFromCurrentQty(row)).then(() =>
+			frm.trigger("recalculate_totals"),
+		);
 	},
 
 	items_remove: function (frm) {
 		frm.trigger("recalculate_totals");
-		frm.ra_bill_render_items_grid();
 	},
 });

@@ -44,7 +44,7 @@ class RABill(Document):
 			boq_item = frappe.db.get_value(
 				"BOQ Item",
 				row.boq_item,
-				["item_name", "qty", "unit_rate", "uom"],
+				["item_name", "qty", "unit_rate", "uom", "boq_category"],
 				as_dict=True,
 			)
 			if boq_item:
@@ -52,6 +52,15 @@ class RABill(Document):
 				row.boq_qty = boq_item.qty
 				row.boq_rate = boq_item.unit_rate
 				row.uom = boq_item.uom
+				if not row.sub_category and boq_item.boq_category:
+					row.sub_category = boq_item.boq_category
+				if not row.category_name and boq_item.boq_category:
+					row.category_name = (
+						frappe.db.get_value(
+							"BOQ Category", boq_item.boq_category, "parent_node"
+						)
+						or boq_item.boq_category
+					)
 
 	def _fill_prev_cumulative_qty(self):
 		"""
@@ -81,17 +90,11 @@ class RABill(Document):
 
 	def _calculate_row_totals(self):
 		"""
-		Calculate cumulative_qty, completion_pct, current_amount
-		for each row.
+		Calculate current_qty and current_amount for each row from Work %.
 		"""
 		for row in self.items:
-			row.cumulative_qty = (row.prev_cumulative_qty or 0) + (row.current_qty or 0)
-
-			if row.boq_qty and row.boq_qty > 0:
-				row.completion_pct = (row.cumulative_qty / row.boq_qty) * 100
-			else:
-				row.completion_pct = 0
-
+			row.work_percent = row.work_percent or 0
+			row.current_qty = (row.boq_qty or 0) * (row.work_percent / 100)
 			row.current_amount = (row.current_qty or 0) * (row.boq_rate or 0)
 
 	def _calculate_header_totals(self):
@@ -237,7 +240,7 @@ class RABill(Document):
 				f"Item: {row.item_name or ''}",
 				f"BOQ Qty: {flt(row.boq_qty)} {row.uom or ''}".strip(),
 				f"BOQ Rate: {flt(row.boq_rate)}",
-				f"Work Completed: {flt(row.completion_pct)}%",
+				f"Work Completed: {flt(row.work_percent)}%",
 				f"Current Qty: {flt(row.current_qty)}",
 				f"Amount: {flt(row.current_amount)}",
 			]
@@ -314,6 +317,9 @@ class RABill(Document):
 			"remarks": f"Created from RA Bill {self.name}",
 			"items": invoice_items,
 		}
+
+		if frappe.get_meta("Sales Invoice").has_field("ra_bill"):
+			si_data["ra_bill"] = self.name
 
 		try:
 			si = frappe.get_doc(si_data)

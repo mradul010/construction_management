@@ -4,11 +4,15 @@ import os
 
 def after_install():
 	create_boq_client_script()
+	ensure_sales_invoice_ra_bill_field()
+	backfill_sales_invoice_ra_bill_links()
 	ensure_ra_bill_items()
 
 
 def after_migrate():
 	create_boq_client_script()
+	ensure_sales_invoice_ra_bill_field()
+	backfill_sales_invoice_ra_bill_links()
 	ensure_ra_bill_items()
 
 
@@ -38,6 +42,69 @@ def create_boq_client_script():
 		doc.insert()
 	frappe.db.commit()
 	print("BOQ client script created/updated successfully")
+
+
+def ensure_sales_invoice_ra_bill_field():
+	"""
+	Ensure Sales Invoice can point back to the RA Bill that created it.
+	Used by standard Frappe Connections on RA Bill.
+	"""
+	if frappe.db.exists("Custom Field", "Sales Invoice-ra_bill"):
+		frappe.clear_cache(doctype="Sales Invoice")
+		return
+
+	frappe.get_doc(
+		{
+			"doctype": "Custom Field",
+			"dt": "Sales Invoice",
+			"fieldname": "ra_bill",
+			"label": "RA Bill",
+			"fieldtype": "Link",
+			"options": "RA Bill",
+			"insert_after": "project",
+			"read_only": 1,
+			"no_copy": 1,
+			"module": "Construction Management",
+		}
+	).insert(ignore_permissions=True)
+
+	frappe.clear_cache(doctype="Sales Invoice")
+	frappe.db.commit()
+	print("Sales Invoice RA Bill custom field created successfully")
+
+
+def backfill_sales_invoice_ra_bill_links():
+	"""
+	Backfill Sales Invoice.ra_bill from existing RA Bill.sales_invoice links.
+	Only updates the reference field and does not touch financial fields.
+	"""
+	frappe.clear_cache(doctype="Sales Invoice")
+	if not frappe.get_meta("Sales Invoice").has_field("ra_bill"):
+		return
+
+	ra_bills = frappe.get_all(
+		"RA Bill",
+		filters={"sales_invoice": ["is", "set"]},
+		fields=["name", "sales_invoice"],
+	)
+
+	for rb in ra_bills:
+		if not rb.sales_invoice or not frappe.db.exists("Sales Invoice", rb.sales_invoice):
+			continue
+
+		current_ra_bill = frappe.db.get_value("Sales Invoice", rb.sales_invoice, "ra_bill")
+		if current_ra_bill == rb.name:
+			continue
+
+		frappe.db.set_value(
+			"Sales Invoice",
+			rb.sales_invoice,
+			"ra_bill",
+			rb.name,
+			update_modified=False,
+		)
+
+	frappe.db.commit()
 
 
 def get_or_create_ra_bill_receivable_account(company, currency):
