@@ -2,12 +2,14 @@ import frappe
 from frappe import _
 from frappe.model.document import Document
 from frappe.utils import flt, getdate, today
+from frappe.utils import flt
 
 
 OVERBILLING_TOLERANCE = 0.0001
 
 
 class RABill(Document):
+    
 	def validate(self):
 		self._set_bill_no()
 		self._fetch_boq_item_details()
@@ -16,6 +18,8 @@ class RABill(Document):
 		self._validate_no_duplicate_items()
 		self._validate_not_overbilling()
 		self._calculate_header_totals()
+        
+
 
 	def _set_bill_no(self):
 		"""
@@ -37,6 +41,22 @@ class RABill(Document):
 			limit=1,
 		)
 		self.bill_no = (existing[0].bill_no + 1) if existing else 1
+
+    
+	
+		for row in self.items:
+			if not row.boq_item:
+				continue
+
+			if flt(row.work_percent) <= 0:
+				frappe.throw(
+					f"Work % for Item <b>{row.item_name or row.boq_item}</b> must be greater than 0."
+				)
+
+			if flt(row.work_percent) > 100:
+				frappe.throw(
+					f"Work % for Item <b>{row.item_name or row.boq_item}</b> cannot be greater than 100."
+				)
 
 	def _fetch_boq_item_details(self):
 		"""
@@ -105,7 +125,7 @@ class RABill(Document):
 				frappe.throw(
 					_(
 						"Duplicate BOQ Item found: {0}. "
-						"This BOQ Item is already selected in this RA Bill."
+						"The same BOQ Item cannot be selected more than once in the same RA Bill."
 					).format(row.item_name or row.boq_item)
 				)
 
@@ -763,42 +783,47 @@ def search_boq_items_for_ra_bill(doctype, txt, searchfield, start, page_len, fil
 	prefix_txt = f"{txt}%"
 	start = int(start or 0)
 	page_len = int(page_len or 20)
-	candidate_limit = max(start + page_len + len(exclude_items) + 50, page_len)
+	candidate_limit = max(start + page_len + 50, page_len)
+
+	conditions = [
+		"parent = %(boq)s",
+		"parenttype = 'BOQ'",
+		"parentfield = 'items'",
+		"boq_category = %(subcategory)s",
+		"(%(txt)s = '' OR item_name LIKE %(like_txt)s OR name LIKE %(like_txt)s)",
+	]
+	params = {
+		"boq": boq,
+		"subcategory": subcategory,
+		"txt": txt,
+		"like_txt": like_txt,
+		"prefix_txt": prefix_txt,
+		"candidate_limit": candidate_limit,
+	}
+	if exclude_items:
+		conditions.append("name NOT IN %(exclude_items)s")
+		params["exclude_items"] = tuple(exclude_items)
 
 	candidates = frappe.db.sql(
-		"""
+		f"""
 		SELECT name, item_name, qty, unit_rate, uom
 		FROM `tabBOQ Item`
-		WHERE parent = %(boq)s
-		  AND parenttype = 'BOQ'
-		  AND parentfield = 'items'
-		  AND boq_category = %(subcategory)s
-		  AND (%(txt)s = '' OR item_name LIKE %(like_txt)s OR name LIKE %(like_txt)s)
+		WHERE {" AND ".join(conditions)}
 		ORDER BY
 		  CASE
 		    WHEN item_name LIKE %(prefix_txt)s THEN 0
 		    WHEN item_name LIKE %(like_txt)s THEN 1
 		    WHEN name LIKE %(prefix_txt)s THEN 2
 		    ELSE 3
-		  END,
+		END,
 		  item_name ASC
 		LIMIT %(candidate_limit)s
 		""",
-		{
-			"boq": boq,
-			"subcategory": subcategory,
-			"txt": txt,
-			"like_txt": like_txt,
-			"prefix_txt": prefix_txt,
-			"candidate_limit": candidate_limit,
-		},
+		params,
 	)
 
 	available_items = []
 	for name, item_name, qty, unit_rate, uom in candidates:
-		if name in exclude_items:
-			continue
-
 		previous_qty = _get_previous_billed_qty(boq, name, current_ra_bill)
 		if previous_qty >= flt(qty) - OVERBILLING_TOLERANCE:
 			continue
@@ -806,3 +831,5 @@ def search_boq_items_for_ra_bill(doctype, txt, searchfield, start, page_len, fil
 		available_items.append((name, item_name, qty, unit_rate, uom))
 
 	return available_items[start : start + page_len]
+
+

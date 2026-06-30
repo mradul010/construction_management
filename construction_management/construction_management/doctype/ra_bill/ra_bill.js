@@ -135,12 +135,38 @@ function clearItemDetailFields(frm, cdt, cdn, options = {}) {
 	return setChildValues(frm, cdt, cdn, values).then(() => frm.trigger("recalculate_totals"));
 }
 
+function clearDuplicateBoqItemFields(frm, cdt, cdn) {
+	return setChildValues(frm, cdt, cdn, {
+		boq_item: "",
+		item_name: "",
+		boq_qty: 0,
+		boq_rate: 0,
+		uom: "",
+		work_percent: 0,
+		current_qty: 0,
+		cumulative_qty: getNumber(locals[cdt][cdn].prev_cumulative_qty),
+		current_amount: 0,
+	}).then(() => frm.trigger("recalculate_totals"));
+}
+
 function hasDuplicateBoqItem(frm, row) {
 	if (!row || !row.boq_item) return false;
 
 	return (frm.doc.items || []).some(
 		(item) => item.name !== row.name && item.boq_item === row.boq_item,
 	);
+}
+
+function rejectDuplicateBoqItem(frm, cdt, cdn) {
+	frappe.msgprint({
+		title: __("Duplicate Item Not Allowed"),
+		indicator: "red",
+		message: __(
+			"This BOQ Item is already selected in this RA Bill. Please update the existing row instead of adding it again.",
+		),
+	});
+
+	return clearDuplicateBoqItemFields(frm, cdt, cdn);
 }
 
 function cacheCategoryLabel(category) {
@@ -192,15 +218,7 @@ async function setBoqItemDetails(frm, cdt, cdn) {
 	if (!row || !row.boq_item) return Promise.resolve();
 
 	if (hasDuplicateBoqItem(frm, row)) {
-		frappe.msgprint({
-			title: __("Duplicate BOQ Item"),
-			indicator: "orange",
-			message: __("This BOQ Item is already selected in another RA Bill Item row."),
-		});
-		return clearItemDetailFields(frm, cdt, cdn, {
-			keep_sub_category: true,
-			keep_boq_item: false,
-		});
+		return rejectDuplicateBoqItem(frm, cdt, cdn);
 	}
 
 	const doc = await frappe.db.get_doc("BOQ Item", row.boq_item);
@@ -282,13 +300,19 @@ frappe.ui.form.on("RA Bill", {
 		});
 
 		frm.set_query("boq_item", "items", function (doc, cdt, cdn) {
-			const row = locals[cdt][cdn];
+			const row = locals[cdt][cdn] || {};
+			const selected_items = (frm.doc.items || [])
+				.filter((item) => item.name !== row.name && item.boq_item)
+				.map((item) => item.boq_item);
+
 			return {
 				query: `${RA_BILL_METHOD}.search_boq_items_for_ra_bill`,
 				filters: {
 					boq: frm.doc.boq,
 					category: row.category_name,
 					subcategory: row.sub_category,
+					exclude_items: selected_items,
+					current_ra_bill: frm.doc.name,
 				},
 			};
 		});
@@ -565,6 +589,11 @@ frappe.ui.form.on("RA Bill Item", {
 				keep_sub_category: true,
 				keep_boq_item: true,
 			});
+			return;
+		}
+
+		if (hasDuplicateBoqItem(frm, row)) {
+			rejectDuplicateBoqItem(frm, cdt, cdn);
 			return;
 		}
 
