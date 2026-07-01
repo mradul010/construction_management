@@ -5,6 +5,7 @@
  "doctype": "DocType",
  "engine": "InnoDB",
  "field_order": [
+  "details_tab",
   "project_boq_section",
   "project",
   "boq",
@@ -28,9 +29,17 @@
   "cumulative_billed",
   "invoice_details_section",
   "sales_invoice",
-  "amended_from"
+  "amended_from",
+  "connections_tab",
+  "connections_section",
+  "connections_html"
  ],
  "fields": [
+  {
+   "fieldname": "details_tab",
+   "fieldtype": "Tab Break",
+   "label": "Details"
+  },
   {
    "fieldname": "project_boq_section",
    "fieldtype": "Section Break",
@@ -188,6 +197,22 @@
    "options": "RA Bill",
    "print_hide": 1,
    "read_only": 1
+  },
+  {
+   "fieldname": "connections_tab",
+   "fieldtype": "Tab Break",
+   "label": "Connections",
+   "show_dashboard": 1
+  },
+  {
+   "fieldname": "connections_section",
+   "fieldtype": "Section Break",
+   "label": "Connections"
+  },
+  {
+   "fieldname": "connections_html",
+   "fieldtype": "HTML",
+   "label": "Connections"
   }
  ],
  "is_submittable": 1,

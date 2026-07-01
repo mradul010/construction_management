@@ -1,5 +1,7 @@
 import frappe
+from frappe import _
 from frappe.model.document import Document
+from frappe.utils import flt
 
 
 class BOQ(Document):
@@ -8,6 +10,7 @@ class BOQ(Document):
 		self._ensure_component_keys()
 		self._fill_parent_categories()
 		self._calculate_item_unit_costs()
+		self.validate_item_values()
 		self._calculate_totals()
 
 	def _ensure_component_keys(self):
@@ -50,6 +53,19 @@ class BOQ(Document):
 			components = [c for c in all_components if c.boq_item in (component_key, row.name)]
 			if components:
 				row.unit_cost = sum(float(getattr(c, "amount", 0) or 0) for c in components)
+
+	def validate_item_values(self):
+		for row in self.items:
+			item = row.item_name or row.item or row.name
+
+			if flt(row.qty) <= 0:
+				frappe.throw(_("Qty for item {0} must be greater than 0.").format(item))
+
+			if flt(row.margin_percent) < 0:
+				frappe.throw(_("Margin % for item {0} cannot be negative.").format(item))
+
+			if flt(row.unit_cost) < 0 or flt(row.unit_rate) < 0:
+				frappe.throw(_("Unit Cost/Rate for item {0} cannot be negative.").format(item))
 
 	def _calculate_totals(self):
 		grand_total = 0

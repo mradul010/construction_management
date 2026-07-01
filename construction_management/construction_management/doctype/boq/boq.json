@@ -5,6 +5,7 @@
  "doctype": "DocType",
  "engine": "InnoDB",
  "field_order": [
+  "details_tab",
   "project_details_section",
   "project",
   "company",
@@ -30,9 +31,17 @@
   "status_section",
   "status",
   "revision_no",
-  "amended_from"
+  "amended_from",
+  "connections_tab",
+  "connections_section",
+  "connections_html"
  ],
  "fields": [
+  {
+   "fieldname": "details_tab",
+   "fieldtype": "Tab Break",
+   "label": "Details"
+  },
   {
    "fieldname": "project_details_section",
    "fieldtype": "Section Break",
@@ -205,6 +214,22 @@
    "options": "BOQ",
    "print_hide": 1,
    "read_only": 1
+  },
+  {
+   "fieldname": "connections_tab",
+   "fieldtype": "Tab Break",
+   "label": "Connections",
+   "show_dashboard": 1
+  },
+  {
+   "fieldname": "connections_section",
+   "fieldtype": "Section Break",
+   "label": "Connections"
+  },
+  {
+   "fieldname": "connections_html",
+   "fieldtype": "HTML",
+   "label": "Connections"
   }
  ],
  "is_submittable": 1,

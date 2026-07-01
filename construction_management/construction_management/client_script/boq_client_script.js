@@ -1,3 +1,47 @@
+function boqNumber(value) {
+	const parsed = parseFloat(value);
+	return isNaN(parsed) ? 0 : parsed;
+}
+
+function getBoqItemLabel(row) {
+	return row.item_name || row.item || __("selected item");
+}
+
+function showBoqItemValidation(message) {
+	frappe.msgprint({
+		title: __("Invalid BOQ Item Value"),
+		indicator: "red",
+		message: message,
+	});
+}
+
+function validateBoqItemValues(row) {
+	if (!row) return true;
+
+	const item = getBoqItemLabel(row);
+
+	if (boqNumber(row.qty) <= 0) {
+		showBoqItemValidation(__("Qty for item {0} must be greater than 0.", [item]));
+		return false;
+	}
+
+	if (boqNumber(row.margin_percent) < 0) {
+		showBoqItemValidation(__("Margin % for item {0} cannot be negative.", [item]));
+		return false;
+	}
+
+	if (boqNumber(row.unit_cost) < 0 || boqNumber(row.unit_rate) < 0) {
+		showBoqItemValidation(__("Unit Cost/Rate for item {0} cannot be negative.", [item]));
+		return false;
+	}
+
+	return true;
+}
+
+function validateAllBoqItemValues(frm) {
+	return (frm.doc.items || []).every((row) => validateBoqItemValues(row));
+}
+
 frappe.ui.form.on("BOQ", {
 	setup: function (frm) {
 		frm._boq_cat_state = {};
@@ -213,6 +257,24 @@ frappe.ui.form.on("BOQ", {
 				],
 				primary_action_label: "Add Item",
 				primary_action: function (values) {
+					const qty = parseFloat(values.qty) || 0;
+					const margin = parseFloat(values.margin_percent) || 0;
+					const unit_cost = parseFloat(values.unit_cost) || 0;
+					const unit_rate = unit_cost * (1 + margin / 100);
+
+					if (
+						!validateBoqItemValues({
+							item: values.item,
+							item_name: values.item_name || values.item,
+							qty: qty,
+							unit_cost: unit_cost,
+							margin_percent: margin,
+							unit_rate: unit_rate,
+						})
+					) {
+						return;
+					}
+
 					const newRow = frm.add_child("items");
 
 					newRow.component_key = frm.boq_make_component_key();
@@ -220,17 +282,12 @@ frappe.ui.form.on("BOQ", {
 					newRow.item = values.item;
 					newRow.item_name = values.item_name || values.item;
 
-					const qty = parseFloat(values.qty) || 1;
-					const margin = parseFloat(values.margin_percent) || 0;
-
-					const unit_cost = parseFloat(values.unit_cost) || 0;
-
 					newRow.qty = qty;
 					newRow.uom = values.uom || "Nos";
 					newRow.unit_cost = unit_cost;
 					newRow.margin_percent = margin;
 
-					newRow.unit_rate = unit_cost * (1 + margin / 100);
+					newRow.unit_rate = unit_rate;
 					newRow.amount = qty * newRow.unit_rate;
 
 					newRow.notes = values.notes || "";
@@ -1342,7 +1399,13 @@ title="${buildCostTooltip(row).replace(/"/g, "&quot;")}">
 						const row = (frm.doc.items || []).find((r) => r.name === rowName);
 						if (!row) return;
 
-						row.qty = getNumberValue($(this).val());
+						const qty = getNumberValue($(this).val());
+						if (!validateBoqItemValues({ ...row, qty: qty })) {
+							$(this).val(getNumberValue(row.qty));
+							return;
+						}
+
+						row.qty = qty;
 						row.amount = row.qty * (parseFloat(row.unit_rate) || 0);
 
 						if (frm.dirty) {
@@ -1361,7 +1424,21 @@ title="${buildCostTooltip(row).replace(/"/g, "&quot;")}">
 						const row = (frm.doc.items || []).find((r) => r.name === rowName);
 						if (!row) return;
 
-						row.unit_cost = getNumberValue($(this).val());
+						const unitCost = getNumberValue($(this).val());
+						const margin = getNumberValue(row.margin_percent);
+						const unitRate = unitCost * (1 + margin / 100);
+						if (
+							!validateBoqItemValues({
+								...row,
+								unit_cost: unitCost,
+								unit_rate: unitRate,
+							})
+						) {
+							$(this).val(getNumberValue(row.unit_cost));
+							return;
+						}
+
+						row.unit_cost = unitCost;
 						recalculateInlineRow(row);
 
 						if (frm.dirty) {
@@ -1380,7 +1457,21 @@ title="${buildCostTooltip(row).replace(/"/g, "&quot;")}">
 						const row = (frm.doc.items || []).find((r) => r.name === rowName);
 						if (!row) return;
 
-						row.margin_percent = getNumberValue($(this).val());
+						const margin = getNumberValue($(this).val());
+						const unitCost = getNumberValue(row.unit_cost);
+						const unitRate = unitCost * (1 + margin / 100);
+						if (
+							!validateBoqItemValues({
+								...row,
+								margin_percent: margin,
+								unit_rate: unitRate,
+							})
+						) {
+							$(this).val(getNumberValue(row.margin_percent));
+							return;
+						}
+
+						row.margin_percent = margin;
 						recalculateInlineRow(row);
 
 						if (frm.dirty) {
@@ -1591,10 +1682,58 @@ title="${buildCostTooltip(row).replace(/"/g, "&quot;")}">
 	},
 
 	validate: function (frm) {
+		if (!validateAllBoqItemValues(frm)) {
+			frappe.validated = false;
+			return;
+		}
+
 		frm.boq_prepare_component_keys();
 	},
 
 	after_save: function (frm) {
 		frm.boq_render_grid();
+	},
+});
+
+function resetBoqChildField(frm, cdt, cdn, fieldname, value) {
+	Promise.resolve(frappe.model.set_value(cdt, cdn, fieldname, value)).then(() => {
+		frm.refresh_field("items");
+		if (frm.boq_render_grid) {
+			frm.boq_render_grid();
+		}
+	});
+}
+
+function validateBoqChildField(frm, cdt, cdn, fieldname, resetValue) {
+	const row = locals[cdt][cdn];
+	if (!row) return;
+
+	const candidate = { ...row };
+	if (fieldname === "unit_cost" || fieldname === "margin_percent") {
+		const unitCost = boqNumber(row.unit_cost);
+		const margin = boqNumber(row.margin_percent);
+		candidate.unit_rate = unitCost * (1 + margin / 100);
+	}
+
+	if (!validateBoqItemValues(candidate)) {
+		resetBoqChildField(frm, cdt, cdn, fieldname, resetValue);
+	}
+}
+
+frappe.ui.form.on("BOQ Item", {
+	qty: function (frm, cdt, cdn) {
+		validateBoqChildField(frm, cdt, cdn, "qty", 1);
+	},
+
+	unit_cost: function (frm, cdt, cdn) {
+		validateBoqChildField(frm, cdt, cdn, "unit_cost", 0);
+	},
+
+	margin_percent: function (frm, cdt, cdn) {
+		validateBoqChildField(frm, cdt, cdn, "margin_percent", 0);
+	},
+
+	unit_rate: function (frm, cdt, cdn) {
+		validateBoqChildField(frm, cdt, cdn, "unit_rate", 0);
 	},
 });

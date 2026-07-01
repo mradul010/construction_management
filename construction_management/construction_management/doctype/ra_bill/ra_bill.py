@@ -2,24 +2,21 @@ import frappe
 from frappe import _
 from frappe.model.document import Document
 from frappe.utils import flt, getdate, today
-from frappe.utils import flt
 
 
 OVERBILLING_TOLERANCE = 0.0001
 
 
 class RABill(Document):
-    
 	def validate(self):
 		self._set_bill_no()
 		self._fetch_boq_item_details()
-		self._fill_prev_cumulative_qty()
+		self._fill_previous_work_summary()
+		self.validate_item_values()
 		self._calculate_row_totals()
 		self._validate_no_duplicate_items()
 		self._validate_not_overbilling()
 		self._calculate_header_totals()
-        
-
 
 	def _set_bill_no(self):
 		"""
@@ -42,20 +39,36 @@ class RABill(Document):
 		)
 		self.bill_no = (existing[0].bill_no + 1) if existing else 1
 
-    
-	
+	def validate_item_values(self):
 		for row in self.items:
 			if not row.boq_item:
 				continue
 
+			item = row.item_name or row.boq_item
+
 			if flt(row.work_percent) <= 0:
 				frappe.throw(
-					f"Work % for Item <b>{row.item_name or row.boq_item}</b> must be greater than 0."
+					_("Work % for item {0} must be greater than 0.").format(item)
 				)
 
 			if flt(row.work_percent) > 100:
 				frappe.throw(
-					f"Work % for Item <b>{row.item_name or row.boq_item}</b> cannot be greater than 100."
+					_("Work % for item {0} cannot be greater than 100.").format(item)
+				)
+
+			if flt(row.current_qty) < 0:
+				frappe.throw(
+					_("Current Qty for item {0} cannot be negative.").format(item)
+				)
+
+			if flt(row.boq_qty) <= 0:
+				frappe.throw(
+					_("BOQ Qty for item {0} must be greater than 0.").format(item)
+				)
+
+			if flt(row.boq_rate) < 0:
+				frappe.throw(
+					_("BOQ Rate for item {0} cannot be negative.").format(item)
 				)
 
 	def _fetch_boq_item_details(self):
@@ -88,21 +101,30 @@ class RABill(Document):
 						or boq_item.boq_category
 					)
 
-	def _fill_prev_cumulative_qty(self):
+	def _fill_previous_work_summary(self):
 		"""
 		For each row, read previous submitted billing from RA Bill Transaction.
 		If transaction history has not been backfilled yet, the helper falls
-		back to submitted RA Bill Items.
+		back to submitted RA Bill Items. Values are saved on the row so users
+		can see previous and remaining work after reload.
 		"""
 		for row in self.items:
 			if not row.boq_item:
 				continue
 
-			row.prev_cumulative_qty = _get_previous_billed_qty(
+			summary = _get_boq_item_billing_summary(
 				self.boq,
 				row.boq_item,
 				self.name,
 			)
+			row.previous_qty = summary["previous_qty"]
+			row.previous_percent = summary["previous_percent"]
+			row.remaining_qty = summary["remaining_qty"]
+			row.remaining_percent = summary["remaining_percent"]
+			row.prev_cumulative_qty = summary["previous_qty"]
+
+	def _fill_prev_cumulative_qty(self):
+		self._fill_previous_work_summary()
 
 	def _calculate_row_totals(self):
 		"""
@@ -138,11 +160,16 @@ class RABill(Document):
 
 			boq_qty = flt(row.boq_qty)
 			current_qty = flt(row.current_qty)
-			previous_qty = _get_previous_billed_qty(self.boq, row.boq_item, self.name)
-			remaining_qty = boq_qty - previous_qty
-			previous_pct = _qty_to_percent(previous_qty, boq_qty)
-			remaining_pct = 100 - previous_pct if boq_qty else 0
+			summary = _get_boq_item_billing_summary(self.boq, row.boq_item, self.name)
+			previous_qty = summary["previous_qty"]
+			remaining_qty = summary["remaining_qty"]
+			previous_pct = summary["previous_percent"]
+			remaining_pct = summary["remaining_percent"]
 
+			row.previous_qty = previous_qty
+			row.previous_percent = previous_pct
+			row.remaining_qty = remaining_qty
+			row.remaining_percent = remaining_pct
 			row.prev_cumulative_qty = previous_qty
 			row.cumulative_qty = previous_qty + current_qty
 
@@ -631,9 +658,9 @@ def _create_ra_bill_transaction(ra_bill, row, previous_qty=0):
 def _get_boq_item_billing_summary(boq, boq_item, current_ra_bill=None):
 	boq_qty = _get_boq_item_qty(boq, boq_item)
 	previous_qty = _get_previous_billed_qty(boq, boq_item, current_ra_bill)
-	previous_percent = _qty_to_percent(previous_qty, boq_qty)
-	remaining_qty = boq_qty - previous_qty
-	remaining_percent = 100 - previous_percent if boq_qty else 0
+	previous_percent = _qty_to_percent(previous_qty, boq_qty) if boq_qty > 0 else 0
+	remaining_qty = max(0, boq_qty - previous_qty)
+	remaining_percent = max(0, 100 - previous_percent) if boq_qty > 0 else 0
 
 	return {
 		"boq_qty": boq_qty,
@@ -662,6 +689,15 @@ def _coerce_list(value):
 
 @frappe.whitelist()
 def get_boq_item_billing_summary(boq, boq_item, current_ra_bill=None):
+	return _get_boq_item_billing_summary(boq, boq_item, current_ra_bill)
+
+
+@frappe.whitelist()
+def get_boq_item_previous_work(boq, boq_item, current_ra_bill=None):
+	"""
+	Return previous completed qty/percent and remaining qty/percent
+	for selected BOQ Item in selected BOQ.
+	"""
 	return _get_boq_item_billing_summary(boq, boq_item, current_ra_bill)
 
 
@@ -831,5 +867,3 @@ def search_boq_items_for_ra_bill(doctype, txt, searchfield, start, page_len, fil
 		available_items.append((name, item_name, qty, unit_rate, uom))
 
 	return available_items[start : start + page_len]
-
-

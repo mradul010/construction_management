@@ -72,6 +72,35 @@ function setChildValues(frm, cdt, cdn, values) {
 		});
 }
 
+function setChildValuesIfChanged(frm, cdt, cdn, values) {
+	const row = locals[cdt][cdn];
+	if (!row) return Promise.resolve();
+
+	const changedValues = {};
+	Object.keys(values).forEach((fieldname) => {
+		if (!childFieldExists(cdt, fieldname)) return;
+
+		const currentValue = row[fieldname];
+		const nextValue = values[fieldname];
+		if (typeof nextValue === "number") {
+			if (Math.abs(getNumber(currentValue) - nextValue) > 0.0001) {
+				changedValues[fieldname] = nextValue;
+			}
+			return;
+		}
+
+		if ((currentValue || "") !== (nextValue || "")) {
+			changedValues[fieldname] = nextValue;
+		}
+	});
+
+	if (!Object.keys(changedValues).length) {
+		return Promise.resolve();
+	}
+
+	return setChildValues(frm, cdt, cdn, changedValues);
+}
+
 function getCurrentWorkPercent(row) {
 	if (getNumber(row.work_percent)) {
 		return getNumber(row.work_percent);
@@ -84,11 +113,35 @@ function getCurrentWorkPercent(row) {
 	return 0;
 }
 
+function getPreviousQty(row) {
+	if (row && row.previous_qty !== undefined && row.previous_qty !== null) {
+		return getNumber(row.previous_qty);
+	}
+	return getNumber(row && row.prev_cumulative_qty);
+}
+
+function getRemainingQty(row) {
+	if (row && row.remaining_qty !== undefined && row.remaining_qty !== null) {
+		return Math.max(0, getNumber(row.remaining_qty));
+	}
+
+	return Math.max(0, getNumber(row && row.boq_qty) - getPreviousQty(row || {}));
+}
+
+function getRemainingPercent(row) {
+	if (row && row.remaining_percent !== undefined && row.remaining_percent !== null) {
+		return Math.max(0, getNumber(row.remaining_percent));
+	}
+
+	const boqQty = getNumber(row && row.boq_qty);
+	return boqQty ? (getRemainingQty(row || {}) / boqQty) * 100 : 0;
+}
+
 function getRowTotals(row, workPercent) {
 	const pct = clampPercent(workPercent);
 	const boqQty = getNumber(row.boq_qty);
 	const boqRate = getNumber(row.boq_rate);
-	const prevQty = getNumber(row.prev_cumulative_qty);
+	const prevQty = getPreviousQty(row);
 	const currentQty = boqQty ? (boqQty * pct) / 100 : 0;
 
 	return {
@@ -103,7 +156,7 @@ function getRowTotalsFromCurrentQty(row) {
 	const currentQty = getNumber(row.current_qty);
 	const boqQty = getNumber(row.boq_qty);
 	const boqRate = getNumber(row.boq_rate);
-	const prevQty = getNumber(row.prev_cumulative_qty);
+	const prevQty = getPreviousQty(row);
 
 	return {
 		work_percent: boqQty ? (currentQty / boqQty) * 100 : 0,
@@ -119,9 +172,14 @@ function clearItemDetailFields(frm, cdt, cdn, options = {}) {
 		boq_qty: 0,
 		boq_rate: 0,
 		uom: "Nos",
+		previous_qty: 0,
+		previous_percent: 0,
+		remaining_qty: 0,
+		remaining_percent: 0,
+		prev_cumulative_qty: 0,
 		work_percent: 0,
 		current_qty: 0,
-		cumulative_qty: getNumber(locals[cdt][cdn].prev_cumulative_qty),
+		cumulative_qty: 0,
 		current_amount: 0,
 	};
 
@@ -142,9 +200,14 @@ function clearDuplicateBoqItemFields(frm, cdt, cdn) {
 		boq_qty: 0,
 		boq_rate: 0,
 		uom: "",
+		previous_qty: 0,
+		previous_percent: 0,
+		remaining_qty: 0,
+		remaining_percent: 0,
+		prev_cumulative_qty: 0,
 		work_percent: 0,
 		current_qty: 0,
-		cumulative_qty: getNumber(locals[cdt][cdn].prev_cumulative_qty),
+		cumulative_qty: 0,
 		current_amount: 0,
 	}).then(() => frm.trigger("recalculate_totals"));
 }
@@ -167,6 +230,160 @@ function rejectDuplicateBoqItem(frm, cdt, cdn) {
 	});
 
 	return clearDuplicateBoqItemFields(frm, cdt, cdn);
+}
+
+function showRaBillItemValidation(message) {
+	frappe.msgprint({
+		title: __("Invalid RA Bill Item Value"),
+		indicator: "red",
+		message: message,
+	});
+}
+
+function getRaBillItemLabel(row) {
+	return row.item_name || row.boq_item || __("selected item");
+}
+
+function validateRaBillItemValues(row) {
+	if (!row || !row.boq_item) return true;
+
+	const item = getRaBillItemLabel(row);
+
+	if (getNumber(row.work_percent) <= 0) {
+		showRaBillItemValidation(__("Work % for item {0} must be greater than 0.", [item]));
+		return false;
+	}
+
+	if (getNumber(row.work_percent) > 100) {
+		showRaBillItemValidation(__("Work % for item {0} cannot be greater than 100.", [item]));
+		return false;
+	}
+
+	if (getNumber(row.current_qty) < 0) {
+		showRaBillItemValidation(__("Current Qty for item {0} cannot be negative.", [item]));
+		return false;
+	}
+
+	if (getNumber(row.boq_qty) <= 0) {
+		showRaBillItemValidation(__("BOQ Qty for item {0} must be greater than 0.", [item]));
+		return false;
+	}
+
+	if (getNumber(row.boq_rate) < 0) {
+		showRaBillItemValidation(__("BOQ Rate for item {0} cannot be negative.", [item]));
+		return false;
+	}
+
+	if (getNumber(row.current_qty) > getRemainingQty(row) + 0.0001) {
+		showOverbillingCapMessage(row, getNumber(row.work_percent));
+		return false;
+	}
+
+	return true;
+}
+
+function validateAllRaBillItemValues(frm) {
+	return (frm.doc.items || []).every((row) => validateRaBillItemValues(row));
+}
+
+function getPreviousWorkValues(summary, fallbackBoqQty = 0) {
+	summary = summary || {};
+	const previousQty = getNumber(summary.previous_qty);
+	const fallbackRemainingQty = Math.max(0, getNumber(fallbackBoqQty) - previousQty);
+
+	return {
+		previous_qty: previousQty,
+		previous_percent: getNumber(summary.previous_percent),
+		remaining_qty:
+			summary.remaining_qty === undefined || summary.remaining_qty === null
+				? fallbackRemainingQty
+				: Math.max(0, getNumber(summary.remaining_qty)),
+		remaining_percent:
+			summary.remaining_percent === undefined || summary.remaining_percent === null
+				? getNumber(fallbackBoqQty)
+					? (fallbackRemainingQty / getNumber(fallbackBoqQty)) * 100
+					: 0
+				: Math.max(0, getNumber(summary.remaining_percent)),
+		prev_cumulative_qty: previousQty,
+	};
+}
+
+function showOverbillingCapMessage(row, enteredPercent) {
+	frappe.msgprint({
+		title: __("Overbilling Not Allowed"),
+		indicator: "orange",
+		message: __(
+			"Overbilling not allowed. This item already has {0}% completed. Remaining allowed is {1}%. You entered {2}%.",
+			[
+				formatNumber(getNumber(row.previous_percent)),
+				formatNumber(getRemainingPercent(row)),
+				formatNumber(enteredPercent),
+			],
+		),
+	});
+}
+
+function capWorkToRemaining(frm, cdt, cdn, row, enteredPercent) {
+	const remainingPercent = getRemainingPercent(row);
+	const remainingQty = getRemainingQty(row);
+	const values = {
+		work_percent: remainingPercent,
+		current_qty: remainingQty,
+		cumulative_qty: getPreviousQty(row) + remainingQty,
+		current_amount: remainingQty * getNumber(row.boq_rate),
+	};
+
+	showOverbillingCapMessage(row, enteredPercent);
+	return setChildValues(frm, cdt, cdn, values).then(() => frm.trigger("recalculate_totals"));
+}
+
+function fetchPreviousWorkSummary(frm, row) {
+	if (!frm.doc.boq || !row || !row.boq_item) {
+		return Promise.resolve(null);
+	}
+
+	return frappe
+		.call({
+			method: `${RA_BILL_METHOD}.get_boq_item_previous_work`,
+			args: {
+				boq: frm.doc.boq,
+				boq_item: row.boq_item,
+				current_ra_bill: frm.doc.name,
+			},
+		})
+		.then((r) => r.message || null);
+}
+
+function updatePreviousWorkSummary(frm, cdt, cdn, options = {}) {
+	const row = locals[cdt][cdn];
+	if (!row || !row.boq_item) return Promise.resolve();
+
+	return fetchPreviousWorkSummary(frm, row).then((summary) => {
+		if (!summary) return;
+
+		const values = getPreviousWorkValues(summary, row.boq_qty);
+		const updatedRow = { ...row, ...values };
+		const currentQty = getNumber(updatedRow.current_qty);
+		const currentPercent = getNumber(updatedRow.work_percent);
+
+		if (options.cap_current !== false && currentQty > values.remaining_qty + 0.0001) {
+			return capWorkToRemaining(frm, cdt, cdn, updatedRow, currentPercent);
+		}
+
+		return setChildValuesIfChanged(frm, cdt, cdn, values);
+	});
+}
+
+function refreshPreviousWorkSummaries(frm) {
+	if (!frm.doc.boq || frm.doc.docstatus !== 0) return;
+
+	(frm.doc.items || [])
+		.filter((row) => row.boq_item)
+		.forEach((row) => {
+			updatePreviousWorkSummary(frm, row.doctype || "RA Bill Item", row.name, {
+				cap_current: false,
+			});
+		});
 }
 
 function cacheCategoryLabel(category) {
@@ -235,9 +452,39 @@ async function setBoqItemDetails(frm, cdt, cdn) {
 	const uom = doc.uom || doc.stock_uom || "Nos";
 	const itemName = doc.item_name || doc.item || row.boq_item;
 	const subCategory = doc.boq_category || "";
+
+	if (qty <= 0) {
+		showRaBillItemValidation(__("BOQ Qty for item {0} must be greater than 0.", [itemName]));
+		return clearItemDetailFields(frm, cdt, cdn, {
+			keep_sub_category: true,
+			keep_boq_item: false,
+		});
+	}
+
+	if (rate < 0) {
+		showRaBillItemValidation(__("BOQ Rate for item {0} cannot be negative.", [itemName]));
+		return clearItemDetailFields(frm, cdt, cdn, {
+			keep_sub_category: true,
+			keep_boq_item: false,
+		});
+	}
+
 	const parentCategoryFromTree = await getParentCategoryFromSubcategory(subCategory);
 	const parentCategory = parentCategoryFromTree || doc.boq_parent_category || row.category_name || "";
-	const workPercent = getCurrentWorkPercent(row);
+	const previousWork = await fetchPreviousWorkSummary(frm, row);
+	const previousWorkValues = getPreviousWorkValues(previousWork, qty);
+	const rowWithPreviousWork = {
+		...row,
+		boq_qty: qty,
+		boq_rate: rate,
+		...previousWorkValues,
+	};
+	let workPercent = getCurrentWorkPercent(rowWithPreviousWork);
+	const enteredQty = qty ? (qty * workPercent) / 100 : 0;
+	if (enteredQty > previousWorkValues.remaining_qty + 0.0001) {
+		showOverbillingCapMessage(rowWithPreviousWork, workPercent);
+		workPercent = previousWorkValues.remaining_percent;
+	}
 	const values = {
 		item_name: itemName,
 		boq_qty: qty,
@@ -245,12 +492,9 @@ async function setBoqItemDetails(frm, cdt, cdn) {
 		uom: uom,
 		sub_category: subCategory || row.sub_category || "",
 		category_name: parentCategory || row.category_name || "",
+		...previousWorkValues,
 		...getRowTotals(
-			{
-				...row,
-				boq_qty: qty,
-				boq_rate: rate,
-			},
+			rowWithPreviousWork,
 			workPercent,
 		),
 	};
@@ -394,6 +638,7 @@ frappe.ui.form.on("RA Bill", {
 	refresh: function (frm) {
 		showStandardItemsGrid(frm);
 		hydrateBoqLabels(frm);
+		refreshPreviousWorkSummaries(frm);
 
 		if (frm.doc.status === "Submitted" && frm.doc.docstatus === 1) {
 			frm.add_custom_button(
@@ -492,6 +737,11 @@ frappe.ui.form.on("RA Bill", {
 	},
 
 	validate: function (frm) {
+		if (!validateAllRaBillItemValues(frm)) {
+			frappe.validated = false;
+			return;
+		}
+
 		frm.trigger("recalculate_totals");
 	},
 
@@ -554,7 +804,12 @@ frappe.ui.form.on("RA Bill Item", {
 			work_percent: 0,
 			current_qty: 0,
 			current_amount: 0,
-			cumulative_qty: getNumber(locals[cdt][cdn].prev_cumulative_qty),
+			previous_qty: 0,
+			previous_percent: 0,
+			remaining_qty: 0,
+			remaining_percent: 0,
+			prev_cumulative_qty: 0,
+			cumulative_qty: 0,
 		});
 	},
 
@@ -604,6 +859,34 @@ frappe.ui.form.on("RA Bill Item", {
 		if (isSettingChildValues(frm, cdn)) return;
 
 		const row = locals[cdt][cdn];
+		const item = getRaBillItemLabel(row);
+		const workPercent = getNumber(row.work_percent);
+
+		if (row.boq_item && workPercent <= 0) {
+			showRaBillItemValidation(__("Work % for item {0} must be greater than 0.", [item]));
+			setChildValues(frm, cdt, cdn, {
+				work_percent: 0,
+				current_qty: 0,
+				cumulative_qty: getNumber(row.prev_cumulative_qty),
+				current_amount: 0,
+			}).then(() => frm.trigger("recalculate_totals"));
+			return;
+		}
+
+		if (row.boq_item && workPercent > 100) {
+			showRaBillItemValidation(__("Work % for item {0} cannot be greater than 100.", [item]));
+			setChildValues(frm, cdt, cdn, getRowTotals(row, 100)).then(() =>
+				frm.trigger("recalculate_totals"),
+			);
+			return;
+		}
+
+		const requestedQty = getNumber(row.boq_qty) * (workPercent / 100);
+		if (row.boq_item && requestedQty > getRemainingQty(row) + 0.0001) {
+			capWorkToRemaining(frm, cdt, cdn, row, workPercent);
+			return;
+		}
+
 		setChildValues(frm, cdt, cdn, getRowTotals(row, row.work_percent)).then(() =>
 			frm.trigger("recalculate_totals"),
 		);
@@ -613,6 +896,24 @@ frappe.ui.form.on("RA Bill Item", {
 		if (isSettingChildValues(frm, cdn)) return;
 
 		const row = locals[cdt][cdn];
+		if (row.boq_item && getNumber(row.current_qty) < 0) {
+			showRaBillItemValidation(
+				__("Current Qty for item {0} cannot be negative.", [getRaBillItemLabel(row)]),
+			);
+			setChildValues(frm, cdt, cdn, getRowTotalsFromCurrentQty({ ...row, current_qty: 0 })).then(
+				() => frm.trigger("recalculate_totals"),
+			);
+			return;
+		}
+
+		if (row.boq_item && getNumber(row.current_qty) > getRemainingQty(row) + 0.0001) {
+			const enteredPercent = getNumber(row.boq_qty)
+				? (getNumber(row.current_qty) / getNumber(row.boq_qty)) * 100
+				: getNumber(row.work_percent);
+			capWorkToRemaining(frm, cdt, cdn, row, enteredPercent);
+			return;
+		}
+
 		setChildValues(frm, cdt, cdn, getRowTotalsFromCurrentQty(row)).then(() =>
 			frm.trigger("recalculate_totals"),
 		);

@@ -23,5 +23,18 @@
     "module": "Construction Management",
     "read_only": 1,
     "no_copy": 1
+  },
+  {
+    "doctype": "Custom Field",
+    "name": "RA Bill Item-item_name",
+    "dt": "RA Bill Item",
+    "fieldname": "item_name",
+    "fieldtype": "Data",
+    "label": "Item Name",
+    "insert_after": "boq_item",
+    "module": "Construction Management",
+    "read_only": 1,
+    "hidden": 1,
+    "in_list_view": 0
   }
 ]
