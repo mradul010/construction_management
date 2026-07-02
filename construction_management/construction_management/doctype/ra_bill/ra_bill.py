@@ -6,6 +6,14 @@ from frappe.utils import flt, getdate, today
 
 OVERBILLING_TOLERANCE = 0.0001
 
+RA_BILL_TAX_CHARGE_TYPES = {
+	"Actual",
+	"On Net Total",
+	"On Previous Row Amount",
+	"On Previous Row Total",
+	"On Item Quantity",
+}
+
 
 class RABill(Document):
 	def validate(self):
@@ -17,6 +25,8 @@ class RABill(Document):
 		self._validate_no_duplicate_items()
 		self._validate_not_overbilling()
 		self._calculate_header_totals()
+		self._validate_payment_and_tax_fields()
+		self.calculate_taxes_and_grand_total()
 
 	def _set_bill_no(self):
 		"""
@@ -223,6 +233,47 @@ class RABill(Document):
 		)
 		self.cumulative_billed = (prev_billed[0][0] if prev_billed else 0) + self.gross_amount
 
+	def _validate_payment_and_tax_fields(self):
+		for row in self.get("advances") or []:
+			advance_amount = flt(row.advance_amount)
+			allocated_amount = flt(row.allocated_amount)
+
+			if advance_amount < 0:
+				frappe.throw(_("Advance Amount cannot be negative."))
+
+			if allocated_amount < 0:
+				frappe.throw(_("Allocated Amount cannot be negative."))
+
+			if advance_amount and allocated_amount > advance_amount + OVERBILLING_TOLERANCE:
+				frappe.throw(
+					_(
+						"Allocated Amount cannot be greater than Advance Amount "
+						"for reference {0}."
+					).format(row.reference_name or row.idx)
+				)
+
+		for row in self.get("taxes") or []:
+			if row.charge_type and row.charge_type not in RA_BILL_TAX_CHARGE_TYPES:
+				frappe.throw(_("Invalid tax charge type: {0}").format(row.charge_type))
+
+	def calculate_taxes_and_grand_total(self):
+		"""
+		Keep the new Sales Invoice-like totals passive.
+		RA Bill's existing gross/retention/net calculation remains authoritative.
+		"""
+		self.net_total = flt(self.gross_amount)
+
+		total_taxes = 0
+		for row in self.get("taxes") or []:
+			total_taxes += flt(row.tax_amount)
+			row.total = flt(self.net_payable) + total_taxes
+
+		self.total_taxes_and_charges = total_taxes
+		self.grand_total = flt(self.net_payable) + total_taxes
+
+		self.total_advance = sum(flt(row.allocated_amount) for row in self.get("advances") or [])
+		self.outstanding_amount = flt(self.grand_total) - flt(self.total_advance)
+
 	def on_submit(self):
 		self._validate_no_duplicate_items()
 		self._validate_not_overbilling()
@@ -316,6 +367,205 @@ class RABill(Document):
 		invoice_currency = self.currency or company_currency or "AED"
 		conversion_rate = 1.0
 		receivable_account = get_or_create_ra_bill_receivable_account(company, invoice_currency)
+
+		def set_if_exists(doc, fieldname, value):
+			if doc.meta.has_field(fieldname) and value not in (None, ""):
+				doc.set(fieldname, value)
+
+		def append_child_if_table_exists(doc, table_field, row_data):
+			table_df = doc.meta.get_field(table_field)
+			if not table_df or table_df.fieldtype != "Table" or not table_df.options:
+				return
+
+			child_meta = frappe.get_meta(table_df.options)
+			filtered_row = {
+				fieldname: value
+				for fieldname, value in row_data.items()
+				if child_meta.has_field(fieldname) and value not in (None, "")
+			}
+			if filtered_row:
+				doc.append(table_field, filtered_row)
+
+		def set_link_if_valid(doc, fieldname, value, parenttype, link_doctype, link_name):
+			if not doc.meta.has_field(fieldname) or value in (None, ""):
+				return
+
+			if frappe.db.exists(
+				"Dynamic Link",
+				{
+					"parent": value,
+					"parenttype": parenttype,
+					"link_doctype": link_doctype,
+					"link_name": link_name,
+				},
+			):
+				doc.set(fieldname, value)
+
+		def get_first_payment_schedule_due_date():
+			due_dates = [
+				row.due_date for row in self.get("payment_schedule") or [] if row.due_date
+			]
+			return min(due_dates) if due_dates else None
+
+		def get_posting_date():
+			return self.billing_period_to or today()
+
+		def get_due_date():
+			schedule_due_date = get_first_payment_schedule_due_date()
+			if schedule_due_date:
+				return schedule_due_date
+			return frappe.utils.add_days(get_posting_date(), 30)
+
+		def add_advanced_fields(si):
+			set_if_exists(si, "customer", self.customer)
+			set_if_exists(si, "company", company)
+			set_if_exists(si, "debit_to", receivable_account)
+			set_if_exists(si, "project", self.project)
+			set_if_exists(si, "currency", invoice_currency)
+			set_if_exists(si, "conversion_rate", conversion_rate)
+			set_if_exists(si, "posting_date", get_posting_date())
+			set_if_exists(si, "due_date", get_due_date())
+			set_if_exists(si, "remarks", self.remarks or f"Created from RA Bill {self.name}")
+			set_if_exists(si, "letter_head", self.letter_head)
+			set_if_exists(si, "select_print_heading", self.select_print_heading)
+			set_if_exists(si, "language", self.language)
+			set_if_exists(si, "ra_bill", self.name)
+
+			set_link_if_valid(
+				si,
+				"customer_address",
+				self.customer_address,
+				"Address",
+				"Customer",
+				self.customer,
+			)
+			set_link_if_valid(
+				si,
+				"shipping_address_name",
+				self.shipping_address_name,
+				"Address",
+				"Customer",
+				self.customer,
+			)
+			set_link_if_valid(
+				si,
+				"contact_person",
+				self.contact_person,
+				"Contact",
+				"Customer",
+				self.customer,
+			)
+			set_link_if_valid(
+				si,
+				"dispatch_address_name",
+				self.dispatch_address_name,
+				"Address",
+				"Company",
+				company,
+			)
+			set_link_if_valid(
+				si,
+				"company_address",
+				self.company_address,
+				"Address",
+				"Company",
+				company,
+			)
+			set_link_if_valid(
+				si,
+				"company_contact_person",
+				self.company_contact_person,
+				"Contact",
+				"Company",
+				company,
+			)
+
+			for source_field, target_field in (
+				("address_display", "address_display"),
+				("contact_display", "contact_display"),
+				("contact_mobile", "contact_mobile"),
+				("contact_email", "contact_email"),
+				("shipping_address", "shipping_address"),
+				("dispatch_address", "dispatch_address"),
+				("company_address_display", "company_address_display"),
+				("territory", "territory"),
+				("payment_terms_template", "payment_terms_template"),
+				("terms", "tc_name"),
+				("terms_and_conditions", "terms"),
+				("tax_category", "tax_category"),
+				("shipping_rule", "shipping_rule"),
+				("incoterm", "incoterm"),
+				("sales_taxes_and_charges_template", "taxes_and_charges"),
+			):
+				set_if_exists(si, target_field, self.get(source_field))
+
+			for row in self.get("payment_schedule") or []:
+				append_child_if_table_exists(
+					si,
+					"payment_schedule",
+					{
+						"payment_term": row.payment_term,
+						"description": row.description,
+						"due_date": row.due_date,
+						"invoice_portion": row.invoice_portion,
+						"payment_amount": row.payment_amount,
+					},
+				)
+
+			for row in self.get("taxes") or []:
+				append_child_if_table_exists(
+					si,
+					"taxes",
+					{
+						"charge_type": row.charge_type,
+						"account_head": row.account_head,
+						"description": row.description,
+						"rate": row.rate,
+						"tax_amount": row.tax_amount,
+						"total": row.total,
+					},
+				)
+
+			for row in self.get("advances") or []:
+				append_child_if_table_exists(
+					si,
+					"advances",
+					{
+						"reference_type": row.reference_type,
+						"reference_name": row.reference_name,
+						"remarks": row.remarks,
+						"advance_amount": row.advance_amount,
+						"allocated_amount": row.allocated_amount,
+						"difference_posting_date": row.difference_posting_date,
+					},
+				)
+
+			for row in self.get("timesheets") or []:
+				append_child_if_table_exists(
+					si,
+					"timesheets",
+					{
+						"activity_type": row.activity_type,
+						"description": row.description,
+						"billing_hours": row.billing_hours,
+						"billing_amount": row.billing_amount,
+						"time_sheet": row.timesheet,
+					},
+				)
+
+		def make_sales_invoice(items):
+			si_data = {
+				"doctype": "Sales Invoice",
+				"items": items,
+			}
+			si = frappe.get_doc(si_data)
+			add_advanced_fields(si)
+			if hasattr(si, "set_missing_values"):
+				si.set_missing_values()
+			if hasattr(si, "calculate_taxes_and_totals"):
+				si.calculate_taxes_and_totals()
+			si.insert(ignore_permissions=True)
+			return si
 
 		period_str = ""
 		if self.billing_period_from and self.billing_period_to:
@@ -425,25 +675,8 @@ class RABill(Document):
 				f"Net payable: {frappe.format(self.net_payable, {'fieldtype': 'Currency'})}."
 			)
 
-		si_data = {
-			"doctype": "Sales Invoice",
-			"company": company,
-			"customer": self.customer,
-			"debit_to": receivable_account,
-			"project": self.project,
-			"currency": invoice_currency,
-			"conversion_rate": conversion_rate,
-			"due_date": frappe.utils.add_days(frappe.utils.today(), 30),
-			"remarks": f"Created from RA Bill {self.name}",
-			"items": invoice_items,
-		}
-
-		if frappe.get_meta("Sales Invoice").has_field("ra_bill"):
-			si_data["ra_bill"] = self.name
-
 		try:
-			si = frappe.get_doc(si_data)
-			si.insert(ignore_permissions=True)
+			si = make_sales_invoice(invoice_items)
 		except Exception as negative_rate_error:
 			if not (self.retention_amount and self.retention_amount > 0):
 				raise
@@ -456,10 +689,8 @@ class RABill(Document):
 					item["rate"] = self.retention_amount
 				fallback_items.append(item)
 
-			si_data["items"] = fallback_items
 			try:
-				si = frappe.get_doc(si_data)
-				si.insert(ignore_permissions=True)
+				si = make_sales_invoice(fallback_items)
 			except Exception:
 				raise negative_rate_error
 
@@ -475,6 +706,40 @@ class RABill(Document):
 		)
 
 		return si.name
+
+
+@frappe.whitelist()
+def get_customer_address_and_contact(customer):
+	if not customer:
+		return {}
+
+	from frappe.contacts.doctype.address.address import get_address_display, get_default_address
+	from frappe.contacts.doctype.contact.contact import get_default_contact
+
+	billing_address = get_default_address("Customer", customer, "is_primary_address")
+	shipping_address = get_default_address("Customer", customer, "is_shipping_address")
+	contact = get_default_contact("Customer", customer)
+	contact_details = {}
+
+	if contact:
+		contact_details = frappe.db.get_value(
+			"Contact",
+			contact,
+			["full_name", "email_id", "mobile_no"],
+			as_dict=True,
+		) or {}
+
+	return {
+		"customer_address": billing_address,
+		"address_display": get_address_display(billing_address) if billing_address else "",
+		"shipping_address_name": shipping_address,
+		"shipping_address": get_address_display(shipping_address) if shipping_address else "",
+		"contact_person": contact,
+		"contact_display": contact_details.get("full_name") or "",
+		"contact_email": contact_details.get("email_id") or "",
+		"contact_mobile": contact_details.get("mobile_no") or "",
+		"territory": frappe.db.get_value("Customer", customer, "territory") or "",
+	}
 
 
 def _has_ra_bill_transaction_table():

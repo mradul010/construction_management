@@ -51,7 +51,7 @@ function childFieldExists(cdt, fieldname) {
 	return Boolean(frappe.meta.get_docfield(cdt, fieldname));
 }
 
-function setChildValues(frm, cdt, cdn, values) {
+function setChildValues(frm, cdt, cdn, values, tableFieldname = "items") {
 	frm._ra_bill_setting_child_values = frm._ra_bill_setting_child_values || {};
 	frm._ra_bill_setting_child_values[cdn] = true;
 
@@ -64,7 +64,7 @@ function setChildValues(frm, cdt, cdn, values) {
 	return Promise.all(setters)
 		.then(() => {
 			delete frm._ra_bill_setting_child_values[cdn];
-			frm.refresh_field("items");
+			frm.refresh_field(tableFieldname);
 		})
 		.catch((error) => {
 			delete frm._ra_bill_setting_child_values[cdn];
@@ -414,6 +414,135 @@ function hydrateBoqLabels(frm) {
 	if (frm.ra_bill_load_boq_context) {
 		frm.ra_bill_load_boq_context().then(() => frm.refresh_field("items"));
 	}
+}
+
+function formFieldExists(frm, fieldname) {
+	return Boolean(frm.fields_dict && frm.fields_dict[fieldname]);
+}
+
+function setFormValuesIfChanged(frm, values) {
+	const changedValues = {};
+	Object.keys(values || {}).forEach((fieldname) => {
+		if (!formFieldExists(frm, fieldname)) return;
+
+		const nextValue = values[fieldname] === undefined || values[fieldname] === null ? "" : values[fieldname];
+		if ((frm.doc[fieldname] || "") !== (nextValue || "")) {
+			changedValues[fieldname] = nextValue;
+		}
+	});
+
+	if (!Object.keys(changedValues).length) {
+		return Promise.resolve();
+	}
+
+	return Promise.resolve(frm.set_value(changedValues));
+}
+
+function renderAddressDisplay(frm, addressField, displayField) {
+	if (!formFieldExists(frm, addressField) || !formFieldExists(frm, displayField)) {
+		return Promise.resolve();
+	}
+
+	if (!frm.doc[addressField]) {
+		return setFormValuesIfChanged(frm, { [displayField]: "" });
+	}
+
+	return frappe
+		.call({
+			method: "frappe.contacts.doctype.address.address.get_address_display",
+			args: {
+				address_dict: frm.doc[addressField],
+			},
+		})
+		.then((r) => setFormValuesIfChanged(frm, { [displayField]: r.message || "" }));
+}
+
+function setCustomerAddressAndContact(frm) {
+	if (!frm.doc.customer) {
+		return setFormValuesIfChanged(frm, {
+			customer_address: "",
+			address_display: "",
+			shipping_address_name: "",
+			shipping_address: "",
+			contact_person: "",
+			contact_display: "",
+			contact_mobile: "",
+			contact_email: "",
+			territory: "",
+		});
+	}
+
+	return frappe
+		.call({
+			method: `${RA_BILL_METHOD}.get_customer_address_and_contact`,
+			args: {
+				customer: frm.doc.customer,
+			},
+		})
+		.then((r) => setFormValuesIfChanged(frm, r.message || {}));
+}
+
+function setContactDetails(frm) {
+	if (!frm.doc.contact_person) {
+		return setFormValuesIfChanged(frm, {
+			contact_display: "",
+			contact_mobile: "",
+			contact_email: "",
+		});
+	}
+
+	return frappe
+		.call({
+			method: "frappe.contacts.doctype.contact.contact.get_contact_details",
+			args: {
+				contact: frm.doc.contact_person,
+			},
+		})
+		.then((r) => {
+			const details = r.message || {};
+			return setFormValuesIfChanged(frm, {
+				contact_display: details.contact_display || "",
+				contact_mobile: details.contact_mobile || "",
+				contact_email: details.contact_email || "",
+			});
+		});
+}
+
+function setTermsAndConditions(frm) {
+	if (!frm.doc.terms) {
+		return setFormValuesIfChanged(frm, { terms_and_conditions: "" });
+	}
+
+	return frappe.db
+		.get_value("Terms and Conditions", frm.doc.terms, "terms")
+		.then((r) =>
+			setFormValuesIfChanged(frm, {
+				terms_and_conditions: (r.message && r.message.terms) || "",
+			}),
+		);
+}
+
+function setParentValueIfFieldExists(frm, fieldname, value) {
+	if (!formFieldExists(frm, fieldname)) return;
+
+	frappe.model.set_value(frm.doctype, frm.docname, fieldname, value);
+}
+
+function updateTaxRowTotals(frm, netPayable) {
+	let totalTaxes = 0;
+
+	(frm.doc.taxes || []).forEach((row) => {
+		totalTaxes += getNumber(row.tax_amount);
+
+		if (row.doctype && row.name && childFieldExists(row.doctype, "total")) {
+			const rowTotal = netPayable + totalTaxes;
+			if (Math.abs(getNumber(row.total) - rowTotal) > 0.0001) {
+				frappe.model.set_value(row.doctype, row.name, "total", rowTotal);
+			}
+		}
+	});
+
+	return totalTaxes;
 }
 
 function getParentCategoryFromSubcategory(category) {
@@ -778,6 +907,44 @@ frappe.ui.form.on("RA Bill", {
 		hydrateBoqLabels(frm);
 	},
 
+	customer: function (frm) {
+		setCustomerAddressAndContact(frm);
+	},
+
+	customer_address: function (frm) {
+		renderAddressDisplay(frm, "customer_address", "address_display");
+	},
+
+	shipping_address_name: function (frm) {
+		renderAddressDisplay(frm, "shipping_address_name", "shipping_address");
+	},
+
+	dispatch_address_name: function (frm) {
+		renderAddressDisplay(frm, "dispatch_address_name", "dispatch_address");
+	},
+
+	company_address: function (frm) {
+		renderAddressDisplay(frm, "company_address", "company_address_display");
+	},
+
+	contact_person: function (frm) {
+		setContactDetails(frm);
+	},
+
+	terms: function (frm) {
+		setTermsAndConditions(frm);
+	},
+
+	get_advances_received: function () {
+		frappe.show_alert(
+			{
+				message: __("Advance allocation can be filled manually for now."),
+				indicator: "blue",
+			},
+			5,
+		);
+	},
+
 	retention_percent: function (frm) {
 		frm.trigger("recalculate_totals");
 	},
@@ -790,10 +957,22 @@ frappe.ui.form.on("RA Bill", {
 		});
 
 		const retention = gross * (getNumber(frm.doc.retention_percent) / 100);
+		const netPayable = gross - retention;
+		const totalTaxes = updateTaxRowTotals(frm, netPayable);
+		const grandTotal = netPayable + totalTaxes;
+		const totalAdvance = (frm.doc.advances || []).reduce(
+			(total, row) => total + getNumber(row.allocated_amount),
+			0,
+		);
 
 		frappe.model.set_value(frm.doctype, frm.docname, "gross_amount", gross);
 		frappe.model.set_value(frm.doctype, frm.docname, "retention_amount", retention);
-		frappe.model.set_value(frm.doctype, frm.docname, "net_payable", gross - retention);
+		frappe.model.set_value(frm.doctype, frm.docname, "net_payable", netPayable);
+		setParentValueIfFieldExists(frm, "net_total", gross);
+		setParentValueIfFieldExists(frm, "total_taxes_and_charges", totalTaxes);
+		setParentValueIfFieldExists(frm, "grand_total", grandTotal);
+		setParentValueIfFieldExists(frm, "total_advance", totalAdvance);
+		setParentValueIfFieldExists(frm, "outstanding_amount", grandTotal - totalAdvance);
 	},
 });
 
@@ -920,6 +1099,49 @@ frappe.ui.form.on("RA Bill Item", {
 	},
 
 	items_remove: function (frm) {
+		frm.trigger("recalculate_totals");
+	},
+});
+
+frappe.ui.form.on("RA Bill Advance", {
+	advances_add: function (frm, cdt, cdn) {
+		setChildValues(frm, cdt, cdn, {
+			advance_amount: 0,
+			allocated_amount: 0,
+		}, "advances").then(() => frm.trigger("recalculate_totals"));
+	},
+
+	advance_amount: function (frm) {
+		frm.trigger("recalculate_totals");
+	},
+
+	allocated_amount: function (frm) {
+		frm.trigger("recalculate_totals");
+	},
+
+	advances_remove: function (frm) {
+		frm.trigger("recalculate_totals");
+	},
+});
+
+frappe.ui.form.on("RA Bill Taxes and Charges", {
+	taxes_add: function (frm, cdt, cdn) {
+		setChildValues(frm, cdt, cdn, {
+			rate: 0,
+			tax_amount: 0,
+			total: getNumber(frm.doc.net_payable),
+		}, "taxes").then(() => frm.trigger("recalculate_totals"));
+	},
+
+	rate: function (frm) {
+		frm.trigger("recalculate_totals");
+	},
+
+	tax_amount: function (frm) {
+		frm.trigger("recalculate_totals");
+	},
+
+	taxes_remove: function (frm) {
 		frm.trigger("recalculate_totals");
 	},
 });
