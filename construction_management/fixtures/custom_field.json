@@ -10,5 +10,31 @@
     "insert_after": "description",
     "module": "Construction Management",
     "description": "Default Labour/Material/Equipment breakdown for this item. Auto-fills in BOQ when this item is selected, and can be updated here for future reuse across all BOQs."
+  },
+  {
+    "doctype": "Custom Field",
+    "name": "Sales Invoice-ra_bill",
+    "dt": "Sales Invoice",
+    "fieldname": "ra_bill",
+    "fieldtype": "Link",
+    "options": "RA Bill",
+    "label": "RA Bill",
+    "insert_after": "project",
+    "module": "Construction Management",
+    "read_only": 1,
+    "no_copy": 1
+  },
+  {
+    "doctype": "Custom Field",
+    "name": "RA Bill Item-item_name",
+    "dt": "RA Bill Item",
+    "fieldname": "item_name",
+    "fieldtype": "Data",
+    "label": "Item Name",
+    "insert_after": "boq_item",
+    "module": "Construction Management",
+    "read_only": 1,
+    "hidden": 1,
+    "in_list_view": 0
   }
 ]

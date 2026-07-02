@@ -1,11 +1,23 @@
 app_name = "construction_management"
 app_title = "Construction Management"
+app_icon = "octicon octicon-tools"
+app_color = "blue"
 app_publisher = "Vigisolvo Private Limited"
 app_description = "Construction Management app build by vigisolvo private limited"
 app_email = "mradulmishra010@gmail.com"
 app_license = "mit"
 
 fixtures = [{"dt": "Custom Field", "filters": [["module", "=", "Construction Management"]]}]
+
+add_to_apps_screen = [
+    {
+        "name": "construction_management",
+        "logo": "/assets/construction_management/techsolvo_logo.jpeg",
+        "title": "Construction Management",
+        "route": "/app/construction-management",
+        
+    }
+]
 
 # Apps
 # ------------------

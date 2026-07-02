@@ -55,3 +55,52 @@ def save_item_default_cost_components(item, components):
 	doc.save(ignore_permissions=True)
 	frappe.db.commit()
 	return {"status": "success"}
+
+
+@frappe.whitelist()
+@frappe.validate_and_sanitize_search_inputs
+def boq_item_search(doctype, txt, searchfield, start, page_len, filters, **kwargs):
+	"""
+	Search BOQ Item links by their human-readable item_name while
+	returning doc.name as the stored Link value.
+	"""
+	if isinstance(filters, str):
+		filters = frappe.parse_json(filters)
+	filters = filters or {}
+	parent = filters.get("parent") or filters.get("boq")
+
+	if not parent:
+		return []
+
+	txt = txt or ""
+	like_txt = f"%{txt}%"
+	prefix_txt = f"{txt}%"
+
+	return frappe.db.sql(
+		"""
+		SELECT name, item_name
+		FROM `tabBOQ Item`
+		WHERE parent = %(parent)s
+		  AND (%(txt)s = '' OR item_name LIKE %(like_txt)s OR name LIKE %(like_txt)s)
+		ORDER BY
+		  CASE
+		    WHEN item_name LIKE %(prefix_txt)s THEN 0
+		    WHEN item_name LIKE %(like_txt)s THEN 1
+		    WHEN name LIKE %(prefix_txt)s THEN 2
+		    ELSE 3
+		  END,
+		  item_name ASC
+		LIMIT %(start)s, %(page_len)s
+		""",
+		{
+			"parent": parent,
+			"txt": txt,
+			"like_txt": like_txt,
+			"prefix_txt": prefix_txt,
+			"start": start,
+			"page_len": page_len,
+		},
+	)
+ 
+ 
+ 

@@ -1,0 +1,196 @@
+{
+ "actions": [],
+ "autoname": "RABT-.YYYY.-.#####",
+ "creation": "2026-06-30 00:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "ra_bill",
+  "project",
+  "boq",
+  "boq_item",
+  "item_name",
+  "category_name",
+  "sub_category",
+  "boq_qty",
+  "boq_rate",
+  "uom",
+  "work_percent",
+  "current_qty",
+  "current_amount",
+  "cumulative_qty_after_bill",
+  "cumulative_percent_after_bill",
+  "remaining_qty_after_bill",
+  "remaining_percent_after_bill",
+  "transaction_date",
+  "docstatus_source"
+ ],
+ "fields": [
+  {
+   "fieldname": "ra_bill",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "RA Bill",
+   "options": "RA Bill",
+   "reqd": 1
+  },
+  {
+   "fieldname": "project",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Project",
+   "options": "Project",
+   "reqd": 1
+  },
+  {
+   "fieldname": "boq",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "BOQ",
+   "options": "BOQ",
+   "reqd": 1
+  },
+  {
+   "fieldname": "boq_item",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "BOQ Item",
+   "options": "BOQ Item",
+   "reqd": 1
+  },
+  {
+   "fieldname": "item_name",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Item Name"
+  },
+  {
+   "fieldname": "category_name",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Category Name",
+   "options": "BOQ Category"
+  },
+  {
+   "fieldname": "sub_category",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Sub Category",
+   "options": "BOQ Category"
+  },
+  {
+   "fieldname": "boq_qty",
+   "fieldtype": "Float",
+   "label": "BOQ Qty"
+  },
+  {
+   "fieldname": "boq_rate",
+   "fieldtype": "Currency",
+   "label": "BOQ Rate"
+  },
+  {
+   "fieldname": "uom",
+   "fieldtype": "Link",
+   "label": "UOM",
+   "options": "UOM"
+  },
+  {
+   "fieldname": "work_percent",
+   "fieldtype": "Percent",
+   "label": "Work %"
+  },
+  {
+   "fieldname": "current_qty",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "Current Qty"
+  },
+  {
+   "fieldname": "current_amount",
+   "fieldtype": "Currency",
+   "in_list_view": 1,
+   "label": "Current Amount"
+  },
+  {
+   "fieldname": "cumulative_qty_after_bill",
+   "fieldtype": "Float",
+   "label": "Cumulative Qty After Bill"
+  },
+  {
+   "fieldname": "cumulative_percent_after_bill",
+   "fieldtype": "Percent",
+   "label": "Cumulative % After Bill"
+  },
+  {
+   "fieldname": "remaining_qty_after_bill",
+   "fieldtype": "Float",
+   "label": "Remaining Qty After Bill"
+  },
+  {
+   "fieldname": "remaining_percent_after_bill",
+   "fieldtype": "Percent",
+   "label": "Remaining % After Bill"
+  },
+  {
+   "fieldname": "transaction_date",
+   "fieldtype": "Date",
+   "label": "Transaction Date"
+  },
+  {
+   "default": "1",
+   "fieldname": "docstatus_source",
+   "fieldtype": "Int",
+   "label": "Source Docstatus"
+  }
+ ],
+ "links": [],
+ "modified": "2026-06-30 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Construction Management",
+ "name": "RA Bill Transaction",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 0,
+   "delete": 0,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Construction Manager",
+   "share": 1,
+   "write": 0
+  },
+  {
+   "create": 0,
+   "delete": 0,
+   "email": 1,
+   "export": 0,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Construction User",
+   "share": 1,
+   "write": 0
+  }
+ ],
+ "search_fields": "ra_bill,project,boq,boq_item,item_name",
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": [],
+ "title_field": "item_name",
+ "track_changes": 1
+}

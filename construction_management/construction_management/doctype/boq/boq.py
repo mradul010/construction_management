@@ -1,13 +1,29 @@
 import frappe
+from frappe import _
 from frappe.model.document import Document
+from frappe.utils import flt
 
 
 class BOQ(Document):
 
 	def validate(self):
+		self._ensure_component_keys()
 		self._fill_parent_categories()
 		self._calculate_item_unit_costs()
+		self.validate_item_values()
 		self._calculate_totals()
+
+	def _ensure_component_keys(self):
+		ref_map = {}
+		for row in self.items:
+			old_ref = row.name
+			if not row.get("component_key"):
+				row.component_key = frappe.generate_hash(length=12)
+			ref_map[old_ref] = row.component_key
+
+		for component in self.cost_components or []:
+			if component.boq_item in ref_map:
+				component.boq_item = ref_map[component.boq_item]
 
 	def _fill_parent_categories(self):
 		for row in self.items:
@@ -28,14 +44,28 @@ class BOQ(Document):
 		"""
 		cost_components is a direct child table of BOQ (not BOQ Item) to work
 		around Frappe v16's explicit non-support for nested child tables.
-		Each component row carries a boq_item field storing the BOQ Item row name.
-		We group by boq_item and sum amounts to set unit_cost on each item row.
+		Each component row carries a boq_item field storing the BOQ Item component_key.
+		Old rows that stored BOQ Item row name are still supported as a fallback.
 		"""
 		all_components = self.cost_components or []
 		for row in self.items:
-			components = [c for c in all_components if c.boq_item == row.name]
+			component_key = row.get("component_key") or row.name
+			components = [c for c in all_components if c.boq_item in (component_key, row.name)]
 			if components:
 				row.unit_cost = sum(float(getattr(c, "amount", 0) or 0) for c in components)
+
+	def validate_item_values(self):
+		for row in self.items:
+			item = row.item_name or row.item or row.name
+
+			if flt(row.qty) <= 0:
+				frappe.throw(_("Qty for item {0} must be greater than 0.").format(item))
+
+			if flt(row.margin_percent) < 0:
+				frappe.throw(_("Margin % for item {0} cannot be negative.").format(item))
+
+			if flt(row.unit_cost) < 0 or flt(row.unit_rate) < 0:
+				frappe.throw(_("Unit Cost/Rate for item {0} cannot be negative.").format(item))
 
 	def _calculate_totals(self):
 		grand_total = 0
