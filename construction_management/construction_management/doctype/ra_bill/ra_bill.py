@@ -575,7 +575,6 @@ class RABill(Document):
 			)
 
 		category_labels = {}
-		boq_item_codes = {}
 
 		def get_category_label(category):
 			if not category:
@@ -586,34 +585,31 @@ class RABill(Document):
 				)
 			return category_labels[category]
 
-		def get_invoice_item_code(row):
-			if not row.boq_item:
-				return "RA Bill Services"
-
-			if row.boq_item not in boq_item_codes:
-				boq_item_code = frappe.db.get_value("BOQ Item", row.boq_item, "item")
-				if boq_item_code and frappe.db.exists("Item", boq_item_code):
-					boq_item_codes[row.boq_item] = boq_item_code
-				else:
-					boq_item_codes[row.boq_item] = "RA Bill Services"
-
-			return boq_item_codes[row.boq_item]
-
 		invoice_items = []
 		for row in self.items:
-			if not row.current_amount or row.current_amount <= 0:
+			qty = flt(row.current_qty or 0)
+			rate = flt(row.boq_rate or 0)
+			amount = flt(row.current_amount or 0)
+
+			if qty <= 0 or amount <= 0:
 				continue
+
+			calculated_amount = flt(qty * rate)
 
 			description_lines = [
 				f"Category: {get_category_label(row.category_name)}",
 				f"Sub Category: {get_category_label(row.sub_category)}",
 				f"Item: {row.item_name or ''}",
 				f"BOQ Qty: {flt(row.boq_qty)} {row.uom or ''}".strip(),
-				f"BOQ Rate: {flt(row.boq_rate)}",
+				f"BOQ Rate: {rate}",
 				f"Work Completed: {flt(row.work_percent)}%",
-				f"Current Qty: {flt(row.current_qty)}",
-				f"Amount: {flt(row.current_amount)}",
+				f"Current Qty: {qty}",
+				f"Amount: {amount}",
 			]
+			if abs(calculated_amount - amount) > 0.01:
+				description_lines.append(
+					f"Amount Check: Qty x Rate = {calculated_amount}; RA Bill Current Amount = {amount}"
+				)
 			if period_str:
 				description_lines.append(f"Billing Period: {period_str}")
 			description_lines.extend(
@@ -626,12 +622,12 @@ class RABill(Document):
 
 			invoice_items.append(
 				{
-					"item_code": get_invoice_item_code(row),
+					"item_code": "RA Bill Services",
 					"item_name": row.item_name or "RA Bill Services",
 					"description": "\n".join(description_lines),
-					"qty": 1,
-					"rate": row.current_amount,
-					"uom": "Nos",
+					"qty": qty,
+					"rate": rate,
+					"uom": row.uom or "Nos",
 					"income_account": income_account,
 				}
 			)
@@ -639,7 +635,9 @@ class RABill(Document):
 		if not invoice_items:
 			frappe.throw("No RA Bill Items with a positive current amount were found to invoice.")
 
-		invoice_gross = sum(flt(item.get("rate")) for item in invoice_items)
+		invoice_gross = sum(
+			flt(item.get("qty")) * flt(item.get("rate")) for item in invoice_items
+		)
 		if flt(invoice_gross, 2) != flt(self.gross_amount, 2):
 			frappe.throw(
 				"Detailed RA Bill Item total does not match the RA Bill gross amount. "
