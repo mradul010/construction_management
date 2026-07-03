@@ -3,6 +3,55 @@ function boqNumber(value) {
 	return isNaN(parsed) ? 0 : parsed;
 }
 
+const BOQ_COST_BREAKDOWN_TOLERANCE = 0.01;
+const BOQ_COST_BREAKDOWN_MISMATCH_MESSAGE =
+	"Cost Breakdown must match Unit Cost only. Please correct the Cost Breakdown.";
+
+function getBoqItemUnitCost(row) {
+	if (!row) return 0;
+
+	return boqNumber(row.unit_cost);
+}
+
+function showCostBreakdownMismatchMessage() {
+	frappe.msgprint({
+		title: __("Cost Breakdown Mismatch"),
+		indicator: "red",
+		message: __(BOQ_COST_BREAKDOWN_MISMATCH_MESSAGE),
+	});
+}
+
+function getBoqCostBreakdownComponents(frm, row) {
+	return (frm.doc.cost_components || []).filter((component) =>
+		frm.boq_matches_item_component(component, row),
+	);
+}
+
+function validateBoqCostBreakdownTotal(frm, row, breakdownAmount) {
+	const unitCost = getBoqItemUnitCost(row);
+	const total = boqNumber(breakdownAmount);
+
+	if (Math.abs(unitCost - total) > BOQ_COST_BREAKDOWN_TOLERANCE) {
+		showCostBreakdownMismatchMessage();
+		return false;
+	}
+
+	return true;
+}
+
+function validateAllBoqCostBreakdowns(frm) {
+	return (frm.doc.items || []).every((row) => {
+		const components = getBoqCostBreakdownComponents(frm, row);
+		if (!components.length) return true;
+
+		const total = components.reduce(
+			(sum, component) => sum + boqNumber(component.amount),
+			0,
+		);
+		return validateBoqCostBreakdownTotal(frm, row, total);
+	});
+}
+
 function getBoqItemLabel(row) {
 	return row.item_name || row.item || __("selected item");
 }
@@ -106,18 +155,6 @@ frappe.ui.form.on("BOQ", {
 
 			frm.refresh_field("items");
 			frm.refresh_field("cost_components");
-		};
-
-		frm.boq_recalculate_item_row = function (row, unitCost) {
-			const cost = parseFloat(unitCost) || 0;
-			const margin = parseFloat(row.margin_percent) || 0;
-			const qty = parseFloat(row.qty) || 0;
-
-			return {
-				unit_cost: cost,
-				unit_rate: cost * (1 + margin / 100),
-				amount: qty * cost * (1 + margin / 100),
-			};
 		};
 
 		frm.boq_get_item_price = async function (item) {
@@ -379,6 +416,10 @@ frappe.ui.form.on("BOQ", {
 						return;
 					}
 
+					if (!validateBoqCostBreakdownTotal(frm, itemRow, total)) {
+						return;
+					}
+
 					const existingOtherComponents = (frm.doc.cost_components || [])
 						.filter((c) => !frm.boq_matches_item_component(c, itemRow))
 						.map((c) => ({
@@ -436,49 +477,19 @@ frappe.ui.form.on("BOQ", {
 						});
 					}
 
-                    const oldAmount = parseFloat(itemRow.amount) || 0;
+					frm.refresh_field("items");
+					frm.refresh_field("cost_components");
+					frm.boq_render_grid();
 
-                    const totals = frm.boq_recalculate_item_row(itemRow, total);
-                    
-                   
-                    
-					Promise.all([
-						frappe.model.set_value(
-							itemRow.doctype,
-							itemRow.name,
-							"unit_cost",
-							totals.unit_cost,
-						),
-						frappe.model.set_value(
-							itemRow.doctype,
-							itemRow.name,
-							"unit_rate",
-							totals.unit_rate,
-						),
-						frappe.model.set_value(
-							itemRow.doctype,
-							itemRow.name,
-							"amount",
-							totals.amount,
-						),
-					]).then(() => {
-						frm.refresh_field("items");
-						frm.refresh_field("cost_components");
-						frm.boq_render_grid();
+					frappe.show_alert(
+						{
+							message: __("Cost Breakdown updated. Click Save to keep changes."),
+							indicator: "blue",
+						},
+						5,
+					);
 
-						frappe.show_alert(
-							{
-								message: __("Cost Breakdown updated. Click Save to keep changes."),
-								indicator: "blue",
-							},
-							5,
-						);
-
-						d.hide();
-
-						// 🔥 FIXED CALL
-						showAmountMismatchWarning(oldAmount, total);
-					});
+					d.hide();
 				},
 			});
 
@@ -529,25 +540,6 @@ frappe.ui.form.on("BOQ", {
 				return (frm.doc.cost_components || [])
 					.filter((component) => frm.boq_matches_item_component(component, itemRow))
 					.reduce((sum, component) => sum + (parseFloat(component.amount) || 0), 0);
-			}
-
-			function showAmountMismatchWarning(oldItemAmount, breakdownAmount) {
-				const itemAmount = parseFloat(oldItemAmount) || 0;
-
-				const bdAmount = parseFloat(breakdownAmount) || 0;
-
-				if (Math.abs(itemAmount - bdAmount) > 0.01) {
-					frappe.msgprint({
-						title: "Amount Mismatch Warning",
-						message:
-							"Previous Item Amount: " +
-							itemAmount +
-							"<br>New Breakdown Amount: " +
-							bdAmount +
-							"<br><br>Please review Cost Breakdown.",
-						indicator: "orange",
-					});
-				}
 			}
 
 			function normalizeComponent(component) {
@@ -1688,6 +1680,10 @@ title="${buildCostTooltip(row).replace(/"/g, "&quot;")}">
 		}
 
 		frm.boq_prepare_component_keys();
+		if (!validateAllBoqCostBreakdowns(frm)) {
+			frappe.validated = false;
+			return;
+		}
 	},
 
 	after_save: function (frm) {
