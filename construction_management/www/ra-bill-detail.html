@@ -1,0 +1,62 @@
+{% extends "templates/web.html" %}
+
+{% block page_content %}
+<div class="container my-5">
+	<a href="/ra-bill" class="btn btn-sm btn-light mb-3">Back</a>
+	<h2>{{ ra_bill.name }}</h2>
+
+	<div class="row mb-4">
+		<div class="col-md-4"><strong>Project:</strong> {{ ra_bill.project or "-" }}</div>
+		<div class="col-md-4"><strong>BOQ:</strong> {{ ra_bill.boq or "-" }}</div>
+		<div class="col-md-4"><strong>Bill No:</strong> {{ ra_bill.bill_no or "-" }}</div>
+		<div class="col-md-4"><strong>Status:</strong> {{ ra_bill.status or "-" }}</div>
+		<div class="col-md-4"><strong>Billing Period:</strong> {{ ra_bill.billing_period_from or "-" }} to {{ ra_bill.billing_period_to or "-" }}</div>
+		<div class="col-md-4"><strong>Gross Amount:</strong> {{ ra_bill.gross_amount or 0 }}</div>
+		<div class="col-md-4"><strong>Retention Amount:</strong> {{ ra_bill.retention_amount or 0 }}</div>
+		<div class="col-md-4"><strong>Net Payable:</strong> {{ ra_bill.net_payable or 0 }}</div>
+		<div class="col-md-4"><strong>Sales Invoice:</strong> {{ ra_bill.sales_invoice or "-" }}</div>
+	</div>
+
+	<table class="table table-bordered table-hover table-sm">
+		<thead>
+			<tr>
+				<th>Category</th>
+				<th>Sub Category</th>
+				<th>Item Name</th>
+				<th>BOQ Qty</th>
+				<th>UOM</th>
+				<th>BOQ Rate</th>
+				<th>Previous %</th>
+				<th>Current Work %</th>
+				<th>Current Qty</th>
+				<th>Current Amount</th>
+				<th>Remaining %</th>
+				<th>Cumulative Qty</th>
+			</tr>
+		</thead>
+		<tbody>
+			{% for row in items %}
+			<tr>
+				<td>{{ row.category_name or "-" }}</td>
+				<td>{{ row.sub_category or "-" }}</td>
+				<td>{{ row.item_name or "-" }}</td>
+				<td>{{ row.boq_qty or 0 }}</td>
+				<td>{{ row.uom or "-" }}</td>
+				<td>{{ row.boq_rate or 0 }}</td>
+				<td>{{ row.previous_percent or 0 }}</td>
+				<td>{{ row.work_percent or 0 }}</td>
+				<td>{{ row.current_qty or 0 }}</td>
+				<td>{{ row.current_amount or 0 }}</td>
+				<td>{{ row.remaining_percent or 0 }}</td>
+				<td>{{ row.cumulative_qty or 0 }}</td>
+			</tr>
+			{% else %}
+			<tr>
+				<td colspan="12" class="text-muted text-center">No RA Bill items found.</td>
+			</tr>
+			{% endfor %}
+		</tbody>
+	</table>
+</div>
+{% endblock %}
+

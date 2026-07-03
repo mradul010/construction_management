@@ -19,6 +19,26 @@ add_to_apps_screen = [
     }
 ]
 
+portal_menu_items = [
+    {
+        "title": "BOQ",
+        "route": "/boq",
+        "reference_doctype": "BOQ",
+        "role": "Customer",
+    },
+    {
+        "title": "RA Bill",
+        "route": "/ra-bill",
+        "reference_doctype": "RA Bill",
+        "role": "Customer",
+    },
+    {
+        "title": "Work Progress",
+        "route": "/work-progress",
+        "role": "Customer",
+    },
+]
+
 # Apps
 # ------------------
 
@@ -264,4 +284,3 @@ after_migrate = "construction_management.construction_management.setup.after_mig
 # ------------
 # List of apps whose translatable strings should be excluded from this app's translations.
 # ignore_translatable_strings_from = []
-

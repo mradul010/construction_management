@@ -1,0 +1,48 @@
+{% extends "templates/web.html" %}
+
+{% block page_content %}
+<div class="container my-5">
+	<a href="/boq" class="btn btn-sm btn-light mb-3">Back</a>
+	<h2>{{ boq.name }}</h2>
+
+	<div class="row mb-4">
+		<div class="col-md-4"><strong>Project:</strong> {{ boq.project or "-" }}</div>
+		<div class="col-md-4"><strong>Client:</strong> {{ boq.client or "-" }}</div>
+		<div class="col-md-4"><strong>Currency:</strong> {{ boq.currency or "-" }}</div>
+		<div class="col-md-4"><strong>Status:</strong> {{ boq.status or "-" }}</div>
+		<div class="col-md-4"><strong>Total Contract Value:</strong> {{ boq.grand_total or 0 }}</div>
+	</div>
+
+	<table class="table table-bordered table-hover table-sm">
+		<thead>
+			<tr>
+				<th>Category</th>
+				<th>Sub Category</th>
+				<th>Item Name</th>
+				<th>Qty</th>
+				<th>UOM</th>
+				<th>Rate</th>
+				<th>Amount</th>
+			</tr>
+		</thead>
+		<tbody>
+			{% for row in items %}
+			<tr>
+				<td>{{ row.boq_parent_category or "-" }}</td>
+				<td>{{ row.boq_category or "-" }}</td>
+				<td>{{ row.item_name or row.item or "-" }}</td>
+				<td>{{ row.qty or 0 }}</td>
+				<td>{{ row.uom or "-" }}</td>
+				<td>{{ row.unit_rate or 0 }}</td>
+				<td>{{ row.amount or ((row.qty or 0) * (row.unit_rate or 0)) }}</td>
+			</tr>
+			{% else %}
+			<tr>
+				<td colspan="7" class="text-muted text-center">No BOQ items found.</td>
+			</tr>
+			{% endfor %}
+		</tbody>
+	</table>
+</div>
+{% endblock %}
+
