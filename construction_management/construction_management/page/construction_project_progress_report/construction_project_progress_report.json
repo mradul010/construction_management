@@ -1,0 +1,31 @@
+{
+ "creation": "2026-07-06 00:00:00.000000",
+ "docstatus": 0,
+ "doctype": "Page",
+ "idx": 0,
+ "modified": "2026-07-06 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Construction Management",
+ "name": "construction-project-progress-report",
+ "owner": "Administrator",
+ "page_name": "construction-project-progress-report",
+ "roles": [
+  {
+   "role": "System Manager"
+  },
+  {
+   "role": "Construction Manager"
+  },
+  {
+   "role": "Construction User"
+  },
+  {
+   "role": "Projects Manager"
+  },
+  {
+   "role": "Projects User"
+  }
+ ],
+ "standard": "Yes",
+ "title": "Project Progress Report"
+}

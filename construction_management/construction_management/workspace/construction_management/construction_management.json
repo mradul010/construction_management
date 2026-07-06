@@ -1,7 +1,7 @@
 {
  "app": "construction_management",
  "charts": [],
- "content": "[{\"id\":\"cm_header\",\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h4\\\"><b>Construction Management</b></span>\",\"col\":12}},{\"id\":\"cm_card\",\"type\":\"card\",\"data\":{\"card_name\":\"Construction Management\",\"col\":4}}]",
+ "content": "[{\"id\":\"cm_header\",\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h4\\\"><b>Construction Management</b></span>\",\"col\":12}},{\"id\":\"cm_card\",\"type\":\"card\",\"data\":{\"card_name\":\"Construction Management\",\"col\":4}},{\"id\":\"cm_reports_card\",\"type\":\"card\",\"data\":{\"card_name\":\"Reports\",\"col\":4}}]",
  "creation": "2026-06-26 00:00:00.000000",
  "custom_blocks": [],
  "docstatus": 0,
@@ -53,9 +53,28 @@
    "link_type": "DocType",
    "onboard": 1,
    "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Reports",
+   "link_count": 0,
+   "onboard": 0,
+   "type": "Card Break"
+  },
+  {
+   "dependencies": "Project, BOQ, RA Bill",
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Project Progress Report",
+   "link_count": 0,
+   "link_to": "construction-project-progress-report",
+   "link_type": "Page",
+   "onboard": 1,
+   "type": "Link"
   }
  ],
- "modified": "2026-06-26 00:00:00.000000",
+ "modified": "2026-07-06 00:00:00.000000",
  "modified_by": "Administrator",
  "module": "Construction Management",
  "name": "Construction Management",
@@ -103,4 +122,3 @@
 
  
   
-
