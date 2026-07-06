@@ -8,6 +8,9 @@
   "category_name",
   "sub_category",
   "boq_item",
+  "boq_item_key",
+  "boq_revision",
+  "original_boq",
   "boq_qty",
   "boq_rate",
   "uom",
@@ -44,6 +47,28 @@
    "label": "BOQ Item",
    "options": "BOQ Item",
    "reqd": 1
+  },
+  {
+   "fieldname": "boq_item_key",
+   "fieldtype": "Data",
+   "label": "BOQ Item Key",
+   "read_only": 1
+  },
+  {
+   "fieldname": "boq_revision",
+   "fieldtype": "Link",
+   "hidden": 1,
+   "label": "BOQ Revision",
+   "options": "BOQ",
+   "read_only": 1
+  },
+  {
+   "fieldname": "original_boq",
+   "fieldtype": "Link",
+   "hidden": 1,
+   "label": "Original BOQ",
+   "options": "BOQ",
+   "read_only": 1
   },
   {
    "description": "Original quantity from BOQ",

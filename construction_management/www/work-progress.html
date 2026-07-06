@@ -1,0 +1,42 @@
+{% extends "templates/web.html" %}
+
+{% block page_content %}
+<div class="container my-5">
+	<h2>Work Progress</h2>
+	<table class="table table-bordered table-hover table-sm">
+		<thead>
+			<tr>
+				<th>BOQ</th>
+				<th>Category</th>
+				<th>Sub Category</th>
+				<th>Item Name</th>
+				<th>BOQ Qty</th>
+				<th>Completed Qty</th>
+				<th>Remaining Qty</th>
+				<th>Progress %</th>
+				<th>Completed Amount</th>
+			</tr>
+		</thead>
+		<tbody>
+			{% for row in rows %}
+			<tr>
+				<td>{{ row.boq or "-" }}</td>
+				<td>{{ row.category_name or "-" }}</td>
+				<td>{{ row.sub_category or "-" }}</td>
+				<td>{{ row.item_name or row.boq_item or "-" }}</td>
+				<td>{{ row.boq_qty or 0 }}</td>
+				<td>{{ row.completed_qty or 0 }}</td>
+				<td>{{ row.remaining_qty or 0 }}</td>
+				<td>{{ row.progress_percent or 0 }}</td>
+				<td>{{ row.completed_amount or 0 }}</td>
+			</tr>
+			{% else %}
+			<tr>
+				<td colspan="9" class="text-muted text-center">No submitted work progress found.</td>
+			</tr>
+			{% endfor %}
+		</tbody>
+	</table>
+</div>
+{% endblock %}
+

@@ -1,0 +1,42 @@
+{% extends "templates/web.html" %}
+
+{% block page_content %}
+<div class="container my-5">
+	<h2>RA Bill</h2>
+	<table class="table table-bordered table-hover table-sm">
+		<thead>
+			<tr>
+				<th>RA Bill No</th>
+				<th>Bill No</th>
+				<th>Project</th>
+				<th>BOQ</th>
+				<th>Status</th>
+				<th>Billing Period</th>
+				<th>Gross Amount</th>
+				<th>Net Payable</th>
+				<th></th>
+			</tr>
+		</thead>
+		<tbody>
+			{% for bill in ra_bills %}
+			<tr>
+				<td>{{ bill.name }}</td>
+				<td>{{ bill.bill_no or "-" }}</td>
+				<td>{{ bill.project or "-" }}</td>
+				<td>{{ bill.boq or "-" }}</td>
+				<td>{{ bill.status or "-" }}</td>
+				<td>{{ bill.billing_period_from or "-" }} to {{ bill.billing_period_to or "-" }}</td>
+				<td>{{ bill.gross_amount or 0 }}</td>
+				<td>{{ bill.net_payable or 0 }}</td>
+				<td><a class="btn btn-sm btn-primary" href="/ra-bill-detail?name={{ bill.name | urlencode }}">View</a></td>
+			</tr>
+			{% else %}
+			<tr>
+				<td colspan="9" class="text-muted text-center">No RA Bills found.</td>
+			</tr>
+			{% endfor %}
+		</tbody>
+	</table>
+</div>
+{% endblock %}
+

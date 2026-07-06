@@ -19,8 +19,6 @@
   "boq_items_section",
   "items",
   "cost_components",
-  "revision_history_section",
-  "revisions",
   "totals_section",
   "total_cost",
   "totals_col_break",
@@ -28,9 +26,24 @@
   "total_margin",
   "margin_percent",
   "rate_per_bua",
+  "revision_tab",
+  "revision_metadata_section",
+  "is_revision",
+  "original_boq",
+  "parent_boq",
+  "revision_no",
+  "revision_reason",
+  "revision_date",
+  "revision_metadata_col_break",
+  "is_active_revision",
+  "revision_status",
+  "superseded_by",
+  "active_from_date",
+  "active_to_date",
+  "revision_history_section",
+  "revisions",
   "status_section",
   "status",
-  "revision_no",
   "amended_from",
   "connections_tab",
   "connections_section",
@@ -129,18 +142,6 @@
    "options": "BOQ Cost Component"
   },
   {
-   "collapsible": 1,
-   "fieldname": "revision_history_section",
-   "fieldtype": "Section Break",
-   "label": "Revision History"
-  },
-  {
-   "fieldname": "revisions",
-   "fieldtype": "Table",
-   "label": "Revision History",
-   "options": "BOQ Revision"
-  },
-  {
    "fieldname": "totals_section",
    "fieldtype": "Section Break",
    "label": "Totals"
@@ -186,6 +187,104 @@
    "read_only": 1
   },
   {
+   "fieldname": "revision_tab",
+   "fieldtype": "Tab Break",
+   "label": "Revision"
+  },
+  {
+   "fieldname": "revision_metadata_section",
+   "fieldtype": "Section Break",
+   "label": "Revision Metadata"
+  },
+  {
+   "default": "0",
+   "fieldname": "is_revision",
+   "fieldtype": "Check",
+   "label": "Is Revision",
+   "read_only": 1
+  },
+  {
+   "fieldname": "original_boq",
+   "fieldtype": "Link",
+   "label": "Original BOQ",
+   "options": "BOQ",
+   "read_only": 1
+  },
+  {
+   "fieldname": "parent_boq",
+   "fieldtype": "Link",
+   "label": "Previous BOQ Revision",
+   "options": "BOQ",
+   "read_only": 1
+  },
+  {
+   "default": "0",
+   "fieldname": "revision_no",
+   "fieldtype": "Int",
+   "in_list_view": 1,
+   "label": "Revision No",
+   "read_only": 1
+  },
+  {
+   "fieldname": "revision_reason",
+   "fieldtype": "Small Text",
+   "label": "Revision Reason"
+  },
+  {
+   "fieldname": "revision_date",
+   "fieldtype": "Date",
+   "label": "Revision Date"
+  },
+  {
+   "fieldname": "revision_metadata_col_break",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "0",
+   "fieldname": "is_active_revision",
+   "fieldtype": "Check",
+   "label": "Active Revision",
+   "read_only": 1
+  },
+  {
+   "allow_on_submit": 1,
+   "default": "Draft",
+   "fieldname": "revision_status",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "Revision Status",
+   "options": "Draft\nSubmitted\nApproved\nActive\nSuperseded\nCancelled"
+  },
+  {
+   "fieldname": "superseded_by",
+   "fieldtype": "Link",
+   "label": "Superseded By",
+   "options": "BOQ",
+   "read_only": 1
+  },
+  {
+   "fieldname": "active_from_date",
+   "fieldtype": "Date",
+   "label": "Active From Date"
+  },
+  {
+   "fieldname": "active_to_date",
+   "fieldtype": "Date",
+   "label": "Active To Date"
+  },
+  {
+   "collapsible": 1,
+   "fieldname": "revision_history_section",
+   "fieldtype": "Section Break",
+   "label": "Revision History"
+  },
+  {
+   "fieldname": "revisions",
+   "fieldtype": "Table",
+   "label": "Revision History",
+   "options": "BOQ Revision"
+  },
+  {
    "fieldname": "status_section",
    "fieldtype": "Section Break"
   },
@@ -195,15 +294,7 @@
    "fieldtype": "Select",
    "in_list_view": 1,
    "label": "Status",
-   "options": "Draft\nSubmitted\nRevised\nCancelled",
-   "read_only": 1
-  },
-  {
-   "default": "1",
-   "fieldname": "revision_no",
-   "fieldtype": "Int",
-   "in_list_view": 1,
-   "label": "Revision No",
+   "options": "Draft\nSubmitted\nApproved\nActive\nSuperseded\nRevised\nCancelled",
    "read_only": 1
   },
   {
@@ -238,6 +329,11 @@
    "group": "Billing",
    "link_doctype": "RA Bill",
    "link_fieldname": "boq"
+  },
+  {
+   "group": "Revisions",
+   "link_doctype": "BOQ",
+   "link_fieldname": "parent_boq"
   }
  ],
  "modified": "2026-06-05 00:00:00.000000",

@@ -3,6 +3,140 @@ function boqNumber(value) {
 	return isNaN(parsed) ? 0 : parsed;
 }
 
+const BOQ_COST_BREAKDOWN_TOLERANCE = 0.01;
+const BOQ_METHOD =
+	"construction_management.construction_management.doctype.boq.boq";
+const BOQ_REVISION_ROLES = [
+	"System Manager",
+	"Construction Manager",
+	"Project Manager",
+	"Estimator",
+];
+
+function calculateBoqRowAmounts(row) {
+	if (!row) return row;
+
+	const qty = row.is_deleted_in_revision ? 0 : boqNumber(row.qty);
+	const unitCost = boqNumber(row.unit_cost);
+	const margin = boqNumber(row.margin_percent);
+
+	row.unit_rate = unitCost * (1 + margin / 100);
+	row.amount = qty * unitCost;
+	row.amount_after_margin = qty * boqNumber(row.unit_rate);
+
+	return row;
+}
+
+function getBoqBaseAmount(row) {
+	if (!row) return 0;
+
+	return boqNumber(row.qty) * boqNumber(row.unit_cost);
+}
+
+function getBoqAmountAfterMargin(row) {
+	if (!row) return 0;
+
+	if (
+		row.amount_after_margin !== undefined &&
+		row.amount_after_margin !== null &&
+		row.amount_after_margin !== ""
+	) {
+		return boqNumber(row.amount_after_margin);
+	}
+
+	return boqNumber(row.qty) * boqNumber(row.unit_rate);
+}
+
+function getBoqItemUnitCost(row) {
+	if (!row) return 0;
+
+	return boqNumber(row.unit_cost);
+}
+
+
+function getCostBreakdownValidationHTML(unitCost, breakdownTotal) {
+	const difference = boqNumber(unitCost) - boqNumber(breakdownTotal);
+
+	if (Math.abs(difference) <= BOQ_COST_BREAKDOWN_TOLERANCE) {
+		return `
+			<div class="cost-breakdown-status success">
+				✓ Cost Breakdown matches Unit Cost.
+			</div>
+		`;
+	}
+
+	return `
+		<div class="cost-breakdown-status error">
+			<b>Amount Mismatch</b><br>
+			Unit Cost:
+			<b>${format_currency(unitCost)}</b>
+			&nbsp;&nbsp;|&nbsp;&nbsp;
+			Your Total:
+			<b>${format_currency(breakdownTotal)}</b>
+			&nbsp;&nbsp;|&nbsp;&nbsp;
+			Difference:
+			<b>${format_currency(Math.abs(difference))}</b>
+		</div>
+	`;
+}
+
+function getCostBreakdownMismatchLine(unitCost, breakdownTotal) {
+	const difference = boqNumber(unitCost) - boqNumber(breakdownTotal);
+
+	if (Math.abs(difference) <= BOQ_COST_BREAKDOWN_TOLERANCE) {
+		return "";
+	}
+
+	return `
+		<div class="boq-cost-breakdown-mismatch-line">
+			<style>
+				.boq-cost-breakdown-mismatch-line {
+					margin-top: 4px;
+					padding-top: 4px;
+					border-top: 1px solid #d1d5db;
+					font-size: 11px;
+					color: #6b7280;
+					line-height: 1.4;
+				}
+				.boq-cost-breakdown-mismatch-line b:last-child {
+					color: #dc2626;
+				}
+			</style>
+			Cost Breakdown not matched with Unit Cost. Unit Cost: <b>${format_currency(unitCost)}</b>, Your Total: <b>${format_currency(breakdownTotal)}</b>, Difference: <b>${format_currency(Math.abs(difference))}</b>
+		</div>
+	`;
+}
+
+function getBoqCostBreakdownComponents(frm, row) {
+	return (frm.doc.cost_components || []).filter((component) =>
+		frm.boq_matches_item_component(component, row),
+	);
+}
+
+function validateBoqCostBreakdownTotal(frm, row, breakdownAmount) {
+	const unitCost = getBoqItemUnitCost(row);
+	const total = boqNumber(breakdownAmount);
+
+	if (Math.abs(unitCost - total) > BOQ_COST_BREAKDOWN_TOLERANCE) {
+		return false;
+	}
+
+	return true;
+}
+
+function validateAllBoqCostBreakdowns(frm) {
+	return (frm.doc.items || []).every((row) => {
+		const components = getBoqCostBreakdownComponents(frm, row);
+		if (!components.length) return true;
+
+		const total = components.reduce(
+			(sum, component) => sum + boqNumber(component.amount),
+			0,
+		);
+		return validateBoqCostBreakdownTotal(frm, row, total);
+	});
+}
+
 function getBoqItemLabel(row) {
 	return row.item_name || row.item || __("selected item");
 }
@@ -20,7 +154,7 @@ function validateBoqItemValues(row) {
 
 	const item = getBoqItemLabel(row);
 
-	if (boqNumber(row.qty) <= 0) {
+	if (!row.is_deleted_in_revision && boqNumber(row.qty) <= 0) {
 		showBoqItemValidation(__("Qty for item {0} must be greater than 0.", [item]));
 		return false;
 	}
@@ -40,6 +174,221 @@ function validateBoqItemValues(row) {
 
 function validateAllBoqItemValues(frm) {
 	return (frm.doc.items || []).every((row) => validateBoqItemValues(row));
+}
+
+function canManageBoqRevisions() {
+	return BOQ_REVISION_ROLES.some((role) => frappe.user.has_role(role));
+}
+
+function isSubmittedApprovedOrActiveBoq(frm) {
+	const status = frm.doc.status || "";
+	const revisionStatus = frm.doc.revision_status || "";
+	return (
+		frm.doc.docstatus === 1 ||
+		frm.doc.is_active_revision ||
+		["Submitted", "Approved", "Active"].includes(status) ||
+		["Submitted", "Approved", "Active"].includes(revisionStatus)
+	);
+}
+
+function escapeBoqHtml(value) {
+	return frappe.utils.escape_html(String(value || ""));
+}
+
+function formatBoqDate(value) {
+	return value ? frappe.datetime.str_to_user(value) : "";
+}
+
+function renderBoqRevisionHistory(rows) {
+	const body = (rows || [])
+		.map(
+			(row) => `
+				<tr>
+					<td>${escapeBoqHtml(row.name)}</td>
+					<td style="text-align:center">${escapeBoqHtml(row.revision_no)}</td>
+					<td>${escapeBoqHtml(row.parent_boq)}</td>
+					<td>${escapeBoqHtml(row.revision_status || row.status)}</td>
+					<td style="text-align:center">${row.is_active_revision ? __("Yes") : ""}</td>
+					<td>${formatBoqDate(row.active_from_date)}</td>
+					<td>${formatBoqDate(row.active_to_date)}</td>
+					<td>${escapeBoqHtml(row.superseded_by)}</td>
+				</tr>`,
+		)
+		.join("");
+
+	return `
+		<div style="max-height:420px;overflow:auto">
+			<table class="table table-bordered table-condensed">
+				<thead>
+					<tr>
+						<th>${__("BOQ")}</th>
+						<th style="text-align:center">${__("Rev")}</th>
+						<th>${__("Previous")}</th>
+						<th>${__("Status")}</th>
+						<th style="text-align:center">${__("Active")}</th>
+						<th>${__("Active From")}</th>
+						<th>${__("Active To")}</th>
+						<th>${__("Superseded By")}</th>
+					</tr>
+				</thead>
+				<tbody>${body || `<tr><td colspan="8" class="text-muted text-center">${__("No revisions found.")}</td></tr>`}</tbody>
+			</table>
+		</div>`;
+}
+
+function renderBoqRevisionComparison(rows) {
+	const body = (rows || [])
+		.map(
+			(row) => `
+				<tr>
+					<td>${escapeBoqHtml(row.item_name || row.item || row.boq_item_key)}</td>
+					<td>${escapeBoqHtml(row.status)}</td>
+					<td style="text-align:right">${boqNumber(row.previous_qty).toFixed(2)}</td>
+					<td style="text-align:right">${boqNumber(row.current_qty).toFixed(2)}</td>
+					<td style="text-align:right">${boqNumber(row.qty_difference).toFixed(2)}</td>
+					<td style="text-align:right">${format_currency(row.previous_rate || 0)}</td>
+					<td style="text-align:right">${format_currency(row.current_rate || 0)}</td>
+					<td style="text-align:right">${format_currency(row.rate_difference || 0)}</td>
+					<td style="text-align:right">${format_currency(row.amount_difference || 0)}</td>
+				</tr>`,
+		)
+		.join("");
+
+	return `
+		<div style="max-height:480px;overflow:auto">
+			<table class="table table-bordered table-condensed">
+				<thead>
+					<tr>
+						<th>${__("Item")}</th>
+						<th>${__("Status")}</th>
+						<th style="text-align:right">${__("Prev Qty")}</th>
+						<th style="text-align:right">${__("Current Qty")}</th>
+						<th style="text-align:right">${__("Qty Diff")}</th>
+						<th style="text-align:right">${__("Prev Rate")}</th>
+						<th style="text-align:right">${__("Current Rate")}</th>
+						<th style="text-align:right">${__("Rate Diff")}</th>
+						<th style="text-align:right">${__("Amount Diff")}</th>
+					</tr>
+				</thead>
+				<tbody>${body || `<tr><td colspan="9" class="text-muted text-center">${__("No comparison rows found.")}</td></tr>`}</tbody>
+			</table>
+		</div>`;
+}
+
+function addBoqRevisionButtons(frm) {
+	if (frm.is_new()) return;
+
+	if (canManageBoqRevisions() && frm.doc.docstatus !== 2 && isSubmittedApprovedOrActiveBoq(frm)) {
+		frm.add_custom_button(
+			__("Create Revision"),
+			function () {
+				frappe.prompt(
+					[
+						{
+							fieldname: "revision_reason",
+							fieldtype: "Small Text",
+							label: __("Revision Reason"),
+							reqd: 1,
+						},
+					],
+					function (values) {
+						frappe.call({
+							method: `${BOQ_METHOD}.create_revision`,
+							args: {
+								boq: frm.doc.name,
+								revision_reason: values.revision_reason,
+							},
+							freeze: true,
+							freeze_message: __("Creating BOQ Revision..."),
+							callback: function (r) {
+								if (!r.message) return;
+								frappe.set_route("Form", "BOQ", r.message);
+							},
+						});
+					},
+					__("Create BOQ Revision"),
+					__("Create"),
+				);
+			},
+			__("Revision"),
+		);
+	}
+
+	if (
+		canManageBoqRevisions() &&
+		frm.doc.docstatus === 1 &&
+		!frm.doc.is_active_revision &&
+		(frm.doc.revision_status === "Approved" || frm.doc.status === "Approved")
+	) {
+		frm.add_custom_button(
+			__("Activate Revision"),
+			function () {
+				frappe.confirm(
+					__("Activate this BOQ revision and supersede the other revisions in this chain?"),
+					function () {
+						frappe.call({
+							method: `${BOQ_METHOD}.activate_revision`,
+							args: {
+								boq: frm.doc.name,
+							},
+							freeze: true,
+							freeze_message: __("Activating BOQ Revision..."),
+							callback: function () {
+								frm.reload_doc();
+							},
+						});
+					},
+				);
+			},
+			__("Revision"),
+		);
+	}
+
+	if (frm.doc.original_boq || frm.doc.parent_boq || (frm.doc.revisions || []).length) {
+		frm.add_custom_button(
+			__("View Revision History"),
+			function () {
+				frappe.call({
+					method: `${BOQ_METHOD}.get_revision_history`,
+					args: {
+						boq: frm.doc.name,
+					},
+					callback: function (r) {
+						frappe.msgprint({
+							title: __("Revision History"),
+							indicator: "blue",
+							message: renderBoqRevisionHistory(r.message || []),
+							wide: true,
+						});
+					},
+				});
+			},
+			__("Revision"),
+		);
+	}
+
+	if (frm.doc.parent_boq) {
+		frm.add_custom_button(
+			__("Compare with Previous Revision"),
+			function () {
+				frappe.call({
+					method: `${BOQ_METHOD}.get_revision_comparison`,
+					args: {
+						boq: frm.doc.name,
+					},
+					callback: function (r) {
+						frappe.msgprint({
+							title: __("Revision Comparison"),
+							indicator: "blue",
+							message: renderBoqRevisionComparison(r.message || []),
+							wide: true,
+						});
+					},
+				});
+			},
+			__("Revision"),
+		);
+	}
 }
 
 frappe.ui.form.on("BOQ", {
@@ -95,6 +444,9 @@ frappe.ui.form.on("BOQ", {
 				if (!row.component_key) {
 					row.component_key = frm.boq_make_component_key();
 				}
+				if (!row.boq_item_key) {
+					row.boq_item_key = row.component_key;
+				}
 				refs_to_migrate[oldRef] = row.component_key;
 			});
 
@@ -106,18 +458,6 @@ frappe.ui.form.on("BOQ", {
 
 			frm.refresh_field("items");
 			frm.refresh_field("cost_components");
-		};
-
-		frm.boq_recalculate_item_row = function (row, unitCost) {
-			const cost = parseFloat(unitCost) || 0;
-			const margin = parseFloat(row.margin_percent) || 0;
-			const qty = parseFloat(row.qty) || 0;
-
-			return {
-				unit_cost: cost,
-				unit_rate: cost * (1 + margin / 100),
-				amount: qty * cost * (1 + margin / 100),
-			};
 		};
 
 		frm.boq_get_item_price = async function (item) {
@@ -278,6 +618,7 @@ frappe.ui.form.on("BOQ", {
 					const newRow = frm.add_child("items");
 
 					newRow.component_key = frm.boq_make_component_key();
+					newRow.boq_item_key = newRow.component_key;
 					newRow.boq_category = subCatDoc;
 					newRow.item = values.item;
 					newRow.item_name = values.item_name || values.item;
@@ -288,7 +629,7 @@ frappe.ui.form.on("BOQ", {
 					newRow.margin_percent = margin;
 
 					newRow.unit_rate = unit_rate;
-					newRow.amount = qty * newRow.unit_rate;
+					calculateBoqRowAmounts(newRow);
 
 					newRow.notes = values.notes || "";
 
@@ -379,6 +720,10 @@ frappe.ui.form.on("BOQ", {
 						return;
 					}
 
+					if (!validateBoqCostBreakdownTotal(frm, itemRow, total)) {
+						return;
+					}
+
 					const existingOtherComponents = (frm.doc.cost_components || [])
 						.filter((c) => !frm.boq_matches_item_component(c, itemRow))
 						.map((c) => ({
@@ -436,49 +781,19 @@ frappe.ui.form.on("BOQ", {
 						});
 					}
 
-                    const oldAmount = parseFloat(itemRow.amount) || 0;
+					frm.refresh_field("items");
+					frm.refresh_field("cost_components");
+					frm.boq_render_grid();
 
-                    const totals = frm.boq_recalculate_item_row(itemRow, total);
-                    
-                   
-                    
-					Promise.all([
-						frappe.model.set_value(
-							itemRow.doctype,
-							itemRow.name,
-							"unit_cost",
-							totals.unit_cost,
-						),
-						frappe.model.set_value(
-							itemRow.doctype,
-							itemRow.name,
-							"unit_rate",
-							totals.unit_rate,
-						),
-						frappe.model.set_value(
-							itemRow.doctype,
-							itemRow.name,
-							"amount",
-							totals.amount,
-						),
-					]).then(() => {
-						frm.refresh_field("items");
-						frm.refresh_field("cost_components");
-						frm.boq_render_grid();
+					frappe.show_alert(
+						{
+							message: __("Cost Breakdown updated. Click Save to keep changes."),
+							indicator: "blue",
+						},
+						5,
+					);
 
-						frappe.show_alert(
-							{
-								message: __("Cost Breakdown updated. Click Save to keep changes."),
-								indicator: "blue",
-							},
-							5,
-						);
-
-						d.hide();
-
-						// 🔥 FIXED CALL
-						showAmountMismatchWarning(oldAmount, total);
-					});
+					d.hide();
 				},
 			});
 
@@ -529,25 +844,6 @@ frappe.ui.form.on("BOQ", {
 				return (frm.doc.cost_components || [])
 					.filter((component) => frm.boq_matches_item_component(component, itemRow))
 					.reduce((sum, component) => sum + (parseFloat(component.amount) || 0), 0);
-			}
-
-			function showAmountMismatchWarning(oldItemAmount, breakdownAmount) {
-				const itemAmount = parseFloat(oldItemAmount) || 0;
-
-				const bdAmount = parseFloat(breakdownAmount) || 0;
-
-				if (Math.abs(itemAmount - bdAmount) > 0.01) {
-					frappe.msgprint({
-						title: "Amount Mismatch Warning",
-						message:
-							"Previous Item Amount: " +
-							itemAmount +
-							"<br>New Breakdown Amount: " +
-							bdAmount +
-							"<br><br>Please review Cost Breakdown.",
-						indicator: "orange",
-					});
-				}
 			}
 
 			function normalizeComponent(component) {
@@ -671,6 +967,19 @@ frappe.ui.form.on("BOQ", {
 				wrapper
 					.find(".comp-total-value")
 					.html(frappe.format(total, { fieldtype: "Currency" }));
+				
+				// Update mismatch line
+				const mismatchLineHtml = getCostBreakdownMismatchLine(row.unit_cost, total);
+				const existingMismatchLine = wrapper.find(".boq-cost-breakdown-mismatch-line");
+				if (mismatchLineHtml) {
+					if (existingMismatchLine.length) {
+						existingMismatchLine.replaceWith(mismatchLineHtml);
+					} else {
+						wrapper.find(".boq-cost-breakdown-wrapper").append(mismatchLineHtml);
+					}
+				} else {
+					existingMismatchLine.remove();
+				}
 			}
 
 			function recalculateDialogRow(rowEl) {
@@ -914,6 +1223,7 @@ frappe.ui.form.on("BOQ", {
 	                    ${frappe.format(total, { fieldtype: "Currency" })}
 	                </span>
 	            </div>
+	            ${getCostBreakdownMismatchLine(row.unit_cost, total)}
 	        </div>
 	    `);
 				setTimeout(() => bindComponentEvents(), 0);
@@ -1099,12 +1409,7 @@ frappe.ui.form.on("BOQ", {
 					}
 
 					function recalculateInlineRow(row) {
-						const unitCost = parseFloat(row.unit_cost) || 0;
-						const margin = parseFloat(row.margin_percent) || 0;
-						const qty = parseFloat(row.qty) || 0;
-
-						row.unit_rate = unitCost * (1 + margin / 100);
-						row.amount = qty * row.unit_rate;
+						calculateBoqRowAmounts(row);
 					}
 
 					// ── Build HTML ──────────────────────────────────────────
@@ -1115,7 +1420,11 @@ frappe.ui.form.on("BOQ", {
 						const subKeys = Object.keys(cat.subcats);
 						const catTotal = subKeys.reduce(
 							(a, s) =>
-								a + cat.subcats[s].items.reduce((b, r) => b + (r.amount || 0), 0),
+								a +
+								cat.subcats[s].items.reduce(
+									(b, r) => b + getBoqAmountAfterMargin(r),
+									0,
+								),
 							0,
 						);
 						const catOpen = frm._boq_cat_state[pKey] !== false;
@@ -1133,7 +1442,7 @@ frappe.ui.form.on("BOQ", {
 							subKeys.forEach((subKey) => {
 								const sub = cat.subcats[subKey];
 								const subTotal = sub.items.reduce(
-									(a, r) => a + (r.amount || 0),
+									(a, r) => a + getBoqAmountAfterMargin(r),
 									0,
 								);
 								const subCost = sub.items.reduce(
@@ -1167,31 +1476,35 @@ frappe.ui.form.on("BOQ", {
 
 <th style="width:5%;text-align:center;padding:8px;">S.NO</th>
 
-<th style="width:32%text-align:left;padding:8px;">
+<th style="width:25%;text-align:left;padding:8px;">
     DESCRIPTION
 </th>
 
-<th style="width:8%;text-align:center;padding:8px;">
+<th style="width:7%;text-align:center;padding:8px;">
     QTY
 </th>
 
-<th style="width:8%;text-align:center;padding:8px;">
+<th style="width:7%;text-align:center;padding:8px;">
     UOM
 </th>
 
-<th style="width:12%;text-align:center;padding:8px;">
+<th style="width:11%;text-align:center;padding:8px;">
     UNIT COST
 </th>
 
-<th style="width:11%;text-align:center;padding:8px;">
+<th style="width:8%;text-align:center;padding:8px;">
     MARGIN %
 </th>
 
-<th style="width:15%;text-align:center;padding:8px;">
+<th style="width:12%;text-align:center;padding:8px;">
     AMOUNT
 </th>
 
-<th style="width:7%;text-align:center;padding:8px;">
+<th style="width:14%;text-align:center;padding:8px;">
+    AAM
+</th>
+
+<th style="width:6%;text-align:center;padding:8px;">
     ACTION
 </th>
 
@@ -1274,7 +1587,16 @@ title="${buildCostTooltip(row).replace(/"/g, "&quot;")}">
     font-weight:600;
     color:var(--primary);
 ">
-    ${CUR} ${fmt0(row.amount)}
+    ${CUR} ${fmt0(getBoqBaseAmount(row))}
+</td>
+
+<td style="
+    text-align:center;
+    white-space:nowrap;
+    font-weight:600;
+    color:var(--primary);
+">
+    ${CUR} ${fmt0(getBoqAmountAfterMargin(row))}
 </td>
 
 <td style="text-align:center;white-space:nowrap;">
@@ -1406,7 +1728,7 @@ title="${buildCostTooltip(row).replace(/"/g, "&quot;")}">
 						}
 
 						row.qty = qty;
-						row.amount = row.qty * (parseFloat(row.unit_rate) || 0);
+						recalculateInlineRow(row);
 
 						if (frm.dirty) {
 							frm.dirty();
@@ -1679,15 +2001,22 @@ title="${buildCostTooltip(row).replace(/"/g, "&quot;")}">
 		if (!frm._boq_sub_state) frm._boq_sub_state = {};
 		if (!frm._boq_registered) frm._boq_registered = [];
 		frm.boq_render_grid();
+		addBoqRevisionButtons(frm);
 	},
 
 	validate: function (frm) {
+		(frm.doc.items || []).forEach((row) => calculateBoqRowAmounts(row));
+
 		if (!validateAllBoqItemValues(frm)) {
 			frappe.validated = false;
 			return;
 		}
 
 		frm.boq_prepare_component_keys();
+		if (!validateAllBoqCostBreakdowns(frm)) {
+			frappe.validated = false;
+			return;
+		}
 	},
 
 	after_save: function (frm) {

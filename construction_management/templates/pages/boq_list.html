@@ -1,0 +1,30 @@
+{% extends "templates/web.html" %}
+
+{% block page_content %}
+<h2>BOQ</h2>
+
+{% set boqs = get_list() %}
+
+<table class="table table-bordered">
+	<thead>
+		<tr>
+			<th>BOQ</th>
+			<th>Project</th>
+			<th>Client</th>
+			<th>Status</th>
+			<th>Grand Total</th>
+		</tr>
+	</thead>
+	<tbody>
+		{% for boq in boqs %}
+		<tr>
+			<td>{{ boq.name }}</td>
+			<td>{{ boq.project or "-" }}</td>
+			<td>{{ boq.client or "-" }}</td>
+			<td>{{ boq.status or "-" }}</td>
+			<td>{{ boq.grand_total or 0 }}</td>
+		</tr>
+		{% endfor %}
+	</tbody>
+</table>
+{% endblock %}

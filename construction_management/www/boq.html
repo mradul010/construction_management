@@ -1,0 +1,39 @@
+{% extends "templates/web.html" %}
+
+{% block page_content %}
+<div class="container my-5">
+	<h2>BOQ</h2>
+	<table class="table table-bordered table-hover table-sm">
+		<thead>
+			<tr>
+				<th>BOQ No</th>
+				<th>Project</th>
+				<th>Client</th>
+				<th>Currency</th>
+				<th>Revision</th>
+				<th>Status</th>
+				<th>Total Value</th>
+				<th></th>
+			</tr>
+		</thead>
+		<tbody>
+			{% for boq in boqs %}
+			<tr>
+				<td>{{ boq.name }}</td>
+				<td>{{ boq.project or "-" }}</td>
+				<td>{{ boq.client or "-" }}</td>
+				<td>{{ boq.currency or "-" }}</td>
+				<td>Rev {{ boq.revision_no or 0 }}</td>
+				<td>{{ boq.revision_status or boq.status or "-" }}</td>
+				<td>{{ boq.grand_total or 0 }}</td>
+				<td><a class="btn btn-sm btn-primary" href="/boq-detail?name={{ boq.name | urlencode }}">View</a></td>
+			</tr>
+			{% else %}
+			<tr>
+				<td colspan="8" class="text-muted text-center">No BOQs found.</td>
+			</tr>
+			{% endfor %}
+		</tbody>
+	</table>
+</div>
+{% endblock %}

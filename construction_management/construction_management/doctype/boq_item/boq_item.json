@@ -6,6 +6,7 @@
  "engine": "InnoDB",
  "field_order": [
   "component_key",
+  "boq_item_key",
   "boq_category",
   "boq_parent_category",
   "item",
@@ -16,7 +17,18 @@
   "margin_percent",
   "unit_rate",
   "amount",
-  "notes"
+  "amount_after_margin",
+  "notes",
+  "revision_details_section",
+  "previous_boq_item",
+  "previous_qty",
+  "previous_unit_cost",
+  "previous_unit_rate",
+  "qty_difference",
+  "rate_difference",
+  "amount_difference",
+  "revision_item_status",
+  "is_deleted_in_revision"
  ],
  "fields": [
   {
@@ -24,6 +36,13 @@
    "fieldtype": "Data",
    "hidden": 1,
    "label": "Component Key",
+   "search_index": 1
+  },
+  {
+   "fieldname": "boq_item_key",
+   "fieldtype": "Data",
+   "label": "BOQ Item Key",
+   "read_only": 1,
    "search_index": 1
   },
   {
@@ -110,7 +129,7 @@
   },
   {
    "allow_on_submit": 1,
-   "description": "qty \u00d7 unit_rate",
+   "description": "qty \u00d7 unit_cost",
    "fieldname": "amount",
    "fieldtype": "Currency",
    "in_list_view": 1,
@@ -120,9 +139,85 @@
   },
   {
    "allow_on_submit": 1,
+   "description": "Final BOQ item amount after applying margin",
+   "fieldname": "amount_after_margin",
+   "fieldtype": "Currency",
+   "in_list_view": 1,
+   "label": "Amount After Margin",
+   "options": "currency",
+   "read_only": 1
+  },
+  {
+   "allow_on_submit": 1,
    "fieldname": "notes",
    "fieldtype": "Small Text",
    "label": "Notes"
+  },
+  {
+   "collapsible": 1,
+   "fieldname": "revision_details_section",
+   "fieldtype": "Section Break",
+   "label": "Revision Details"
+  },
+  {
+   "fieldname": "previous_boq_item",
+   "fieldtype": "Link",
+   "label": "Previous BOQ Item",
+   "options": "BOQ Item",
+   "read_only": 1
+  },
+  {
+   "fieldname": "previous_qty",
+   "fieldtype": "Float",
+   "label": "Previous Qty",
+   "read_only": 1
+  },
+  {
+   "fieldname": "previous_unit_cost",
+   "fieldtype": "Currency",
+   "label": "Previous Unit Cost",
+   "options": "currency",
+   "read_only": 1
+  },
+  {
+   "fieldname": "previous_unit_rate",
+   "fieldtype": "Currency",
+   "label": "Previous Unit Rate",
+   "options": "currency",
+   "read_only": 1
+  },
+  {
+   "fieldname": "qty_difference",
+   "fieldtype": "Float",
+   "label": "Qty Difference",
+   "read_only": 1
+  },
+  {
+   "fieldname": "rate_difference",
+   "fieldtype": "Currency",
+   "label": "Rate Difference",
+   "options": "currency",
+   "read_only": 1
+  },
+  {
+   "fieldname": "amount_difference",
+   "fieldtype": "Currency",
+   "label": "Amount Difference",
+   "options": "currency",
+   "read_only": 1
+  },
+  {
+   "default": "Unchanged",
+   "fieldname": "revision_item_status",
+   "fieldtype": "Select",
+   "label": "Revision Item Status",
+   "options": "Unchanged\nAdded\nModified\nDeleted"
+  },
+  {
+   "default": "0",
+   "fieldname": "is_deleted_in_revision",
+   "fieldtype": "Check",
+   "label": "Deleted in Revision"
   }
  ],
  "istable": 1,

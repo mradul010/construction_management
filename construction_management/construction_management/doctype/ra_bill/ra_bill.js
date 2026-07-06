@@ -181,6 +181,9 @@ function clearItemDetailFields(frm, cdt, cdn, options = {}) {
 		current_qty: 0,
 		cumulative_qty: 0,
 		current_amount: 0,
+		boq_item_key: "",
+		boq_revision: "",
+		original_boq: "",
 	};
 
 	if (!options.keep_sub_category) {
@@ -209,6 +212,9 @@ function clearDuplicateBoqItemFields(frm, cdt, cdn) {
 		current_qty: 0,
 		cumulative_qty: 0,
 		current_amount: 0,
+		boq_item_key: "",
+		boq_revision: "",
+		original_boq: "",
 	}).then(() => frm.trigger("recalculate_totals"));
 }
 
@@ -602,10 +608,12 @@ async function setBoqItemDetails(frm, cdt, cdn) {
 	const parentCategory = parentCategoryFromTree || doc.boq_parent_category || row.category_name || "";
 	const previousWork = await fetchPreviousWorkSummary(frm, row);
 	const previousWorkValues = getPreviousWorkValues(previousWork, qty);
+	const boqItemKey = doc.boq_item_key || doc.component_key || row.boq_item;
 	const rowWithPreviousWork = {
 		...row,
 		boq_qty: qty,
 		boq_rate: rate,
+		boq_item_key: boqItemKey,
 		...previousWorkValues,
 	};
 	let workPercent = getCurrentWorkPercent(rowWithPreviousWork);
@@ -619,6 +627,9 @@ async function setBoqItemDetails(frm, cdt, cdn) {
 		boq_qty: qty,
 		boq_rate: rate,
 		uom: uom,
+		boq_item_key: boqItemKey,
+		boq_revision: frm.doc.boq,
+		original_boq: (previousWork && previousWork.original_boq) || "",
 		sub_category: subCategory || row.sub_category || "",
 		category_name: parentCategory || row.category_name || "",
 		...previousWorkValues,
@@ -711,8 +722,9 @@ frappe.ui.form.on("RA Bill", {
 						parent: frm.doc.boq,
 						parenttype: "BOQ",
 						parentfield: "items",
+						is_deleted_in_revision: 0,
 					},
-					fields: ["name", "boq_category", "item", "item_name"],
+					fields: ["name", "boq_category", "item", "item_name", "boq_item_key"],
 					limit: 1000,
 					order_by: "idx asc",
 				})
@@ -875,12 +887,27 @@ frappe.ui.form.on("RA Bill", {
 	},
 
 	project: function (frm) {
+		const selectedProject = frm.doc.project;
+
 		if (frm.doc.boq) {
 			frm.set_value("boq", null);
-			frm.clear_table("items");
-			frm.refresh_field("items");
-			frm.trigger("recalculate_totals");
 		}
+		frm.clear_table("items");
+		frm.refresh_field("items");
+		frm.trigger("recalculate_totals");
+
+		if (!selectedProject) return;
+
+		frappe.call({
+			method: `${RA_BILL_METHOD}.get_active_boq_for_project`,
+			args: {
+				project: selectedProject,
+			},
+			callback: function (r) {
+				if (frm.doc.project !== selectedProject || !r.message) return;
+				frm.set_value("boq", r.message);
+			},
+		});
 	},
 
 	boq: function (frm) {
@@ -989,6 +1016,9 @@ frappe.ui.form.on("RA Bill Item", {
 			remaining_percent: 0,
 			prev_cumulative_qty: 0,
 			cumulative_qty: 0,
+			boq_item_key: "",
+			boq_revision: "",
+			original_boq: "",
 		});
 	},
 
