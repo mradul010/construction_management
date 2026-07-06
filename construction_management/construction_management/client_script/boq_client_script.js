@@ -4,8 +4,6 @@ function boqNumber(value) {
 }
 
 const BOQ_COST_BREAKDOWN_TOLERANCE = 0.01;
-const BOQ_COST_BREAKDOWN_MISMATCH_MESSAGE =
-	"Cost Breakdown must match Unit Cost only. Please correct the Cost Breakdown.";
 
 function getBoqItemUnitCost(row) {
 	if (!row) return 0;
@@ -13,11 +11,50 @@ function getBoqItemUnitCost(row) {
 	return boqNumber(row.unit_cost);
 }
 
-function showCostBreakdownMismatchMessage() {
+function showCostBreakdownMismatchMessage(row, unitCost, breakdownTotal) {
+	const difference = boqNumber(unitCost) - boqNumber(breakdownTotal);
+
+	const itemName = row.item_name || row.item || row.item_code || row.name || "";
+
 	frappe.msgprint({
 		title: __("Cost Breakdown Mismatch"),
 		indicator: "red",
-		message: __(BOQ_COST_BREAKDOWN_MISMATCH_MESSAGE),
+		message: `
+			<div style="font-size:13px; line-height:1.6;">
+				<p style="margin-bottom:10px;">
+					<b>Cost Breakdown total does not match Unit Cost.</b>
+				</p>
+
+				<table style="width:100%; border-collapse:collapse;">
+					<tr>
+						<td style="padding:7px; border:1px solid #ddd; font-weight:600;">Item</td>
+						<td style="padding:7px; border:1px solid #ddd;">${frappe.utils.escape_html(itemName)}</td>
+					</tr>
+
+					<tr>
+						<td style="padding:7px; border:1px solid #ddd; font-weight:600;">Unit Cost</td>
+						<td style="padding:7px; border:1px solid #ddd;">${format_currency(unitCost)}</td>
+					</tr>
+
+					<tr>
+						<td style="padding:7px; border:1px solid #ddd; font-weight:600;">Cost Breakdown Total</td>
+						<td style="padding:7px; border:1px solid #ddd;">${format_currency(breakdownTotal)}</td>
+					</tr>
+
+					<tr>
+						<td style="padding:7px; border:1px solid #ddd; font-weight:600; color:#dc2626;">Difference</td>
+						<td style="padding:7px; border:1px solid #ddd; color:#dc2626; font-weight:700;">
+							${format_currency(Math.abs(difference))}
+						</td>
+					</tr>
+				</table>
+
+				<p style="margin-top:12px; color:#6b7280;">
+					Please correct the Cost Breakdown. It must match <b>Unit Cost only</b>.
+					Quantity and Margin should not be included.
+				</p>
+			</div>
+		`,
 	});
 }
 
@@ -32,7 +69,7 @@ function validateBoqCostBreakdownTotal(frm, row, breakdownAmount) {
 	const total = boqNumber(breakdownAmount);
 
 	if (Math.abs(unitCost - total) > BOQ_COST_BREAKDOWN_TOLERANCE) {
-		showCostBreakdownMismatchMessage();
+		showCostBreakdownMismatchMessage(row, unitCost, total);
 		return false;
 	}
 
@@ -69,7 +106,7 @@ function validateBoqItemValues(row) {
 
 	const item = getBoqItemLabel(row);
 
-	if (boqNumber(row.qty) <= 0) {
+	if (boqNumber(row.qty) < 0) {
 		showBoqItemValidation(__("Qty for item {0} must be greater than 0.", [item]));
 		return false;
 	}
