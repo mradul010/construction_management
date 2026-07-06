@@ -17,6 +17,9 @@ RA_BILL_TAX_CHARGE_TYPES = {
 
 class RABill(Document):
 	def validate(self):
+		self._set_active_boq_for_project()
+		self._validate_boq_matches_project()
+		self._validate_boq_is_active_for_new_bill()
 		self._set_bill_no()
 		self._fetch_boq_item_details()
 		self._fill_previous_work_summary()
@@ -48,6 +51,53 @@ class RABill(Document):
 			limit=1,
 		)
 		self.bill_no = (existing[0].bill_no + 1) if existing else 1
+
+	def _set_active_boq_for_project(self):
+		if self.boq or not self.project:
+			return
+
+		active_boq = _get_active_boq_for_project(self.project)
+		if active_boq:
+			self.boq = active_boq
+
+	def _validate_boq_matches_project(self):
+		if not self.project or not self.boq:
+			return
+
+		boq_project = frappe.db.get_value("BOQ", self.boq, "project")
+		if boq_project and boq_project != self.project:
+			frappe.throw(
+				_("BOQ {0} belongs to Project {1}, not {2}.").format(
+					self.boq, boq_project, self.project
+				)
+			)
+
+	def _validate_boq_is_active_for_new_bill(self):
+		if self.docstatus != 0 or not self.project or not self.boq:
+			return
+
+		active_boq = _get_active_boq_for_project(self.project)
+		if not active_boq or active_boq == self.boq:
+			return
+
+		if "System Manager" in frappe.get_roles():
+			frappe.msgprint(
+				_(
+					"BOQ {0} is not the current active BOQ for Project {1}. "
+					"The active BOQ is {2}."
+				).format(self.boq, self.project, active_boq),
+				indicator="orange",
+				alert=True,
+			)
+			return
+
+		frappe.throw(
+			_(
+				"New RA Bills must use the active BOQ revision for the Project.<br>"
+				"Selected BOQ: {0}<br>Active BOQ: {1}"
+			).format(self.boq, active_boq),
+			title=_("Inactive BOQ Revision"),
+		)
 
 	def validate_item_values(self):
 		for row in self.items:
@@ -93,7 +143,15 @@ class RABill(Document):
 			boq_item = frappe.db.get_value(
 				"BOQ Item",
 				row.boq_item,
-				["item_name", "qty", "unit_rate", "uom", "boq_category"],
+				[
+					"item_name",
+					"qty",
+					"unit_rate",
+					"uom",
+					"boq_category",
+					"boq_item_key",
+					"component_key",
+				],
 				as_dict=True,
 			)
 			if boq_item:
@@ -101,6 +159,11 @@ class RABill(Document):
 				row.boq_qty = boq_item.qty
 				row.boq_rate = boq_item.unit_rate
 				row.uom = boq_item.uom
+				row.boq_item_key = (
+					boq_item.boq_item_key or boq_item.component_key or row.boq_item
+				)
+				row.boq_revision = self.boq
+				row.original_boq = _get_original_boq(self.boq)
 				if not row.sub_category and boq_item.boq_category:
 					row.sub_category = boq_item.boq_category
 				if not row.category_name and boq_item.boq_category:
@@ -153,7 +216,8 @@ class RABill(Document):
 			if not row.boq_item:
 				continue
 
-			if row.boq_item in seen_items:
+			item_key = row.boq_item_key or row.boq_item
+			if item_key in seen_items:
 				frappe.throw(
 					_(
 						"Duplicate BOQ Item found: {0}. "
@@ -161,7 +225,7 @@ class RABill(Document):
 					).format(row.item_name or row.boq_item)
 				)
 
-			seen_items.add(row.boq_item)
+			seen_items.add(item_key)
 
 	def _validate_not_overbilling(self):
 		for row in self.items:
@@ -220,16 +284,17 @@ class RABill(Document):
 		self.retention_amount = self.gross_amount * (retention_pct / 100)
 		self.net_payable = self.gross_amount - self.retention_amount
 
+		chain_names = _get_boq_chain_names(self.boq)
 		prev_billed = frappe.db.sql(
 			"""
 			SELECT COALESCE(SUM(gross_amount), 0)
 			FROM `tabRA Bill`
 			WHERE project = %s
-			  AND boq = %s
+			  AND boq IN %s
 			  AND docstatus = 1
 			  AND name != %s
 			""",
-			(self.project, self.boq, self.name or "__new__"),
+			(self.project, tuple(chain_names or [self.boq]), self.name or "__new__"),
 		)
 		self.cumulative_billed = (prev_billed[0][0] if prev_billed else 0) + self.gross_amount
 
@@ -764,34 +829,150 @@ def _delete_ra_bill_transactions(ra_bill):
 		)
 
 
+def _doctype_has_field(doctype, fieldname):
+	try:
+		return frappe.get_meta(doctype).has_field(fieldname)
+	except Exception:
+		return False
+
+
+def _get_original_boq(boq):
+	if not boq:
+		return None
+
+	if not _doctype_has_field("BOQ", "original_boq"):
+		return boq
+
+	values = frappe.db.get_value(
+		"BOQ",
+		boq,
+		["original_boq", "parent_boq"],
+		as_dict=True,
+	)
+	if not values:
+		return boq
+	if values.original_boq:
+		return values.original_boq
+	if values.parent_boq:
+		return _get_original_boq(values.parent_boq)
+	return boq
+
+
+def _get_boq_chain_names(boq):
+	original_boq = _get_original_boq(boq)
+	if not original_boq:
+		return []
+
+	names = {original_boq}
+	if _doctype_has_field("BOQ", "original_boq"):
+		names.update(
+			frappe.get_all(
+				"BOQ",
+				filters={"original_boq": original_boq},
+				pluck="name",
+			)
+		)
+	return list(names)
+
+
+def _get_boq_item_context(boq, boq_item):
+	if not boq_item:
+		return frappe._dict(
+			{
+				"boq": boq,
+				"boq_item": boq_item,
+				"boq_item_key": None,
+				"qty": 0,
+				"unit_rate": 0,
+			}
+		)
+
+	fields = ["name", "parent", "qty", "unit_rate", "item"]
+	for fieldname in ("boq_item_key", "component_key"):
+		if _doctype_has_field("BOQ Item", fieldname):
+			fields.append(fieldname)
+
+	row = frappe.db.get_value("BOQ Item", boq_item, fields, as_dict=True) or {}
+	boq_item_key = (
+		row.get("boq_item_key")
+		or row.get("component_key")
+		or row.get("item")
+		or boq_item
+	)
+
+	return frappe._dict(
+		{
+			"boq": boq or row.get("parent"),
+			"boq_item": boq_item,
+			"boq_item_key": boq_item_key,
+			"qty": flt(row.get("qty")),
+			"unit_rate": flt(row.get("unit_rate")),
+		}
+	)
+
+
+def _get_active_boq_for_project(project):
+	if not project:
+		return None
+
+	if _doctype_has_field("Project", "current_boq"):
+		current_boq = frappe.db.get_value("Project", project, "current_boq")
+		if current_boq:
+			current = frappe.db.get_value(
+				"BOQ",
+				current_boq,
+				["project", "is_active_revision", "docstatus"],
+				as_dict=True,
+			)
+			if (
+				current
+				and current.project == project
+				and current.is_active_revision
+				and current.docstatus != 2
+			):
+				return current_boq
+
+	active = frappe.get_all(
+		"BOQ",
+		filters={
+			"project": project,
+			"is_active_revision": 1,
+			"docstatus": ["!=", 2],
+		},
+		fields=["name"],
+		order_by="revision_no desc, modified desc",
+		limit=1,
+	)
+	return active[0].name if active else None
+
+
+@frappe.whitelist()
+def get_active_boq_for_project(project):
+	return _get_active_boq_for_project(project)
+
+
 def _get_previous_billed_qty(boq, boq_item, current_ra_bill=None):
 	if not boq or not boq_item:
 		return 0
 
+	context = _get_boq_item_context(boq, boq_item)
+	original_boq = _get_original_boq(context.boq or boq)
+	boq_item_key = context.boq_item_key
+
 	transaction_qty = 0
 	transaction_count = 0
 	if _has_ra_bill_transaction_table():
-		transaction_rows = frappe.db.sql(
-			"""
-			SELECT COALESCE(SUM(current_qty), 0) AS qty, COUNT(*) AS transaction_count
-			FROM `tabRA Bill Transaction`
-			WHERE boq = %(boq)s
-			  AND boq_item = %(boq_item)s
-			  AND (%(current_ra_bill)s = '' OR ra_bill != %(current_ra_bill)s)
-			""",
-			{
-				"boq": boq,
-				"boq_item": boq_item,
-				"current_ra_bill": current_ra_bill or "",
-			},
-			as_dict=True,
+		transaction_qty, transaction_count = _get_previous_billed_qty_from_transactions(
+			original_boq,
+			boq_item_key,
+			boq_item,
+			current_ra_bill,
 		)
-		if transaction_rows:
-			transaction_qty = flt(transaction_rows[0].qty)
-			transaction_count = transaction_rows[0].transaction_count or 0
 
 	fallback_qty = _get_previous_billed_qty_from_submitted_ra_bills(
+		original_boq,
 		boq,
+		boq_item_key,
 		boq_item,
 		current_ra_bill,
 	)
@@ -802,7 +983,107 @@ def _get_previous_billed_qty(boq, boq_item, current_ra_bill=None):
 	return fallback_qty
 
 
-def _get_previous_billed_qty_from_submitted_ra_bills(boq, boq_item, current_ra_bill=None):
+def _get_previous_billed_qty_from_transactions(
+	original_boq,
+	boq_item_key,
+	boq_item,
+	current_ra_bill=None,
+):
+	if (
+		not original_boq
+		or not boq_item_key
+		or not _doctype_has_field("RA Bill Transaction", "original_boq")
+		or not _doctype_has_field("RA Bill Transaction", "boq_item_key")
+	):
+		return _get_previous_billed_qty_from_exact_transactions(
+			original_boq,
+			boq_item,
+			current_ra_bill,
+		)
+
+	result = frappe.db.sql(
+		"""
+		SELECT COALESCE(SUM(t.current_qty), 0) AS qty, COUNT(*) AS transaction_count
+		FROM `tabRA Bill Transaction` t
+		JOIN `tabRA Bill` rb ON rb.name = t.ra_bill
+		LEFT JOIN `tabBOQ` b
+		  ON b.name = COALESCE(NULLIF(t.boq_revision, ''), NULLIF(t.boq, ''))
+		LEFT JOIN `tabBOQ Item` bi ON bi.name = t.boq_item
+		WHERE rb.docstatus = 1
+		  AND COALESCE(NULLIF(t.original_boq, ''), NULLIF(b.original_boq, ''), t.boq)
+		      = %(original_boq)s
+		  AND COALESCE(
+				NULLIF(t.boq_item_key, ''),
+				NULLIF(bi.boq_item_key, ''),
+				NULLIF(bi.component_key, ''),
+				t.boq_item
+			  ) = %(boq_item_key)s
+		  AND (%(current_ra_bill)s = '' OR t.ra_bill != %(current_ra_bill)s)
+		""",
+		{
+			"original_boq": original_boq,
+			"boq_item_key": boq_item_key,
+			"current_ra_bill": current_ra_bill or "",
+		},
+		as_dict=True,
+	)
+	if not result:
+		return 0, 0
+
+	return flt(result[0].qty), result[0].transaction_count or 0
+
+
+def _get_previous_billed_qty_from_exact_transactions(
+	original_boq,
+	boq_item,
+	current_ra_bill=None,
+):
+	if not original_boq or not boq_item:
+		return 0, 0
+
+	chain_names = _get_boq_chain_names(original_boq)
+	result = frappe.db.sql(
+		"""
+		SELECT COALESCE(SUM(t.current_qty), 0) AS qty, COUNT(*) AS transaction_count
+		FROM `tabRA Bill Transaction` t
+		JOIN `tabRA Bill` rb ON rb.name = t.ra_bill
+		WHERE rb.docstatus = 1
+		  AND t.boq IN %(chain_names)s
+		  AND t.boq_item = %(boq_item)s
+		  AND (%(current_ra_bill)s = '' OR t.ra_bill != %(current_ra_bill)s)
+		""",
+		{
+			"chain_names": tuple(chain_names or [original_boq]),
+			"boq_item": boq_item,
+			"current_ra_bill": current_ra_bill or "",
+		},
+		as_dict=True,
+	)
+	if not result:
+		return 0, 0
+
+	return flt(result[0].qty), result[0].transaction_count or 0
+
+
+def _get_previous_billed_qty_from_submitted_ra_bills(
+	original_boq,
+	boq,
+	boq_item_key,
+	boq_item,
+	current_ra_bill=None,
+):
+	if (
+		original_boq
+		and boq_item_key
+		and _doctype_has_field("RA Bill Item", "original_boq")
+		and _doctype_has_field("RA Bill Item", "boq_item_key")
+	):
+		return _get_previous_billed_qty_from_lineage_ra_bill_items(
+			original_boq,
+			boq_item_key,
+			current_ra_bill,
+		)
+
 	result = frappe.db.sql(
 		"""
 		SELECT COALESCE(
@@ -832,19 +1113,54 @@ def _get_previous_billed_qty_from_submitted_ra_bills(boq, boq_item, current_ra_b
 	return flt(result[0][0]) if result else 0
 
 
+def _get_previous_billed_qty_from_lineage_ra_bill_items(
+	original_boq,
+	boq_item_key,
+	current_ra_bill=None,
+):
+	result = frappe.db.sql(
+		"""
+		SELECT COALESCE(
+			SUM(
+				CASE
+					WHEN COALESCE(rbi.current_qty, 0) > 0 THEN rbi.current_qty
+					ELSE COALESCE(NULLIF(rbi.boq_qty, 0), bi.qty, 0)
+						* COALESCE(rbi.work_percent, 0) / 100
+				END
+			),
+			0
+		) AS qty
+		FROM `tabRA Bill Item` rbi
+		JOIN `tabRA Bill` rb ON rb.name = rbi.parent
+		LEFT JOIN `tabBOQ` b
+		  ON b.name = COALESCE(NULLIF(rbi.boq_revision, ''), rb.boq)
+		LEFT JOIN `tabBOQ Item` bi ON bi.name = rbi.boq_item
+		WHERE rb.docstatus = 1
+		  AND COALESCE(NULLIF(rbi.original_boq, ''), NULLIF(b.original_boq, ''), rb.boq)
+		      = %(original_boq)s
+		  AND COALESCE(
+				NULLIF(rbi.boq_item_key, ''),
+				NULLIF(bi.boq_item_key, ''),
+				NULLIF(bi.component_key, ''),
+				rbi.boq_item
+			  ) = %(boq_item_key)s
+		  AND (%(current_ra_bill)s = '' OR rb.name != %(current_ra_bill)s)
+		""",
+		{
+			"original_boq": original_boq,
+			"boq_item_key": boq_item_key,
+			"current_ra_bill": current_ra_bill or "",
+		},
+	)
+	return flt(result[0][0]) if result else 0
+
+
 def _get_boq_item_qty(boq, boq_item):
 	if not boq_item:
 		return 0
 
-	filters = {"name": boq_item}
-	if boq:
-		filters["parent"] = boq
-
-	qty = frappe.db.get_value("BOQ Item", filters, "qty")
-	if qty is None and boq:
-		qty = frappe.db.get_value("BOQ Item", boq_item, "qty")
-
-	return flt(qty)
+	context = _get_boq_item_context(boq, boq_item)
+	return flt(context.qty)
 
 
 def _qty_to_percent(qty, boq_qty):
@@ -882,6 +1198,9 @@ def _get_transaction_date(ra_bill):
 
 
 def _create_ra_bill_transaction(ra_bill, row, previous_qty=0):
+	context = _get_boq_item_context(ra_bill.boq, row.boq_item)
+	original_boq = _get_original_boq(ra_bill.boq)
+	boq_item_key = row.get("boq_item_key") or context.boq_item_key
 	boq_qty = _get_row_boq_qty(row, ra_bill.boq)
 	current_qty = _get_row_current_qty(row)
 	current_amount = _get_row_current_amount(row)
@@ -896,6 +1215,9 @@ def _create_ra_bill_transaction(ra_bill, row, previous_qty=0):
 			"ra_bill": ra_bill.name,
 			"project": ra_bill.project,
 			"boq": ra_bill.boq,
+			"original_boq": original_boq,
+			"boq_revision": ra_bill.boq,
+			"boq_item_key": boq_item_key,
 			"boq_item": row.boq_item,
 			"item_name": row.item_name,
 			"category_name": row.category_name,
@@ -919,6 +1241,7 @@ def _create_ra_bill_transaction(ra_bill, row, previous_qty=0):
 
 
 def _get_boq_item_billing_summary(boq, boq_item, current_ra_bill=None):
+	context = _get_boq_item_context(boq, boq_item)
 	boq_qty = _get_boq_item_qty(boq, boq_item)
 	previous_qty = _get_previous_billed_qty(boq, boq_item, current_ra_bill)
 	previous_percent = _qty_to_percent(previous_qty, boq_qty) if boq_qty > 0 else 0
@@ -931,6 +1254,9 @@ def _get_boq_item_billing_summary(boq, boq_item, current_ra_bill=None):
 		"previous_percent": previous_percent,
 		"remaining_qty": remaining_qty,
 		"remaining_percent": remaining_percent,
+		"original_boq": _get_original_boq(context.boq or boq),
+		"boq_revision": context.boq or boq,
+		"boq_item_key": context.boq_item_key,
 	}
 
 
@@ -989,6 +1315,7 @@ def search_ra_bill_categories(doctype, txt, searchfield, start, page_len, filter
 		WHERE item.parent = %(boq)s
 		  AND item.parenttype = 'BOQ'
 		  AND item.parentfield = 'items'
+		  AND COALESCE(item.is_deleted_in_revision, 0) = 0
 		  AND (%(txt)s = ''
 		    OR parent_cat.category_name LIKE %(like_txt)s
 		    OR parent_cat.name LIKE %(like_txt)s)
@@ -1037,6 +1364,7 @@ def search_ra_bill_subcategories(doctype, txt, searchfield, start, page_len, fil
 		WHERE item.parent = %(boq)s
 		  AND item.parenttype = 'BOQ'
 		  AND item.parentfield = 'items'
+		  AND COALESCE(item.is_deleted_in_revision, 0) = 0
 		  AND (sub_cat.parent_node = %(category)s OR sub_cat.name = %(category)s)
 		  AND (%(txt)s = ''
 		    OR sub_cat.category_name LIKE %(like_txt)s
@@ -1089,6 +1417,7 @@ def search_boq_items_for_ra_bill(doctype, txt, searchfield, start, page_len, fil
 		"parenttype = 'BOQ'",
 		"parentfield = 'items'",
 		"boq_category = %(subcategory)s",
+		"COALESCE(is_deleted_in_revision, 0) = 0",
 		"(%(txt)s = '' OR item_name LIKE %(like_txt)s OR name LIKE %(like_txt)s)",
 	]
 	params = {

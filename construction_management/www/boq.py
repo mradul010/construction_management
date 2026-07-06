@@ -17,15 +17,22 @@ def get_context(context):
 	customer_field = get_boq_customer_field()
 	context.title = "BOQ"
 	context.customer = customer
+	filters = {
+		customer_field: customer,
+		"is_active_revision": 1,
+		"docstatus": ["!=", 2],
+	}
 	context.boqs = frappe.get_all(
 		"BOQ",
-		filters={customer_field: customer},
+		filters=filters,
 		fields=[
 			"name",
 			"project",
 			customer_field,
 			"currency",
 			"status",
+			"revision_no",
+			"revision_status",
 			"grand_total",
 		],
 		order_by="modified desc",
@@ -38,4 +45,7 @@ def get_context(context):
 def get_boq(name):
 	customer = require_portal_customer()
 	validate_boq_customer(name, customer)
-	return frappe.get_doc("BOQ", name)
+	boq = frappe.get_doc("BOQ", name)
+	if not boq.get("is_active_revision") or boq.docstatus == 2:
+		frappe.throw("Only the active BOQ revision is available in the portal.", frappe.PermissionError)
+	return boq

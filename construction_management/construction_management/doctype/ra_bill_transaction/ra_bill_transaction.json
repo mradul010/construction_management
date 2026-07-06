@@ -8,6 +8,9 @@
   "ra_bill",
   "project",
   "boq",
+  "original_boq",
+  "boq_revision",
+  "boq_item_key",
   "boq_item",
   "item_name",
   "category_name",
@@ -49,6 +52,25 @@
    "label": "BOQ",
    "options": "BOQ",
    "reqd": 1
+  },
+  {
+   "fieldname": "original_boq",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Original BOQ",
+   "options": "BOQ"
+  },
+  {
+   "fieldname": "boq_revision",
+   "fieldtype": "Link",
+   "label": "BOQ Revision",
+   "options": "BOQ"
+  },
+  {
+   "fieldname": "boq_item_key",
+   "fieldtype": "Data",
+   "label": "BOQ Item Key",
+   "search_index": 1
   },
   {
    "fieldname": "boq_item",

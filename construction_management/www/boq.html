@@ -10,6 +10,7 @@
 				<th>Project</th>
 				<th>Client</th>
 				<th>Currency</th>
+				<th>Revision</th>
 				<th>Status</th>
 				<th>Total Value</th>
 				<th></th>
@@ -22,17 +23,17 @@
 				<td>{{ boq.project or "-" }}</td>
 				<td>{{ boq.client or "-" }}</td>
 				<td>{{ boq.currency or "-" }}</td>
-				<td>{{ boq.status or "-" }}</td>
+				<td>Rev {{ boq.revision_no or 0 }}</td>
+				<td>{{ boq.revision_status or boq.status or "-" }}</td>
 				<td>{{ boq.grand_total or 0 }}</td>
 				<td><a class="btn btn-sm btn-primary" href="/boq-detail?name={{ boq.name | urlencode }}">View</a></td>
 			</tr>
 			{% else %}
 			<tr>
-				<td colspan="7" class="text-muted text-center">No BOQs found.</td>
+				<td colspan="8" class="text-muted text-center">No BOQs found.</td>
 			</tr>
 			{% endfor %}
 		</tbody>
 	</table>
 </div>
 {% endblock %}
-

@@ -17,6 +17,11 @@ def get_context(context):
 	validate_boq_customer(name, customer)
 
 	boq = frappe.get_doc("BOQ", name)
+	if not boq.get("is_active_revision") or boq.docstatus == 2:
+		frappe.throw(
+			"Only the active BOQ revision is available in the portal.",
+			frappe.PermissionError,
+		)
 	context.title = boq.name
 	context.customer = customer
 	context.boq = boq

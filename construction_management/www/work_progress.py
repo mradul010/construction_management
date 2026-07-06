@@ -21,56 +21,72 @@ def get_context(context):
 
 def get_work_progress(customer):
 	boq_customer_field = get_boq_customer_field()
-	if has_ra_bill_transaction_rows(customer, boq_customer_field):
+	if has_ra_bill_transaction_table():
 		return get_work_progress_from_transactions(customer, boq_customer_field)
 
 	return get_work_progress_from_ra_bill_items(customer, boq_customer_field)
 
 
-def has_ra_bill_transaction_rows(customer, boq_customer_field):
+def has_ra_bill_transaction_table():
 	try:
-		if not frappe.db.table_exists("RA Bill Transaction"):
-			return False
+		return (
+			frappe.db.table_exists("RA Bill Transaction")
+			and frappe.get_meta("RA Bill Transaction").has_field("original_boq")
+			and frappe.get_meta("RA Bill Transaction").has_field("boq_item_key")
+		)
 	except Exception:
 		return False
-
-	return bool(
-		frappe.db.sql(
-			"""
-			SELECT t.name
-			FROM `tabRA Bill Transaction` t
-			JOIN `tabRA Bill` rb ON rb.name = t.ra_bill
-			JOIN `tabBOQ` b ON b.name = t.boq
-			WHERE rb.customer = %s
-			  AND b.`{boq_customer_field}` = %s
-			  AND rb.docstatus = 1
-			LIMIT 1
-			""".format(boq_customer_field=boq_customer_field),
-			(customer, customer),
-		)
-	)
 
 
 def get_work_progress_from_transactions(customer, boq_customer_field):
 	rows = frappe.db.sql(
 		"""
 		SELECT
-			t.boq,
-			t.boq_item,
-			MAX(t.category_name) AS category_name,
-			MAX(t.sub_category) AS sub_category,
-			MAX(t.item_name) AS item_name,
-			MAX(t.boq_qty) AS boq_qty,
-			SUM(t.current_qty) AS completed_qty,
-			SUM(t.current_amount) AS completed_amount
-		FROM `tabRA Bill Transaction` t
-		JOIN `tabRA Bill` rb ON rb.name = t.ra_bill
-		JOIN `tabBOQ` b ON b.name = t.boq
-		WHERE rb.customer = %s
-		  AND b.`{boq_customer_field}` = %s
-		  AND rb.docstatus = 1
-		GROUP BY t.boq, t.boq_item
-		ORDER BY t.boq, category_name, sub_category, item_name
+			b.name AS boq,
+			bi.name AS boq_item,
+			bi.boq_parent_category AS category_name,
+			bi.boq_category AS sub_category,
+			bi.item_name AS item_name,
+			bi.qty AS boq_qty,
+			COALESCE(tx.completed_qty, 0) AS completed_qty,
+			COALESCE(tx.completed_amount, 0) AS completed_amount
+		FROM `tabBOQ` b
+		JOIN `tabBOQ Item` bi
+		  ON bi.parent = b.name
+		 AND bi.parenttype = 'BOQ'
+		 AND bi.parentfield = 'items'
+		LEFT JOIN (
+			SELECT
+				COALESCE(NULLIF(t.original_boq, ''), NULLIF(tb.original_boq, ''), t.boq)
+					AS original_boq,
+				COALESCE(
+					NULLIF(t.boq_item_key, ''),
+					NULLIF(tbi.boq_item_key, ''),
+					NULLIF(tbi.component_key, ''),
+					t.boq_item
+				) AS boq_item_key,
+				SUM(t.current_qty) AS completed_qty,
+				SUM(t.current_amount) AS completed_amount
+			FROM `tabRA Bill Transaction` t
+			JOIN `tabRA Bill` rb ON rb.name = t.ra_bill
+			LEFT JOIN `tabBOQ` tb
+			  ON tb.name = COALESCE(NULLIF(t.boq_revision, ''), NULLIF(t.boq, ''))
+			LEFT JOIN `tabBOQ Item` tbi ON tbi.name = t.boq_item
+			WHERE rb.customer = %s
+			  AND rb.docstatus = 1
+			GROUP BY original_boq, boq_item_key
+		) tx
+		  ON tx.original_boq = COALESCE(NULLIF(b.original_boq, ''), b.name)
+		 AND tx.boq_item_key = COALESCE(
+				NULLIF(bi.boq_item_key, ''),
+				NULLIF(bi.component_key, ''),
+				bi.name
+			)
+		WHERE b.`{boq_customer_field}` = %s
+		  AND b.is_active_revision = 1
+		  AND b.docstatus != 2
+		  AND COALESCE(bi.is_deleted_in_revision, 0) = 0
+		ORDER BY b.name, category_name, sub_category, item_name
 		""".format(boq_customer_field=boq_customer_field),
 		(customer, customer),
 		as_dict=True,
@@ -82,40 +98,67 @@ def get_work_progress_from_ra_bill_items(customer, boq_customer_field):
 	rows = frappe.db.sql(
 		"""
 		SELECT
-			rb.boq,
-			rbi.boq_item,
-			MAX(rbi.category_name) AS category_name,
-			MAX(rbi.sub_category) AS sub_category,
-			MAX(bi.item_name) AS item_name,
-			MAX(COALESCE(NULLIF(rbi.boq_qty, 0), bi.qty, 0)) AS boq_qty,
-			SUM(
-				CASE
-					WHEN COALESCE(rbi.current_qty, 0) > 0 THEN rbi.current_qty
-					ELSE COALESCE(NULLIF(rbi.boq_qty, 0), bi.qty, 0)
-						* COALESCE(rbi.work_percent, 0) / 100
-				END
-			) AS completed_qty,
-			SUM(
-				CASE
-					WHEN COALESCE(rbi.current_amount, 0) > 0 THEN rbi.current_amount
-					ELSE (
-						CASE
-							WHEN COALESCE(rbi.current_qty, 0) > 0 THEN rbi.current_qty
-							ELSE COALESCE(NULLIF(rbi.boq_qty, 0), bi.qty, 0)
-								* COALESCE(rbi.work_percent, 0) / 100
-						END
-					) * COALESCE(rbi.boq_rate, bi.unit_rate, 0)
-				END
-			) AS completed_amount
-		FROM `tabRA Bill Item` rbi
-		JOIN `tabRA Bill` rb ON rb.name = rbi.parent
-		JOIN `tabBOQ` b ON b.name = rb.boq
-		LEFT JOIN `tabBOQ Item` bi ON bi.name = rbi.boq_item
-		WHERE rb.customer = %s
-		  AND b.`{boq_customer_field}` = %s
-		  AND rb.docstatus = 1
-		GROUP BY rb.boq, rbi.boq_item
-		ORDER BY rb.boq, category_name, sub_category, item_name
+			b.name AS boq,
+			bi.name AS boq_item,
+			bi.boq_parent_category AS category_name,
+			bi.boq_category AS sub_category,
+			bi.item_name AS item_name,
+			bi.qty AS boq_qty,
+			COALESCE(tx.completed_qty, 0) AS completed_qty,
+			COALESCE(tx.completed_amount, 0) AS completed_amount
+		FROM `tabBOQ` b
+		JOIN `tabBOQ Item` bi
+		  ON bi.parent = b.name
+		 AND bi.parenttype = 'BOQ'
+		 AND bi.parentfield = 'items'
+		LEFT JOIN (
+			SELECT
+				COALESCE(NULLIF(rbi.original_boq, ''), NULLIF(rbq.original_boq, ''), rb.boq)
+					AS original_boq,
+				COALESCE(
+					NULLIF(rbi.boq_item_key, ''),
+					NULLIF(rbi_boq_item.boq_item_key, ''),
+					NULLIF(rbi_boq_item.component_key, ''),
+					rbi.boq_item
+				) AS boq_item_key,
+				SUM(
+					CASE
+						WHEN COALESCE(rbi.current_qty, 0) > 0 THEN rbi.current_qty
+						ELSE COALESCE(NULLIF(rbi.boq_qty, 0), rbi_boq_item.qty, 0)
+							* COALESCE(rbi.work_percent, 0) / 100
+					END
+				) AS completed_qty,
+				SUM(
+					CASE
+						WHEN COALESCE(rbi.current_amount, 0) > 0 THEN rbi.current_amount
+						ELSE (
+							CASE
+								WHEN COALESCE(rbi.current_qty, 0) > 0 THEN rbi.current_qty
+								ELSE COALESCE(NULLIF(rbi.boq_qty, 0), rbi_boq_item.qty, 0)
+									* COALESCE(rbi.work_percent, 0) / 100
+							END
+						) * COALESCE(rbi.boq_rate, rbi_boq_item.unit_rate, 0)
+					END
+				) AS completed_amount
+			FROM `tabRA Bill Item` rbi
+			JOIN `tabRA Bill` rb ON rb.name = rbi.parent
+			LEFT JOIN `tabBOQ` rbq ON rbq.name = COALESCE(NULLIF(rbi.boq_revision, ''), rb.boq)
+			LEFT JOIN `tabBOQ Item` rbi_boq_item ON rbi_boq_item.name = rbi.boq_item
+			WHERE rb.customer = %s
+			  AND rb.docstatus = 1
+			GROUP BY original_boq, boq_item_key
+		) tx
+		  ON tx.original_boq = COALESCE(NULLIF(b.original_boq, ''), b.name)
+		 AND tx.boq_item_key = COALESCE(
+				NULLIF(bi.boq_item_key, ''),
+				NULLIF(bi.component_key, ''),
+				bi.name
+			)
+		WHERE b.`{boq_customer_field}` = %s
+		  AND b.is_active_revision = 1
+		  AND b.docstatus != 2
+		  AND COALESCE(bi.is_deleted_in_revision, 0) = 0
+		ORDER BY b.name, category_name, sub_category, item_name
 		""".format(boq_customer_field=boq_customer_field),
 		(customer, customer),
 		as_dict=True,
@@ -128,6 +171,6 @@ def add_progress_values(rows):
 		row.boq_qty = flt(row.boq_qty)
 		row.completed_qty = flt(row.completed_qty)
 		row.completed_amount = flt(row.completed_amount)
-		row.remaining_qty = row.boq_qty - row.completed_qty
+		row.remaining_qty = max(0, row.boq_qty - row.completed_qty)
 		row.progress_percent = (row.completed_qty / row.boq_qty * 100) if row.boq_qty else 0
 	return rows
