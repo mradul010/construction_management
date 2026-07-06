@@ -34,7 +34,7 @@
 				<td>{{ row.qty or 0 }}</td>
 				<td>{{ row.uom or "-" }}</td>
 				<td>{{ row.unit_rate or 0 }}</td>
-				<td>{{ row.amount or ((row.qty or 0) * (row.unit_rate or 0)) }}</td>
+				<td>{{ row.amount_after_margin or ((row.qty or 0) * (row.unit_rate or 0)) }}</td>
 			</tr>
 			{% else %}
 			<tr>
@@ -45,4 +45,3 @@
 	</table>
 </div>
 {% endblock %}
-

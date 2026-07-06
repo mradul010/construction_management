@@ -5,6 +5,40 @@ function boqNumber(value) {
 
 const BOQ_COST_BREAKDOWN_TOLERANCE = 0.01;
 
+function calculateBoqRowAmounts(row) {
+	if (!row) return row;
+
+	const qty = boqNumber(row.qty);
+	const unitCost = boqNumber(row.unit_cost);
+	const margin = boqNumber(row.margin_percent);
+
+	row.unit_rate = unitCost * (1 + margin / 100);
+	row.amount = qty * unitCost;
+	row.amount_after_margin = qty * boqNumber(row.unit_rate);
+
+	return row;
+}
+
+function getBoqBaseAmount(row) {
+	if (!row) return 0;
+
+	return boqNumber(row.qty) * boqNumber(row.unit_cost);
+}
+
+function getBoqAmountAfterMargin(row) {
+	if (!row) return 0;
+
+	if (
+		row.amount_after_margin !== undefined &&
+		row.amount_after_margin !== null &&
+		row.amount_after_margin !== ""
+	) {
+		return boqNumber(row.amount_after_margin);
+	}
+
+	return boqNumber(row.qty) * boqNumber(row.unit_rate);
+}
+
 function getBoqItemUnitCost(row) {
 	if (!row) return 0;
 
@@ -362,7 +396,7 @@ frappe.ui.form.on("BOQ", {
 					newRow.margin_percent = margin;
 
 					newRow.unit_rate = unit_rate;
-					newRow.amount = qty * newRow.unit_rate;
+					calculateBoqRowAmounts(newRow);
 
 					newRow.notes = values.notes || "";
 
@@ -1128,12 +1162,7 @@ frappe.ui.form.on("BOQ", {
 					}
 
 					function recalculateInlineRow(row) {
-						const unitCost = parseFloat(row.unit_cost) || 0;
-						const margin = parseFloat(row.margin_percent) || 0;
-						const qty = parseFloat(row.qty) || 0;
-
-						row.unit_rate = unitCost * (1 + margin / 100);
-						row.amount = qty * row.unit_rate;
+						calculateBoqRowAmounts(row);
 					}
 
 					// ── Build HTML ──────────────────────────────────────────
@@ -1144,7 +1173,11 @@ frappe.ui.form.on("BOQ", {
 						const subKeys = Object.keys(cat.subcats);
 						const catTotal = subKeys.reduce(
 							(a, s) =>
-								a + cat.subcats[s].items.reduce((b, r) => b + (r.amount || 0), 0),
+								a +
+								cat.subcats[s].items.reduce(
+									(b, r) => b + getBoqAmountAfterMargin(r),
+									0,
+								),
 							0,
 						);
 						const catOpen = frm._boq_cat_state[pKey] !== false;
@@ -1162,7 +1195,7 @@ frappe.ui.form.on("BOQ", {
 							subKeys.forEach((subKey) => {
 								const sub = cat.subcats[subKey];
 								const subTotal = sub.items.reduce(
-									(a, r) => a + (r.amount || 0),
+									(a, r) => a + getBoqAmountAfterMargin(r),
 									0,
 								);
 								const subCost = sub.items.reduce(
@@ -1196,31 +1229,35 @@ frappe.ui.form.on("BOQ", {
 
 <th style="width:5%;text-align:center;padding:8px;">S.NO</th>
 
-<th style="width:32%text-align:left;padding:8px;">
+<th style="width:25%;text-align:left;padding:8px;">
     DESCRIPTION
 </th>
 
-<th style="width:8%;text-align:center;padding:8px;">
+<th style="width:7%;text-align:center;padding:8px;">
     QTY
 </th>
 
-<th style="width:8%;text-align:center;padding:8px;">
+<th style="width:7%;text-align:center;padding:8px;">
     UOM
 </th>
 
-<th style="width:12%;text-align:center;padding:8px;">
+<th style="width:11%;text-align:center;padding:8px;">
     UNIT COST
 </th>
 
-<th style="width:11%;text-align:center;padding:8px;">
+<th style="width:8%;text-align:center;padding:8px;">
     MARGIN %
 </th>
 
-<th style="width:15%;text-align:center;padding:8px;">
+<th style="width:12%;text-align:center;padding:8px;">
     AMOUNT
 </th>
 
-<th style="width:7%;text-align:center;padding:8px;">
+<th style="width:14%;text-align:center;padding:8px;">
+    AMOUNT AFTER MARGIN
+</th>
+
+<th style="width:6%;text-align:center;padding:8px;">
     ACTION
 </th>
 
@@ -1303,7 +1340,16 @@ title="${buildCostTooltip(row).replace(/"/g, "&quot;")}">
     font-weight:600;
     color:var(--primary);
 ">
-    ${CUR} ${fmt0(row.amount)}
+    ${CUR} ${fmt0(getBoqBaseAmount(row))}
+</td>
+
+<td style="
+    text-align:center;
+    white-space:nowrap;
+    font-weight:600;
+    color:var(--primary);
+">
+    ${CUR} ${fmt0(getBoqAmountAfterMargin(row))}
 </td>
 
 <td style="text-align:center;white-space:nowrap;">
@@ -1435,7 +1481,7 @@ title="${buildCostTooltip(row).replace(/"/g, "&quot;")}">
 						}
 
 						row.qty = qty;
-						row.amount = row.qty * (parseFloat(row.unit_rate) || 0);
+						recalculateInlineRow(row);
 
 						if (frm.dirty) {
 							frm.dirty();
@@ -1711,6 +1757,8 @@ title="${buildCostTooltip(row).replace(/"/g, "&quot;")}">
 	},
 
 	validate: function (frm) {
+		(frm.doc.items || []).forEach((row) => calculateBoqRowAmounts(row));
+
 		if (!validateAllBoqItemValues(frm)) {
 			frappe.validated = false;
 			return;

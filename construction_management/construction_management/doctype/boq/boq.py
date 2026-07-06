@@ -100,15 +100,16 @@ class BOQ(Document):
 		total_cost = 0
 
 		for row in self.items:
-			unit_cost = float(row.unit_cost or 0)
-			margin_percent = float(row.margin_percent or 0)
-			qty = float(row.qty or 0)
+			unit_cost = flt(row.unit_cost)
+			margin_percent = flt(row.margin_percent)
+			qty = flt(row.qty)
 
 			row.unit_rate = unit_cost * (1 + margin_percent / 100)
-			row.amount = qty * row.unit_rate
+			row.amount = qty * unit_cost
+			row.amount_after_margin = qty * flt(row.unit_rate)
 
-			total_cost += qty * unit_cost
-			grand_total += row.amount
+			total_cost += row.amount
+			grand_total += row.amount_after_margin
 
 		self.total_cost = total_cost
 		self.grand_total = grand_total

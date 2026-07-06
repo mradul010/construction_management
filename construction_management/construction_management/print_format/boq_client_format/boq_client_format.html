@@ -91,7 +91,7 @@
       {% set cat_items = doc.items | selectattr('boq_category', 'equalto', category) | list %}
       {% set cat_total = namespace(val=0) %}
       {% for item in cat_items %}
-        {% set cat_total.val = cat_total.val + (item.amount | float) %}
+        {% set cat_total.val = cat_total.val + ((item.amount_after_margin or ((item.qty | float) * (item.unit_rate | float))) | float) %}
       {% endfor %}
 
       <!-- Category header row -->
@@ -133,7 +133,7 @@
         <td style="padding:7px 8px; text-align:right; color:#1a1a2e; font-size:11px; font-family:Arial, sans-serif; border-bottom:1px solid #DEE2E6; background-color:{{ '#FAFAFA' if loop.index is even else '#FFFFFF' }};">{{ frappe.utils.fmt_money(item.material_rate | float, currency=doc.currency) }}</td>
         <td style="padding:7px 8px; text-align:right; color:#1a1a2e; font-size:11px; font-family:Arial, sans-serif; border-bottom:1px solid #DEE2E6; background-color:{{ '#FAFAFA' if loop.index is even else '#FFFFFF' }};">{{ frappe.utils.fmt_money(item.labour_rate | float, currency=doc.currency) }}</td>
         <td style="padding:7px 8px; text-align:right; color:#1a1a2e; font-size:11px; font-family:Arial, sans-serif; border-bottom:1px solid #DEE2E6; background-color:{{ '#FAFAFA' if loop.index is even else '#FFFFFF' }};">{{ frappe.utils.fmt_money(item.unit_rate | float, currency=doc.currency) }}</td>
-        <td style="padding:7px 8px; text-align:right; color:#1a1a2e; font-size:11px; font-weight:bold; font-family:Arial, sans-serif; border-bottom:1px solid #DEE2E6; background-color:{{ '#FAFAFA' if loop.index is even else '#FFFFFF' }};">{{ frappe.utils.fmt_money(item.amount | float, currency=doc.currency) }}</td>
+        <td style="padding:7px 8px; text-align:right; color:#1a1a2e; font-size:11px; font-weight:bold; font-family:Arial, sans-serif; border-bottom:1px solid #DEE2E6; background-color:{{ '#FAFAFA' if loop.index is even else '#FFFFFF' }};">{{ frappe.utils.fmt_money((item.amount_after_margin or ((item.qty | float) * (item.unit_rate | float))) | float, currency=doc.currency) }}</td>
       </tr>
       {% endfor %}
 
