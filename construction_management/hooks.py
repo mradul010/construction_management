@@ -59,8 +59,8 @@ portal_menu_items = [
 # ------------------
 
 # include js, css files in header of desk.html
-# app_include_css = "/assets/construction_management/css/construction_management.css"
-# app_include_js = "/assets/construction_management/js/construction_management.js"
+app_include_css = "/assets/construction_management/css/report_summary.css"
+app_include_js = "/assets/construction_management/js/report_summary.js"
 
 # include js, css files in header of web template
 # web_include_css = "/assets/construction_management/css/construction_management.css"
@@ -167,13 +167,18 @@ after_migrate = "construction_management.construction_management.setup.after_mig
 # ---------------
 # Hook on document methods and events
 
-# doc_events = {
-# 	"*": {
-# 		"on_update": "method",
-# 		"on_cancel": "method",
-# 		"on_trash": "method"
-# 	}
-# }
+doc_events = {
+	"Sales Invoice": {
+		"on_submit": "construction_management.construction_management.doctype.retention_record.retention_record.on_sales_invoice_submit",
+		"on_cancel": "construction_management.construction_management.doctype.retention_record.retention_record.on_sales_invoice_cancel",
+		"on_update_after_submit": "construction_management.construction_management.doctype.retention_record.retention_record.on_sales_invoice_update_after_submit",
+	},
+	"Payment Entry": {
+		"on_submit": "construction_management.construction_management.doctype.retention_record.retention_record.on_payment_entry_submit",
+		"on_cancel": "construction_management.construction_management.doctype.retention_record.retention_record.on_payment_entry_cancel",
+		"on_update_after_submit": "construction_management.construction_management.doctype.retention_record.retention_record.on_payment_entry_update_after_submit",
+	},
+}
 
 # Scheduled Tasks
 # ---------------

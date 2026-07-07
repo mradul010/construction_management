@@ -3,6 +3,12 @@ from frappe import _
 from frappe.model.document import Document
 from frappe.utils import flt, getdate, today
 
+from construction_management.construction_management.doctype.retention_record.retention_record import (
+	mark_cancelled_from_ra_bill,
+	set_sales_invoice_for_ra_bill,
+	sync_from_ra_bill,
+)
+
 
 OVERBILLING_TOLERANCE = 0.0001
 
@@ -343,10 +349,12 @@ class RABill(Document):
 		self._validate_no_duplicate_items()
 		self._validate_not_overbilling()
 		self._create_ra_bill_transactions()
+		sync_from_ra_bill(self)
 		self.db_set("status", "Submitted")
 
 	def on_cancel(self):
 		self._delete_ra_bill_transactions()
+		mark_cancelled_from_ra_bill(self)
 		self.db_set("status", "Cancelled")
 
 	def _delete_ra_bill_transactions(self):
@@ -758,6 +766,7 @@ class RABill(Document):
 				raise negative_rate_error
 
 		self.db_set("sales_invoice", si.name)
+		set_sales_invoice_for_ra_bill(self, si.name)
 		self.db_set("status", "Invoiced")
 
 		frappe.msgprint(
