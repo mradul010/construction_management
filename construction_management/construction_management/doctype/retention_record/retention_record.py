@@ -158,6 +158,25 @@ class RetentionRecord(Document):
 		return self.create_sales_invoice()
 
 	@frappe.whitelist()
+	def sync_status_from_sales_invoice(self):
+		if not self.retention_release_invoice:
+			frappe.throw(_("No retention release invoice exists to sync from."))
+
+		invoice = frappe.get_doc("Sales Invoice", self.retention_release_invoice)
+		sync_from_sales_invoice(invoice)
+		return self.name
+
+	@frappe.whitelist()
+	def cancel_retention_record(self):
+		if self.status == "Cancelled":
+			return self.name
+
+		self.status = "Cancelled"
+		self.remarks = _append_remark(self.remarks, "Cancelled from Retention Record form")
+		self.save(ignore_permissions=True)
+		return self.name
+
+	@frappe.whitelist()
 	def make_payment_entry(self):
 		if not self.retention_release_invoice:
 			frappe.throw(_("No retention invoice exists to pay against."))
