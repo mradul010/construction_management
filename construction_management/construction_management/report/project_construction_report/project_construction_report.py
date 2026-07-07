@@ -53,6 +53,27 @@ def get_columns(filters=None):
 			"options": "currency",
 			"width": 140,
 		},
+		{
+			"label": _("Total Retention Held"),
+			"fieldname": "total_retention_held",
+			"fieldtype": "Currency",
+			"options": "currency",
+			"width": 160,
+		},
+		{
+			"label": _("Total Retention Released"),
+			"fieldname": "total_retention_released",
+			"fieldtype": "Currency",
+			"options": "currency",
+			"width": 175,
+		},
+		{
+			"label": _("Retention Balance"),
+			"fieldname": "retention_balance",
+			"fieldtype": "Currency",
+			"options": "currency",
+			"width": 150,
+		},
 		{"label": _("Work Completion %"), "fieldname": "work_completion_percent", "fieldtype": "Percent", "width": 150},
 		{"label": _("Status"), "fieldname": "status", "fieldtype": "Data", "width": 110},
 	]
@@ -68,5 +89,8 @@ def get_report_summary(data):
 		summary_metric("Total BOQ Amount", sum_field(data, "boq_value"), currency=currency),
 		summary_metric("Total RA Billed", sum_field(data, "total_ra_billed"), currency=currency),
 		summary_metric("Total Invoiced", sum_field(data, "total_invoiced"), currency=currency),
+		summary_metric("Total Retention Held", sum_field(data, "total_retention_held"), currency=currency),
+		summary_metric("Total Retention Released", sum_field(data, "total_retention_released"), currency=currency),
+		summary_metric("Retention Balance", sum_field(data, "retention_balance"), currency=currency),
 		summary_metric("Average Completion %", average_field(data, "work_completion_percent"), datatype="Percent"),
 	]
