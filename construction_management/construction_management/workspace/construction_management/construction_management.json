@@ -63,18 +63,87 @@
    "type": "Card Break"
   },
   {
-   "dependencies": "Project, BOQ, RA Bill",
    "hidden": 0,
-   "is_query_report": 0,
-   "label": "Project Progress Report",
+   "is_query_report": 1,
+   "label": "BOQ Report",
    "link_count": 0,
-   "link_to": "construction-project-progress-report",
-   "link_type": "Page",
+   "link_to": "BOQ Report",
+   "link_type": "Report",
+   "onboard": 1,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 1,
+   "label": "BOQ Item Report",
+   "link_count": 0,
+   "link_to": "BOQ Item Report",
+   "link_type": "Report",
+   "onboard": 1,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 1,
+   "label": "RA Bill Report",
+   "link_count": 0,
+   "link_to": "RA Bill Report",
+   "link_type": "Report",
+   "onboard": 1,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 1,
+   "label": "RA Bill Item Report",
+   "link_count": 0,
+   "link_to": "RA Bill Item Report",
+   "link_type": "Report",
+   "onboard": 1,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 1,
+   "label": "Work Progress Report",
+   "link_count": 0,
+   "link_to": "Work Progress Report",
+   "link_type": "Report",
+   "onboard": 1,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 1,
+   "label": "Project Construction Report",
+   "link_count": 0,
+   "link_to": "Project Construction Report",
+   "link_type": "Report",
+   "onboard": 1,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 1,
+   "label": "RA Bill Sales Invoice Report",
+   "link_count": 0,
+   "link_to": "RA Bill Sales Invoice Report",
+   "link_type": "Report",
+   "onboard": 1,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 1,
+   "label": "BOQ Revision Report",
+   "link_count": 0,
+   "link_to": "BOQ Revision Report",
+   "link_type": "Report",
    "onboard": 1,
    "type": "Link"
   }
  ],
- "modified": "2026-07-06 00:00:00.000000",
+ "modified": "2026-07-07 00:00:00.000000",
  "modified_by": "Administrator",
  "module": "Construction Management",
  "name": "Construction Management",
