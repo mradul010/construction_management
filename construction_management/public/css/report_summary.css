@@ -1,0 +1,80 @@
+.construction-management-report .report-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 10px;
+  margin: 12px 0 18px;
+  padding: 0;
+  border: none;
+}
+
+.construction-management-report .report-summary .summary-item {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  min-height: 80px;
+  padding: 12px 14px;
+  border-radius: 8px;
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-left: 3px solid #d1d5db;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.05);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.construction-management-report .report-summary .summary-item:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.08);
+}
+
+.construction-management-report .report-summary .summary-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: #6b7280;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  line-height: 1.2;
+  margin-bottom: 4px;
+}
+
+.construction-management-report .report-summary .summary-value {
+  font-size: 20px;
+  font-weight: 700;
+  color: #111827;
+  line-height: 1.2;
+}
+
+.construction-management-report .report-summary .summary-subtitle,
+.construction-management-report .report-summary .summary-item .summary-subtitle {
+  font-size: 10px;
+  color: #9ca3af;
+  line-height: 1.2;
+  margin-top: 2px;
+}
+
+.construction-management-report .report-summary .summary-item.cm-summary-blue {
+  border-left-color: #2563eb;
+}
+
+.construction-management-report .report-summary .summary-item.cm-summary-green {
+  border-left-color: #16a34a;
+}
+
+.construction-management-report .report-summary .summary-item.cm-summary-orange {
+  border-left-color: #f59e0b;
+}
+
+.construction-management-report .report-summary .summary-item.cm-summary-red {
+  border-left-color: #ef4444;
+}
+
+.construction-management-report .report-summary .summary-item.cm-summary-purple {
+  border-left-color: #7c3aed;
+}
+
+.construction-management-report .report-summary .summary-item.cm-summary-indigo {
+  border-left-color: #4f46e5;
+}
+
+.construction-management-report .report-summary .summary-item.cm-summary-teal {
+  border-left-color: #0891b2;
+}

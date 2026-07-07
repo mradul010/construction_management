@@ -829,8 +829,11 @@ def get_project_construction_rows(filters):
 	if table_exists("Retention Record"):
 		retention_rows = frappe.db.sql(
 			"""
-			SELECT project, SUM(retention_amount) AS total_retention_held,
-				SUM(released_amount) AS total_retention_released,
+			SELECT project,
+				SUM(retention_amount) AS total_retention_held,
+				SUM(CASE WHEN COALESCE(retention_release_invoice, '') != '' THEN retention_amount ELSE 0 END) AS total_retention_invoiced,
+				SUM(paid_amount) AS total_retention_paid,
+				SUM(outstanding_amount) AS total_retention_outstanding,
 				SUM(balance_amount) AS retention_balance
 			FROM `tabRetention Record`
 			WHERE project IN %(projects)s
@@ -843,7 +846,9 @@ def get_project_construction_rows(filters):
 		retention_by_project = {
 			row.project: {
 				"total_retention_held": flt(row.total_retention_held),
-				"total_retention_released": flt(row.total_retention_released),
+				"total_retention_invoiced": flt(row.total_retention_invoiced),
+				"total_retention_paid": flt(row.total_retention_paid),
+				"total_retention_outstanding": flt(row.total_retention_outstanding),
 				"retention_balance": flt(row.retention_balance),
 			}
 			for row in retention_rows
@@ -886,7 +891,9 @@ def get_project_construction_rows(filters):
 				"total_net_payable": flt(ra_totals.get("total_net_payable")),
 				"total_invoiced": flt(invoiced_by_project.get(project.name)),
 				"total_retention_held": flt(retention_totals.get("total_retention_held")),
-				"total_retention_released": flt(retention_totals.get("total_retention_released")),
+				"total_retention_invoiced": flt(retention_totals.get("total_retention_invoiced")),
+				"total_retention_paid": flt(retention_totals.get("total_retention_paid")),
+				"total_retention_outstanding": flt(retention_totals.get("total_retention_outstanding")),
 				"retention_balance": flt(retention_totals.get("retention_balance")),
 				"work_completion_percent": safe_percent(completed_amount, boq_value),
 				"status": project.get("status"),

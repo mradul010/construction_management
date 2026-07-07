@@ -50,31 +50,35 @@ def create_boq_client_script():
 
 def ensure_sales_invoice_ra_bill_field():
 	"""
-	Ensure Sales Invoice can point back to the RA Bill that created it.
-	Used by standard Frappe Connections on RA Bill.
+	Ensure Sales Invoice carries the retention and RA Bill linkage fields used by the workflow.
 	"""
-	if frappe.db.exists("Custom Field", "Sales Invoice-ra_bill"):
-		frappe.clear_cache(doctype="Sales Invoice")
-		return
-
-	frappe.get_doc(
-		{
-			"doctype": "Custom Field",
-			"dt": "Sales Invoice",
-			"fieldname": "ra_bill",
-			"label": "RA Bill",
-			"fieldtype": "Link",
-			"options": "RA Bill",
-			"insert_after": "project",
-			"read_only": 1,
-			"no_copy": 1,
-			"module": "Construction Management",
-		}
-	).insert(ignore_permissions=True)
+	for fieldname, label, options, insert_after in [
+		("ra_bill", "RA Bill", "RA Bill", "project"),
+		("boq", "BOQ", "BOQ", "ra_bill"),
+		("retention_record", "Retention Record", "Retention Record", "boq"),
+	]:
+		if frappe.get_meta("Sales Invoice").has_field(fieldname):
+			continue
+		if frappe.db.exists("Custom Field", f"Sales Invoice-{fieldname}"):
+			continue
+		frappe.get_doc(
+			{
+				"doctype": "Custom Field",
+				"dt": "Sales Invoice",
+				"fieldname": fieldname,
+				"label": label,
+				"fieldtype": "Link",
+				"options": options,
+				"insert_after": insert_after,
+				"read_only": 1,
+				"no_copy": 1,
+				"module": "Construction Management",
+			}
+		).insert(ignore_permissions=True)
 
 	frappe.clear_cache(doctype="Sales Invoice")
 	frappe.db.commit()
-	print("Sales Invoice RA Bill custom field created successfully")
+	print("Sales Invoice retention custom fields created successfully")
 
 
 def ensure_project_current_boq_field():
