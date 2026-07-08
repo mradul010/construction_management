@@ -26,9 +26,21 @@ frappe.query_reports["Retention Report"] = {
 		},
 		{
 			fieldname: "sales_invoice",
-			label: __("Sales Invoice"),
+			label: __("Original Sales Invoice"),
 			fieldtype: "Link",
 			options: "Sales Invoice",
+		},
+		{
+			fieldname: "retention_release_invoice",
+			label: __("Retention Release Sales Invoice"),
+			fieldtype: "Link",
+			options: "Sales Invoice",
+		},
+		{
+			fieldname: "invoice_status",
+			label: __("Invoice Status"),
+			fieldtype: "Select",
+			options: "\nDraft\nSubmitted\nCancelled",
 		},
 		{
 			fieldname: "status",

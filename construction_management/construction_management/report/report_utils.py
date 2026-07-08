@@ -831,7 +831,14 @@ def get_project_construction_rows(filters):
 			"""
 			SELECT project,
 				SUM(retention_amount) AS total_retention_held,
-				SUM(CASE WHEN COALESCE(retention_release_invoice, '') != '' THEN retention_amount ELSE 0 END) AS total_retention_invoiced,
+				SUM(
+					CASE
+						WHEN COALESCE(retention_release_invoice, '') != ''
+							AND COALESCE(invoice_status, '') != 'Cancelled'
+						THEN retention_amount
+						ELSE 0
+					END
+				) AS total_retention_invoiced,
 				SUM(paid_amount) AS total_retention_paid,
 				SUM(outstanding_amount) AS total_retention_outstanding,
 				SUM(balance_amount) AS retention_balance

@@ -22,6 +22,17 @@
    "type": "Card Break"
   },
   {
+   "dependencies": "",
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "BOQ Category",
+   "link_count": 0,
+   "link_to": "BOQ Category",
+   "link_type": "DocType",
+   "onboard": 1,
+   "type": "Link"
+  },
+  {
    "dependencies": "Project",
    "hidden": 0,
    "is_query_report": 0,
@@ -44,20 +55,9 @@
    "type": "Link"
   },
   {
-   "dependencies": "",
    "hidden": 0,
    "is_query_report": 0,
-   "label": "BOQ Category",
-   "link_count": 0,
-   "link_to": "BOQ Category",
-   "link_type": "DocType",
-   "onboard": 1,
-   "type": "Link"
-  },
-  {
-   "hidden": 0,
-   "is_query_report": 0,
-   "label": "Retentaion Report",
+   "label": "Retention Record",
    "link_count": 0,
    "link_to": "Retention Record",
    "link_type": "DocType",
@@ -115,6 +115,16 @@
   {
    "hidden": 0,
    "is_query_report": 1,
+   "label": "Retention Report",
+   "link_count": 0,
+   "link_to": "Retention Report",
+   "link_type": "Report",
+   "onboard": 1,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 1,
    "label": "BOQ Item Report",
    "link_count": 0,
    "link_to": "BOQ Item Report",
@@ -153,7 +163,7 @@
    "type": "Link"
   }
  ],
- "modified": "2026-07-07 12:59:54.846633",
+ "modified": "2026-07-08 12:45:29.784752",
  "modified_by": "Administrator",
  "module": "Construction Management",
  "name": "Construction Management",
@@ -166,6 +176,15 @@
  "roles": [],
  "sequence_id": 1.0,
  "shortcuts": [
+  {
+   "color": "Grey",
+   "doc_view": "List",
+   "format": "{}",
+   "label": "BOQ Category",
+   "link_to": "BOQ Category",
+   "stats_filter": "[]",
+   "type": "DocType"
+  },
   {
    "color": "Blue",
    "doc_view": "List",
@@ -181,15 +200,6 @@
    "format": "{}",
    "label": "RA Bill",
    "link_to": "RA Bill",
-   "stats_filter": "[]",
-   "type": "DocType"
-  },
-  {
-   "color": "Grey",
-   "doc_view": "List",
-   "format": "{}",
-   "label": "BOQ Category",
-   "link_to": "BOQ Category",
    "stats_filter": "[]",
    "type": "DocType"
   },
