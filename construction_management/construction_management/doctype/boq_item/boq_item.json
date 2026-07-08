@@ -101,7 +101,7 @@
   {
    "allow_on_submit": 1,
    "default": "0",
-   "description": "Auto-calculated as sum of Cost Breakdown components if present, otherwise enter directly",
+   "description": "Cost to contractor per unit",
    "fieldname": "unit_cost",
    "fieldtype": "Currency",
    "in_list_view": 1,
@@ -129,7 +129,7 @@
   },
   {
    "allow_on_submit": 1,
-   "description": "qty \u00d7 unit_cost",
+   "description": "qty \u00d7 unit_cost. Cost Breakdown total must match this amount.",
    "fieldname": "amount",
    "fieldtype": "Currency",
    "in_list_view": 1,

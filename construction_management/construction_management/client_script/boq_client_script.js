@@ -28,9 +28,7 @@ function calculateBoqRowAmounts(row) {
 }
 
 function getBoqBaseAmount(row) {
-	if (!row) return 0;
-
-	return boqNumber(row.qty) * boqNumber(row.unit_cost);
+	return getBoqItemAmount(row);
 }
 
 function getBoqAmountAfterMargin(row) {
@@ -47,20 +45,25 @@ function getBoqAmountAfterMargin(row) {
 	return boqNumber(row.qty) * boqNumber(row.unit_rate);
 }
 
-function getBoqItemUnitCost(row) {
+function getBoqItemAmount(row) {
 	if (!row) return 0;
 
-	return boqNumber(row.unit_cost);
+	if (row.amount !== undefined && row.amount !== null && row.amount !== "") {
+		return boqNumber(row.amount);
+	}
+
+	const qty = row.is_deleted_in_revision ? 0 : boqNumber(row.qty);
+	return qty * boqNumber(row.unit_cost);
 }
 
 
-function getCostBreakdownValidationHTML(unitCost, breakdownTotal) {
-	const difference = boqNumber(unitCost) - boqNumber(breakdownTotal);
+function getCostBreakdownValidationHTML(amount, breakdownTotal) {
+	const difference = boqNumber(amount) - boqNumber(breakdownTotal);
 
 	if (Math.abs(difference) <= BOQ_COST_BREAKDOWN_TOLERANCE) {
 		return `
 			<div class="cost-breakdown-status success">
-				✓ Cost Breakdown matches Unit Cost.
+				✓ Cost Breakdown matches Amount.
 			</div>
 		`;
 	}
@@ -68,8 +71,8 @@ function getCostBreakdownValidationHTML(unitCost, breakdownTotal) {
 	return `
 		<div class="cost-breakdown-status error">
 			<b>Amount Mismatch</b><br>
-			Unit Cost:
-			<b>${format_currency(unitCost)}</b>
+			Amount:
+			<b>${format_currency(amount)}</b>
 			&nbsp;&nbsp;|&nbsp;&nbsp;
 			Your Total:
 			<b>${format_currency(breakdownTotal)}</b>
@@ -80,8 +83,8 @@ function getCostBreakdownValidationHTML(unitCost, breakdownTotal) {
 	`;
 }
 
-function getCostBreakdownMismatchLine(unitCost, breakdownTotal) {
-	const difference = boqNumber(unitCost) - boqNumber(breakdownTotal);
+function getCostBreakdownMismatchLine(amount, breakdownTotal) {
+	const difference = boqNumber(amount) - boqNumber(breakdownTotal);
 
 	if (Math.abs(difference) <= BOQ_COST_BREAKDOWN_TOLERANCE) {
 		return "";
@@ -102,7 +105,7 @@ function getCostBreakdownMismatchLine(unitCost, breakdownTotal) {
 					color: #dc2626;
 				}
 			</style>
-			Cost Breakdown not matched with Unit Cost. Unit Cost: <b>${format_currency(unitCost)}</b>, Your Total: <b>${format_currency(breakdownTotal)}</b>, Difference: <b>${format_currency(Math.abs(difference))}</b>
+			Cost Breakdown not matched with Amount. Amount: <b>${format_currency(amount)}</b>, Your Total: <b>${format_currency(breakdownTotal)}</b>, Difference: <b>${format_currency(Math.abs(difference))}</b>
 		</div>
 	`;
 }
@@ -114,10 +117,10 @@ function getBoqCostBreakdownComponents(frm, row) {
 }
 
 function validateBoqCostBreakdownTotal(frm, row, breakdownAmount) {
-	const unitCost = getBoqItemUnitCost(row);
+	const amount = getBoqItemAmount(row);
 	const total = boqNumber(breakdownAmount);
 
-	if (Math.abs(unitCost - total) > BOQ_COST_BREAKDOWN_TOLERANCE) {
+	if (Math.abs(amount - total) > BOQ_COST_BREAKDOWN_TOLERANCE) {
 		return false;
 	}
 
@@ -649,7 +652,7 @@ frappe.ui.form.on("BOQ", {
 			});
 			d.show();
 		};
-		// ── Cost breakdown dialog (click unit cost cell to open) ─────
+		// ── Cost breakdown dialog (click amount cell to open) ─────
 		frm.boq_open_cost_breakdown = function (rowName) {
 			const row = frm.doc.items.find((r) => r.name === rowName);
 			if (!row) return;
@@ -969,7 +972,7 @@ frappe.ui.form.on("BOQ", {
 					.html(frappe.format(total, { fieldtype: "Currency" }));
 				
 				// Update mismatch line
-				const mismatchLineHtml = getCostBreakdownMismatchLine(row.unit_cost, total);
+				const mismatchLineHtml = getCostBreakdownMismatchLine(getBoqItemAmount(row), total);
 				const existingMismatchLine = wrapper.find(".boq-cost-breakdown-mismatch-line");
 				if (mismatchLineHtml) {
 					if (existingMismatchLine.length) {
@@ -1218,12 +1221,12 @@ frappe.ui.form.on("BOQ", {
 	                justify-content:space-between;
 	                align-items:center;
 	            ">
-	                <span style="font-size:12px;color:var(--text-muted)">Total Unit Cost</span>
+	                <span style="font-size:12px;color:var(--text-muted)">Total Amount</span>
 	                <span class="comp-total-value" style="font-size:16px;font-weight:600;color:var(--text-color)">
 	                    ${frappe.format(total, { fieldtype: "Currency" })}
 	                </span>
 	            </div>
-	            ${getCostBreakdownMismatchLine(row.unit_cost, total)}
+	            ${getCostBreakdownMismatchLine(getBoqItemAmount(row), total)}
 	        </div>
 	    `);
 				setTimeout(() => bindComponentEvents(), 0);
@@ -1547,28 +1550,8 @@ frappe.ui.form.on("BOQ", {
 <td style="
     text-align:center;
     white-space:nowrap;
-    cursor:pointer;
-"
-class="boq-cost-breakdown-trigger"
-data-name="${row.name}"
-title="${buildCostTooltip(row).replace(/"/g, "&quot;")}">
-
-    <span style="
-        display:flex;
-        justify-content:center;
-        align-items:center;
-        gap:6px;
-    ">
-        ${renderUnitCost(row)}
-
-	        ${
-				frm.boq_has_cost_breakdown(row)
-					? `<i class="fa fa-list-ul" style="font-size:10px;color:#3b82f6"></i>`
-					: `<i class="fa fa-plus-circle" style="font-size:10px;color:#9ca3af"></i>`
-			}
-
-    </span>
-
+">
+    ${renderUnitCost(row)}
 </td>
 
 <td style="
@@ -1586,8 +1569,24 @@ title="${buildCostTooltip(row).replace(/"/g, "&quot;")}">
     white-space:nowrap;
     font-weight:600;
     color:var(--primary);
-">
-    ${CUR} ${fmt0(getBoqBaseAmount(row))}
+    cursor:pointer;
+"
+class="boq-cost-breakdown-trigger"
+data-name="${row.name}"
+title="${buildCostTooltip(row).replace(/"/g, "&quot;")}">
+    <span style="
+        display:flex;
+        justify-content:center;
+        align-items:center;
+        gap:6px;
+    ">
+        <span>${CUR} ${fmt0(getBoqItemAmount(row))}</span>
+	        ${
+				frm.boq_has_cost_breakdown(row)
+					? `<i class="fa fa-list-ul" style="font-size:10px;color:#3b82f6"></i>`
+					: `<i class="fa fa-plus-circle" style="font-size:10px;color:#9ca3af"></i>`
+			}
+    </span>
 </td>
 
 <td style="
@@ -1865,7 +1864,7 @@ title="${buildCostTooltip(row).replace(/"/g, "&quot;")}">
 						});
 					});
 
-					// ── Cost breakdown (click on unit cost cell) ──────────
+					// ── Cost breakdown (click on amount cell) ──────────
 					container.find(".boq-cost-breakdown-trigger").on("click", function (e) {
 						e.stopPropagation();
 						const rowName = $(this).data("name");
@@ -1882,7 +1881,7 @@ title="${buildCostTooltip(row).replace(/"/g, "&quot;")}">
 									)
 								: "N/A",
 						);
-						console.log("Existing unit_cost:", row ? row.unit_cost : "N/A");
+						console.log("Existing amount:", row ? getBoqItemAmount(row) : "N/A");
 						console.log("============================");
 
 						frm.boq_open_cost_breakdown(rowName);

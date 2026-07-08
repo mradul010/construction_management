@@ -44,3 +44,40 @@ class IntegrationTestBOQ(IntegrationTestCase):
 		self.assertAlmostEqual(boq.total_margin, 50)
 		self.assertAlmostEqual(boq.margin_percent, 20)
 		self.assertAlmostEqual(boq.rate_per_bua, 25)
+
+	def test_cost_breakdown_matches_amount(self):
+		boq = self._make_boq_with_cost_breakdown(1000)
+
+		boq.validate_cost_breakdown_matches_amount()
+
+	def test_cost_breakdown_rejects_unit_cost_total(self):
+		boq = self._make_boq_with_cost_breakdown(100)
+
+		with self.assertRaises(frappe.ValidationError):
+			boq.validate_cost_breakdown_matches_amount()
+
+	def _make_boq_with_cost_breakdown(self, breakdown_amount):
+		boq = frappe.get_doc({
+			"doctype": "BOQ",
+			"currency": "AED",
+			"items": [
+				{
+					"doctype": "BOQ Item",
+					"component_key": "test-boq-item",
+					"qty": 10,
+					"unit_cost": 100,
+					"margin_percent": 25,
+				},
+			],
+			"cost_components": [
+				{
+					"doctype": "BOQ Cost Component",
+					"boq_item": "test-boq-item",
+					"component_type": "Labour",
+					"description": "Labour",
+					"amount": breakdown_amount,
+				},
+			],
+		})
+		boq._calculate_totals()
+		return boq

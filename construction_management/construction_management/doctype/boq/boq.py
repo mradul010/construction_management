@@ -23,7 +23,7 @@ class BOQ(Document):
 		self.validate_item_values()
 		self._calculate_totals()
 		self._calculate_revision_comparison()
-		self.validate_cost_breakdown_matches_unit_cost()
+		self.validate_cost_breakdown_matches_amount()
 
 	def _set_revision_defaults(self):
 		if self.revision_no is None:
@@ -113,7 +113,7 @@ class BOQ(Document):
 			if flt(row.unit_cost) < 0 or flt(row.unit_rate) < 0:
 				frappe.throw(_("Unit Cost/Rate for item {0} cannot be negative.").format(item))
 
-	def validate_cost_breakdown_matches_unit_cost(self):
+	def validate_cost_breakdown_matches_amount(self):
 		all_components = self.cost_components or []
 
 		for row in self.items:
@@ -126,28 +126,34 @@ class BOQ(Document):
 			if not components:
 				continue
 
-			unit_cost = flt(row.unit_cost)
+			amount = self._get_item_amount(row)
 			breakdown_total = sum(flt(component.amount) for component in components)
-			difference = unit_cost - breakdown_total
+			difference = amount - breakdown_total
 
 			if abs(difference) > COST_BREAKDOWN_TOLERANCE:
 				item = row.item_name or row.item or row.name
 				frappe.throw(
 					_(
 						"Cost Breakdown Mismatch for item {0}.<br>"
-						"Unit Cost: {1}<br>"
+						"Amount: {1}<br>"
 						"Cost Breakdown Total: {2}<br>"
 						"Difference: {3}<br>"
-						"Cost Breakdown must match Unit Cost only. "
-						"It must not include quantity, margin, or total amount."
+						"Cost Breakdown must match Amount."
 					).format(
 						item,
-						self._format_currency(unit_cost),
+						self._format_currency(amount),
 						self._format_currency(breakdown_total),
 						self._format_currency(abs(difference)),
 					),
 					title=_("Cost Breakdown Mismatch"),
 				)
+
+	def _get_item_amount(self, row):
+		if row.get("amount") not in (None, ""):
+			return flt(row.amount)
+
+		qty = 0 if row.get("is_deleted_in_revision") else flt(row.qty)
+		return qty * flt(row.unit_cost)
 
 	def _format_currency(self, value):
 		return fmt_money(flt(value), currency=self.currency or "AED")

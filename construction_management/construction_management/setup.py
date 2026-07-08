@@ -6,6 +6,7 @@ def after_install():
 	create_boq_client_script()
 	ensure_project_current_boq_field()
 	ensure_sales_invoice_ra_bill_field()
+	ensure_sales_invoice_retention_records_field()
 	backfill_sales_invoice_ra_bill_links()
 	ensure_ra_bill_items()
 	backfill_boq_revision_fields()
@@ -15,6 +16,7 @@ def after_migrate():
 	create_boq_client_script()
 	ensure_project_current_boq_field()
 	ensure_sales_invoice_ra_bill_field()
+	ensure_sales_invoice_retention_records_field()
 	backfill_sales_invoice_ra_bill_links()
 	ensure_ra_bill_items()
 	backfill_boq_revision_fields()
@@ -79,6 +81,39 @@ def ensure_sales_invoice_ra_bill_field():
 	frappe.clear_cache(doctype="Sales Invoice")
 	frappe.db.commit()
 	print("Sales Invoice retention custom fields created successfully")
+
+
+def ensure_sales_invoice_retention_records_field():
+	"""
+	Ensure Sales Invoice can carry multiple Retention Record references for bulk releases.
+	"""
+	fieldname = "retention_records"
+	if frappe.get_meta("Sales Invoice").has_field(fieldname):
+		frappe.clear_cache(doctype="Sales Invoice")
+		return
+
+	if frappe.db.exists("Custom Field", f"Sales Invoice-{fieldname}"):
+		frappe.clear_cache(doctype="Sales Invoice")
+		return
+
+	frappe.get_doc(
+		{
+			"doctype": "Custom Field",
+			"dt": "Sales Invoice",
+			"fieldname": fieldname,
+			"label": "Retention Records",
+			"fieldtype": "Table",
+			"options": "Sales Invoice Retention Reference",
+			"insert_after": "retention_record",
+			"read_only": 1,
+			"no_copy": 1,
+			"module": "Construction Management",
+		}
+	).insert(ignore_permissions=True)
+
+	frappe.clear_cache(doctype="Sales Invoice")
+	frappe.db.commit()
+	print("Sales Invoice Retention Records custom field created successfully")
 
 
 def ensure_project_current_boq_field():

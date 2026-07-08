@@ -1,0 +1,71 @@
+{
+ "actions": [],
+ "creation": "2026-07-08 00:00:00.000000",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "retention_record",
+  "ra_bill",
+  "boq",
+  "project",
+  "retention_amount",
+  "balance_amount"
+ ],
+ "fields": [
+  {
+   "fieldname": "retention_record",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Retention Record",
+   "options": "Retention Record",
+   "reqd": 1
+  },
+  {
+   "fieldname": "ra_bill",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "RA Bill",
+   "options": "RA Bill"
+  },
+  {
+   "fieldname": "boq",
+   "fieldtype": "Link",
+   "label": "BOQ",
+   "options": "BOQ"
+  },
+  {
+   "fieldname": "project",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Project",
+   "options": "Project"
+  },
+  {
+   "fieldname": "retention_amount",
+   "fieldtype": "Currency",
+   "in_list_view": 1,
+   "label": "Retention Amount",
+   "options": "currency"
+  },
+  {
+   "fieldname": "balance_amount",
+   "fieldtype": "Currency",
+   "in_list_view": 1,
+   "label": "Balance Amount",
+   "options": "currency"
+  }
+ ],
+ "istable": 1,
+ "links": [],
+ "modified": "2026-07-08 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Construction Management",
+ "name": "Sales Invoice Retention Reference",
+ "owner": "Administrator",
+ "permissions": [],
+ "row_format": "Dynamic",
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": []
+}
