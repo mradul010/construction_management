@@ -21,6 +21,18 @@
   {
    "child": 0,
    "collapsible": 1,
+   "icon": "folder",
+   "indent": 0,
+   "keep_closed": 0,
+   "label": "BOQ Category",
+   "link_to": "BOQ Category",
+   "link_type": "DocType",
+   "show_arrow": 0,
+   "type": "Link"
+  },
+  {
+   "child": 0,
+   "collapsible": 1,
    "icon": "project",
    "indent": 0,
    "keep_closed": 0,
@@ -45,29 +57,17 @@
   {
    "child": 0,
    "collapsible": 1,
-   "icon": "folder",
-   "indent": 0,
-   "keep_closed": 0,
-   "label": "BOQ Category",
-   "link_to": "BOQ Category",
-   "link_type": "DocType",
-   "show_arrow": 0,
-   "type": "Link"
-  },
-  {
-   "child": 0,
-   "collapsible": 1,
    "icon": "file-chart-column-increasing",
    "indent": 0,
    "keep_closed": 0,
-   "label": "Retention Report",
+   "label": "Retention Record",
    "link_to": "Retention Record",
    "link_type": "DocType",
    "show_arrow": 0,
    "type": "Link"
   }
  ],
- "modified": "2026-07-07 13:27:56.437782",
+ "modified": "2026-07-08 12:45:29.784752",
  "modified_by": "Administrator",
  "module": "Construction Management",
  "name": "Construction Management",

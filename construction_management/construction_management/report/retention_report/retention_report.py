@@ -1,4 +1,6 @@
+import frappe
 from frappe import _
+from frappe.utils import flt
 
 from construction_management.construction_management.report.report_utils import (
 	ensure_report_access,
@@ -7,8 +9,6 @@ from construction_management.construction_management.report.report_utils import 
 	sum_field,
 	summary_metric,
 )
-from frappe.utils import flt
-import frappe
 
 
 def execute(filters=None):
@@ -31,6 +31,7 @@ def get_columns(filters=None):
 		},
 		{"label": _("Project"), "fieldname": "project", "fieldtype": "Link", "options": "Project", "width": 160},
 		{"label": _("Customer"), "fieldname": "customer", "fieldtype": "Link", "options": "Customer", "width": 160},
+		{"label": _("Currency"), "fieldname": "currency", "fieldtype": "Link", "options": "Currency", "width": 90},
 		{"label": _("BOQ"), "fieldname": "boq", "fieldtype": "Link", "options": "BOQ", "width": 160},
 		{"label": _("RA Bill"), "fieldname": "ra_bill", "fieldtype": "Link", "options": "RA Bill", "width": 160},
 		{
@@ -47,7 +48,9 @@ def get_columns(filters=None):
 			"options": "Sales Invoice",
 			"width": 180,
 		},
+		{"label": _("Invoice Date"), "fieldname": "invoice_date", "fieldtype": "Date", "width": 115},
 		{"label": _("Invoice Status"), "fieldname": "invoice_status", "fieldtype": "Data", "width": 130},
+		{"label": _("Release Date"), "fieldname": "release_date", "fieldtype": "Date", "width": 115},
 		{"label": _("Retention %"), "fieldname": "retention_percent", "fieldtype": "Percent", "width": 110},
 		{"label": _("Gross Amount"), "fieldname": "gross_amount", "fieldtype": "Currency", "options": "currency", "width": 140},
 		{
@@ -58,7 +61,21 @@ def get_columns(filters=None):
 			"width": 150,
 		},
 		{
-			"label": _("Paid/Released Amount"),
+			"label": _("Retention Release Invoiced"),
+			"fieldname": "retention_invoiced_amount",
+			"fieldtype": "Currency",
+			"options": "currency",
+			"width": 190,
+		},
+		{
+			"label": _("Released Amount"),
+			"fieldname": "released_amount",
+			"fieldtype": "Currency",
+			"options": "currency",
+			"width": 140,
+		},
+		{
+			"label": _("Paid Amount"),
 			"fieldname": "paid_amount",
 			"fieldtype": "Currency",
 			"options": "currency",
@@ -87,16 +104,25 @@ def get_data(filters):
 	conditions = []
 	params = {}
 
-	for fieldname in ("project", "customer", "boq", "ra_bill", "sales_invoice", "status"):
+	for fieldname in (
+		"project",
+		"customer",
+		"boq",
+		"ra_bill",
+		"sales_invoice",
+		"retention_release_invoice",
+		"invoice_status",
+		"status",
+	):
 		if filters.get(fieldname):
 			conditions.append(f"rr.`{fieldname}` = %({fieldname})s")
 			params[fieldname] = filters.get(fieldname)
 
 	if filters.get("from_date"):
-		conditions.append("DATE(COALESCE(rr.`release_date`, rr.`creation`)) >= %(from_date)s")
+		conditions.append("DATE(COALESCE(rr.`release_date`, rr.`invoice_date`, rr.`creation`)) >= %(from_date)s")
 		params["from_date"] = filters.from_date
 	if filters.get("to_date"):
-		conditions.append("DATE(COALESCE(rr.`release_date`, rr.`creation`)) <= %(to_date)s")
+		conditions.append("DATE(COALESCE(rr.`release_date`, rr.`invoice_date`, rr.`creation`)) <= %(to_date)s")
 		params["to_date"] = filters.to_date
 
 	where_clause = f"WHERE {' AND '.join(conditions)}" if conditions else ""
@@ -110,27 +136,42 @@ def get_data(filters):
 			rr.`ra_bill`,
 			rr.`sales_invoice`,
 			rr.`retention_release_invoice`,
+			rr.`invoice_date`,
 			rr.`invoice_status`,
+			rr.`release_date`,
 			rr.`retention_percent`,
 			rr.`gross_amount`,
 			rr.`retention_amount`,
+			CASE
+				WHEN rsi.`name` IS NOT NULL
+					AND COALESCE(rsi.`docstatus`, 0) != 2
+					AND COALESCE(rr.`invoice_status`, '') != 'Cancelled'
+				THEN rr.`retention_amount`
+				ELSE 0
+			END AS retention_invoiced_amount,
 			rr.`paid_amount`,
 			rr.`outstanding_amount`,
 			rr.`released_amount`,
 			rr.`balance_amount`,
 			rr.`status`,
-			rr.`last_payment_entry`
+			rr.`last_payment_entry`,
+			COALESCE(rb.`currency`, rsi.`currency`, osi.`currency`, b.`currency`) AS currency
 		FROM `tabRetention Record` rr
+		LEFT JOIN `tabRA Bill` rb ON rb.`name` = rr.`ra_bill`
+		LEFT JOIN `tabSales Invoice` rsi ON rsi.`name` = rr.`retention_release_invoice`
+		LEFT JOIN `tabSales Invoice` osi ON osi.`name` = rr.`sales_invoice`
+		LEFT JOIN `tabBOQ` b ON b.`name` = rr.`boq`
 		{where_clause}
-		ORDER BY rr.`creation` DESC
+		ORDER BY COALESCE(rr.`release_date`, rr.`invoice_date`, rr.`creation`) DESC, rr.`creation` DESC
 		""",
 		params,
 		as_dict=True,
 	)
 
 	for row in rows:
-		row.currency = None
+		row.gross_amount = flt(row.gross_amount)
 		row.retention_amount = flt(row.retention_amount)
+		row.retention_invoiced_amount = flt(row.retention_invoiced_amount)
 		row.paid_amount = flt(row.paid_amount)
 		row.outstanding_amount = flt(row.outstanding_amount)
 		row.released_amount = flt(row.released_amount)
@@ -144,7 +185,8 @@ def get_report_summary(data):
 	active_rows = [row for row in data if row.get("status") != "Cancelled"]
 	return [
 		summary_metric("Total Retention Held", sum_field(active_rows, "retention_amount"), currency=currency),
-		summary_metric("Total Retention Invoiced", sum_field(active_rows, "retention_amount") if any(row.get("retention_release_invoice") for row in active_rows) else 0, currency=currency),
+		summary_metric("Total Retention Invoiced", sum_field(active_rows, "retention_invoiced_amount"), currency=currency),
+		summary_metric("Total Released", sum_field(active_rows, "released_amount"), currency=currency),
 		summary_metric("Total Paid", sum_field(active_rows, "paid_amount"), currency=currency),
 		summary_metric("Total Outstanding", sum_field(active_rows, "outstanding_amount"), currency=currency),
 		summary_metric("Total Balance", sum_field(active_rows, "balance_amount"), currency=currency),
