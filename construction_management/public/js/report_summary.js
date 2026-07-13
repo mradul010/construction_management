@@ -7,6 +7,7 @@ construction_management.report.CONSTRUCTION_REPORTS = [
 	"RA Bill Item Report",
 	"Work Progress Report",
 	"Project Construction Report",
+	"Project Advance Summary",
 	"Retention Report",
 	"BOQ Revision Report",
 ];
@@ -34,7 +35,9 @@ construction_management.report.apply_summary_styles = function () {
 		const label = ($item.find(".summary-label").text() || "").trim().toLowerCase();
 		let colorClass = "";
 
-		if (label.includes("boq")) {
+		if (label.includes("advance")) {
+			colorClass = "cm-summary-teal";
+		} else if (label.includes("boq")) {
 			colorClass = "cm-summary-blue";
 		} else if (
 			label.includes("ra billed") ||

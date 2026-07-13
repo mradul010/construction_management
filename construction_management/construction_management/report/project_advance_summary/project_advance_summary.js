@@ -1,4 +1,4 @@
-frappe.query_reports["Project Construction Report"] = {
+frappe.query_reports["Project Advance Summary"] = {
 	filters: [
 		{
 			fieldname: "company",
@@ -23,12 +23,6 @@ frappe.query_reports["Project Construction Report"] = {
 			label: __("Sales Order"),
 			fieldtype: "Link",
 			options: "Sales Order",
-		},
-		{
-			fieldname: "boq",
-			label: __("BOQ"),
-			fieldtype: "Link",
-			options: "BOQ",
 		},
 		{
 			fieldname: "project_status",

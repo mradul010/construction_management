@@ -13,6 +13,12 @@ frappe.query_reports["RA Bill Report"] = {
 			options: "BOQ",
 		},
 		{
+			fieldname: "sales_order",
+			label: __("Sales Order"),
+			fieldtype: "Link",
+			options: "Sales Order",
+		},
+		{
 			fieldname: "customer",
 			label: __("Customer"),
 			fieldtype: "Link",

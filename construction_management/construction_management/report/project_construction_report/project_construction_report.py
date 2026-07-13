@@ -24,6 +24,7 @@ def get_columns(filters=None):
 	return [
 		{"label": _("Project"), "fieldname": "project", "fieldtype": "Link", "options": "Project", "width": 170},
 		{"label": _("Customer"), "fieldname": "customer", "fieldtype": "Link", "options": "Customer", "width": 160},
+		{"label": _("Sales Order"), "fieldname": "sales_order", "fieldtype": "Link", "options": "Sales Order", "width": 160},
 		{
 			"label": _("Current Active BOQ"),
 			"fieldname": "current_active_boq",
@@ -31,7 +32,36 @@ def get_columns(filters=None):
 			"options": "BOQ",
 			"width": 170,
 		},
+		{
+			"label": _("Total Sales Order Value"),
+			"fieldname": "total_sales_order_value",
+			"fieldtype": "Currency",
+			"options": "currency",
+			"width": 180,
+		},
 		{"label": _("BOQ Value"), "fieldname": "boq_value", "fieldtype": "Currency", "options": "currency", "width": 130},
+		{
+			"label": _("Customer Advance Received"),
+			"fieldname": "total_customer_advance_received",
+			"fieldtype": "Currency",
+			"options": "currency",
+			"width": 210,
+		},
+		{
+			"label": _("Advance Recovered"),
+			"fieldname": "total_advance_recovered",
+			"fieldtype": "Currency",
+			"options": "currency",
+			"width": 160,
+		},
+		{
+			"label": _("Remaining Advance Balance"),
+			"fieldname": "remaining_advance_balance",
+			"fieldtype": "Currency",
+			"options": "currency",
+			"width": 210,
+		},
+		{"label": _("Advance Recovery %"), "fieldname": "advance_recovery_percent", "fieldtype": "Percent", "width": 160},
 		{
 			"label": _("Total RA Billed"),
 			"fieldname": "total_ra_billed",
@@ -52,6 +82,13 @@ def get_columns(filters=None):
 			"fieldtype": "Currency",
 			"options": "currency",
 			"width": 140,
+		},
+		{
+			"label": _("Outstanding Receivable"),
+			"fieldname": "outstanding_receivable",
+			"fieldtype": "Currency",
+			"options": "currency",
+			"width": 180,
 		},
 		{
 			"label": _("Retention Held"),
@@ -89,6 +126,7 @@ def get_columns(filters=None):
 			"width": 150,
 		},
 		{"label": _("Work Completion %"), "fieldname": "work_completion_percent", "fieldtype": "Percent", "width": 150},
+		{"label": _("Advance Status"), "fieldname": "advance_status", "fieldtype": "Data", "width": 150},
 		{"label": _("Status"), "fieldname": "status", "fieldtype": "Data", "width": 110},
 	]
 
@@ -101,8 +139,14 @@ def get_report_summary(data):
 	currency = first_currency(data)
 	return [
 		summary_metric("Total BOQ Amount", sum_field(data, "boq_value"), currency=currency),
+		summary_metric("Total Sales Order Value", sum_field(data, "total_sales_order_value"), currency=currency),
 		summary_metric("Total RA Billed", sum_field(data, "total_ra_billed"), currency=currency),
 		summary_metric("Total Invoiced", sum_field(data, "total_invoiced"), currency=currency),
+		summary_metric("Outstanding Receivable", sum_field(data, "outstanding_receivable"), currency=currency),
+		summary_metric("Customer Advance Received", sum_field(data, "total_customer_advance_received"), currency=currency),
+		summary_metric("Advance Recovered", sum_field(data, "total_advance_recovered"), currency=currency),
+		summary_metric("Remaining Advance", sum_field(data, "remaining_advance_balance"), currency=currency),
+		summary_metric("Average Advance Recovery %", average_field(data, "advance_recovery_percent"), datatype="Percent"),
 		summary_metric("Retention Held", sum_field(data, "total_retention_held"), currency=currency),
 		summary_metric("Retention Release Invoiced", sum_field(data, "total_retention_invoiced"), currency=currency),
 		summary_metric("Retention Paid", sum_field(data, "total_retention_paid"), currency=currency),

@@ -17,13 +17,66 @@ class BOQ(Document):
 
 	def validate(self):
 		self._set_revision_defaults()
+		self._sync_and_validate_sales_order()
 		self._validate_revision_edit_allowed()
 		self._ensure_component_keys()
 		self._fill_parent_categories()
 		self.validate_item_values()
 		self._calculate_totals()
 		self._calculate_revision_comparison()
-		self.validate_cost_breakdown_matches_unit_cost()
+		self.validate_cost_breakdown_matches_amount()
+
+	def _sync_and_validate_sales_order(self):
+		"""Populate empty contract fields and keep the BOQ revision chain consistent."""
+		chain_source = self.parent_boq or self.original_boq
+		if chain_source and chain_source != self.name:
+			chain_sales_order = frappe.db.get_value("BOQ", chain_source, "sales_order")
+			if chain_sales_order and self.sales_order and self.sales_order != chain_sales_order:
+				frappe.throw(
+					_("BOQ revision Sales Order must match the Sales Order linked to BOQ {0}.").format(
+						chain_source
+					)
+				)
+			if chain_sales_order and not self.sales_order:
+				self.sales_order = chain_sales_order
+
+		if not self.sales_order:
+			return
+
+		sales_order = frappe.db.get_value(
+			"Sales Order",
+			self.sales_order,
+			["name", "customer", "project", "company", "currency", "docstatus", "status"],
+			as_dict=True,
+		)
+		if not sales_order:
+			frappe.throw(_("Sales Order {0} does not exist.").format(self.sales_order))
+		if sales_order.docstatus == 2 or sales_order.status == "Cancelled":
+			frappe.throw(
+				_("Sales Order {0} is cancelled and cannot be linked.").format(self.sales_order)
+			)
+		if sales_order.docstatus != 1:
+			frappe.throw(_("Sales Order {0} must be submitted before it can be linked.").format(self.sales_order))
+		if sales_order.status in ("Closed", "On Hold"):
+			frappe.throw(
+				_("Sales Order {0} has status {1} and cannot be linked.").format(
+					self.sales_order, sales_order.status
+				)
+			)
+
+		self._set_or_validate_contract_field("client", sales_order.customer, _("Customer"))
+		self._set_or_validate_contract_field("project", sales_order.project, _("Project"))
+		self._set_or_validate_contract_field("company", sales_order.company, _("Company"))
+		self._set_or_validate_contract_field("currency", sales_order.currency, _("Currency"))
+
+	def _set_or_validate_contract_field(self, fieldname, sales_order_value, label):
+		if not sales_order_value:
+			return
+		boq_value = self.get(fieldname)
+		if boq_value and boq_value != sales_order_value:
+			frappe.throw(_("BOQ {0} must match Sales Order {0}.").format(label))
+		if not boq_value:
+			self.set(fieldname, sales_order_value)
 
 	def _set_revision_defaults(self):
 		if self.revision_no is None:
@@ -101,6 +154,9 @@ class BOQ(Document):
 					) or row.boq_category
 
 	def validate_item_values(self):
+		if flt(self.global_margin_percent) < 0:
+			frappe.throw(_("Global Margin % cannot be negative."))
+
 		for row in self.items:
 			item = row.item_name or row.item or row.name
 
@@ -113,7 +169,7 @@ class BOQ(Document):
 			if flt(row.unit_cost) < 0 or flt(row.unit_rate) < 0:
 				frappe.throw(_("Unit Cost/Rate for item {0} cannot be negative.").format(item))
 
-	def validate_cost_breakdown_matches_unit_cost(self):
+	def validate_cost_breakdown_matches_amount(self):
 		all_components = self.cost_components or []
 
 		for row in self.items:
@@ -126,28 +182,34 @@ class BOQ(Document):
 			if not components:
 				continue
 
-			unit_cost = flt(row.unit_cost)
+			amount = self._get_item_amount(row)
 			breakdown_total = sum(flt(component.amount) for component in components)
-			difference = unit_cost - breakdown_total
+			difference = amount - breakdown_total
 
 			if abs(difference) > COST_BREAKDOWN_TOLERANCE:
 				item = row.item_name or row.item or row.name
 				frappe.throw(
 					_(
 						"Cost Breakdown Mismatch for item {0}.<br>"
-						"Unit Cost: {1}<br>"
+						"Amount: {1}<br>"
 						"Cost Breakdown Total: {2}<br>"
 						"Difference: {3}<br>"
-						"Cost Breakdown must match Unit Cost only. "
-						"It must not include quantity, margin, or total amount."
+						"Cost Breakdown must match Amount."
 					).format(
 						item,
-						self._format_currency(unit_cost),
+						self._format_currency(amount),
 						self._format_currency(breakdown_total),
 						self._format_currency(abs(difference)),
 					),
 					title=_("Cost Breakdown Mismatch"),
 				)
+
+	def _get_item_amount(self, row):
+		if row.get("amount") not in (None, ""):
+			return flt(row.amount)
+
+		qty = 0 if row.get("is_deleted_in_revision") else flt(row.qty)
+		return qty * flt(row.unit_cost)
 
 	def _format_currency(self, value):
 		return fmt_money(flt(value), currency=self.currency or "AED")

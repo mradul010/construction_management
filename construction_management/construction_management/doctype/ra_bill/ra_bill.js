@@ -652,6 +652,45 @@ async function setBoqItemDetails(frm, cdt, cdn) {
 	console.log("RA Bill row after BOQ item apply:", locals[cdt][cdn]);
 }
 
+function applyBoqContractToRaBill(frm, selectedBoq) {
+	return frappe.db
+		.get_value("BOQ", selectedBoq, ["project", "client", "currency", "sales_order"])
+		.then((r) => {
+			if (frm.doc.boq !== selectedBoq) return;
+
+			const boq = r.message || {};
+			const mappings = {
+				project: boq.project,
+				customer: boq.client,
+				currency: boq.currency,
+			};
+			const conflicts = [];
+			const updates = [frm.set_value("sales_order", boq.sales_order || "")];
+
+			Object.entries(mappings).forEach(([fieldname, value]) => {
+				if (!value) return;
+				if (!frm.doc[fieldname]) {
+					updates.push(frm.set_value(fieldname, value));
+				} else if (frm.doc[fieldname] !== value) {
+					conflicts.push(frm.fields_dict[fieldname]?.df.label || fieldname);
+				}
+			});
+
+			if (conflicts.length) {
+				frappe.msgprint({
+					title: __("BOQ Mismatch"),
+					indicator: "orange",
+					message: __(
+						"The following RA Bill values differ from BOQ {0}: {1}. Correct them before saving.",
+						[selectedBoq, conflicts.join(", ")],
+					),
+				});
+			}
+
+			return Promise.all(updates);
+		});
+}
+
 frappe.ui.form.on("RA Bill", {
 	setup: function (frm) {
 		frm.set_query("boq", function () {
@@ -915,12 +954,9 @@ frappe.ui.form.on("RA Bill", {
 
 		if (frm.doc.boq) {
 			const selectedBoq = frm.doc.boq;
-
-			frappe.db.get_value("BOQ", selectedBoq, "client").then((r) => {
-				if (frm.doc.boq === selectedBoq && r.message && r.message.client) {
-					frm.set_value("customer", r.message.client);
-				}
-			});
+			applyBoqContractToRaBill(frm, selectedBoq);
+		} else {
+			frm.set_value("sales_order", "");
 		}
 
 		if (frm.doc.items && frm.doc.items.length > 0) {
@@ -962,17 +998,55 @@ frappe.ui.form.on("RA Bill", {
 		setTermsAndConditions(frm);
 	},
 
-	get_advances_received: function () {
-		frappe.show_alert(
-			{
-				message: __("Advance allocation can be filled manually for now."),
-				indicator: "blue",
+	get_advances_received: function (frm) {
+		frappe.call({
+			doc: frm.doc,
+			method: "get_advances_received",
+			freeze: true,
+			freeze_message: __("Fetching advances..."),
+			callback: function (response) {
+				const data = response.message || {};
+				frm.clear_table("advances");
+				(data.advances || []).forEach((source) => {
+					const row = frm.add_child("advances");
+					[
+						"reference_type",
+						"reference_name",
+						"remarks",
+						"advance_amount",
+						"allocated_amount",
+						"difference_posting_date",
+					].forEach((fieldname) => {
+						if (childFieldExists(row.doctype, fieldname)) {
+							row[fieldname] = source[fieldname];
+						}
+					});
+				});
+				[
+					"total_advance",
+					"outstanding_amount",
+					"total_advance_received",
+					"previously_recovered_advance",
+					"remaining_advance_before_current_bill",
+					"proposed_advance_recovery",
+					"actual_advance_recovered",
+					"remaining_advance_after_current_bill",
+				].forEach((fieldname) => {
+					if (formFieldExists(frm, fieldname) && data[fieldname] !== undefined) {
+						frm.set_value(fieldname, data[fieldname]);
+					}
+				});
+				frm.refresh_field("advances");
+				frm.trigger("recalculate_totals");
 			},
-			5,
-		);
+		});
 	},
 
 	retention_percent: function (frm) {
+		frm.trigger("recalculate_totals");
+	},
+
+	advance_recovery_percent: function (frm) {
 		frm.trigger("recalculate_totals");
 	},
 
@@ -987,10 +1061,18 @@ frappe.ui.form.on("RA Bill", {
 		const netPayable = gross - retention;
 		const totalTaxes = updateTaxRowTotals(frm, netPayable);
 		const grandTotal = netPayable + totalTaxes;
-		const totalAdvance = (frm.doc.advances || []).reduce(
+		const allocatedAdvance = (frm.doc.advances || []).reduce(
 			(total, row) => total + getNumber(row.allocated_amount),
 			0,
 		);
+		const totalAdvanceReceived = getNumber(frm.doc.total_advance_received);
+		const previouslyRecovered = getNumber(frm.doc.previously_recovered_advance);
+		const remainingBefore = Math.max(totalAdvanceReceived - previouslyRecovered, 0);
+		const recoveryPercent = getNumber(frm.doc.advance_recovery_percent);
+		const proposedRecovery = recoveryPercent
+			? Math.min((gross * recoveryPercent) / 100, remainingBefore, grandTotal)
+			: getNumber(frm.doc.proposed_advance_recovery);
+		const totalAdvance = recoveryPercent ? proposedRecovery : allocatedAdvance;
 
 		frappe.model.set_value(frm.doctype, frm.docname, "gross_amount", gross);
 		frappe.model.set_value(frm.doctype, frm.docname, "retention_amount", retention);
@@ -1000,6 +1082,10 @@ frappe.ui.form.on("RA Bill", {
 		setParentValueIfFieldExists(frm, "grand_total", grandTotal);
 		setParentValueIfFieldExists(frm, "total_advance", totalAdvance);
 		setParentValueIfFieldExists(frm, "outstanding_amount", grandTotal - totalAdvance);
+		setParentValueIfFieldExists(frm, "remaining_advance_before_current_bill", remainingBefore);
+		setParentValueIfFieldExists(frm, "proposed_advance_recovery", proposedRecovery);
+		setParentValueIfFieldExists(frm, "actual_advance_recovered", totalAdvance);
+		setParentValueIfFieldExists(frm, "remaining_advance_after_current_bill", Math.max(remainingBefore - totalAdvance, 0));
 	},
 });
 

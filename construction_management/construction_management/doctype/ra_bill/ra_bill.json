@@ -9,6 +9,7 @@
   "project_boq_section",
   "project",
   "boq",
+  "sales_order",
   "bill_no",
   "status",
   "customer_column",
@@ -47,6 +48,15 @@
   "advances_section",
   "allocate_advances_automatically",
   "get_advances_received",
+  "advance_summary_section",
+  "total_advance_received",
+  "previously_recovered_advance",
+  "remaining_advance_before_current_bill",
+  "advance_recovery_column",
+  "advance_recovery_percent",
+  "proposed_advance_recovery",
+  "actual_advance_recovered",
+  "remaining_advance_after_current_bill",
   "advances",
   "payment_summary_section",
   "total_advance",
@@ -119,6 +129,16 @@
    "label": "BOQ",
    "options": "BOQ",
    "reqd": 1
+  },
+  {
+   "fieldname": "sales_order",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Sales Order",
+   "options": "Sales Order",
+   "read_only": 1,
+   "search_index": 1
   },
   {
    "description": "Auto-incremented per project+BOQ combination",
@@ -350,6 +370,63 @@
    "fieldname": "get_advances_received",
    "fieldtype": "Button",
    "label": "Get Advances Received"
+  },
+  {
+   "fieldname": "advance_summary_section",
+   "fieldtype": "Section Break",
+   "label": "Sales Order Advance Summary"
+  },
+  {
+   "fieldname": "total_advance_received",
+   "fieldtype": "Currency",
+   "label": "Total Advance Received",
+   "options": "currency",
+   "read_only": 1
+  },
+  {
+   "fieldname": "previously_recovered_advance",
+   "fieldtype": "Currency",
+   "label": "Previously Recovered Advance",
+   "options": "currency",
+   "read_only": 1
+  },
+  {
+   "fieldname": "remaining_advance_before_current_bill",
+   "fieldtype": "Currency",
+   "label": "Remaining Advance Before Current Bill",
+   "options": "currency",
+   "read_only": 1
+  },
+  {
+   "fieldname": "advance_recovery_column",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "0",
+   "fieldname": "advance_recovery_percent",
+   "fieldtype": "Percent",
+   "label": "Advance Recovery %"
+  },
+  {
+   "fieldname": "proposed_advance_recovery",
+   "fieldtype": "Currency",
+   "label": "Proposed Advance Recovery",
+   "options": "currency",
+   "read_only": 1
+  },
+  {
+   "fieldname": "actual_advance_recovered",
+   "fieldtype": "Currency",
+   "label": "Actual Advance Recovered",
+   "options": "currency",
+   "read_only": 1
+  },
+  {
+   "fieldname": "remaining_advance_after_current_bill",
+   "fieldtype": "Currency",
+   "label": "Remaining Advance After Current Bill",
+   "options": "currency",
+   "read_only": 1
   },
   {
    "fieldname": "advances",

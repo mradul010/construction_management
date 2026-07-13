@@ -24,8 +24,10 @@ def get_columns(filters=None):
 	return [
 		{"label": _("BOQ"), "fieldname": "boq", "fieldtype": "Link", "options": "BOQ", "width": 160},
 		{"label": _("Project"), "fieldname": "project", "fieldtype": "Link", "options": "Project", "width": 160},
+		{"label": _("Sales Order"), "fieldname": "sales_order", "fieldtype": "Link", "options": "Sales Order", "width": 160},
 		{"label": _("Customer"), "fieldname": "customer", "fieldtype": "Link", "options": "Customer", "width": 160},
 		{"label": _("Currency"), "fieldname": "currency", "fieldtype": "Link", "options": "Currency", "width": 90},
+		{"label": _("Global Margin %"), "fieldname": "global_margin_percent", "fieldtype": "Percent", "width": 130},
 		{"label": _("Revision No"), "fieldname": "revision_no", "fieldtype": "Int", "width": 95},
 		{"label": _("Revision Status"), "fieldname": "revision_status", "fieldtype": "Data", "width": 130},
 		{"label": _("Active Revision"), "fieldname": "active_revision", "fieldtype": "Check", "width": 110},
@@ -56,8 +58,10 @@ def get_data(filters):
 			{
 				"boq": row.name,
 				"project": row.get("project"),
+				"sales_order": row.get("sales_order"),
 				"customer": row.get("client"),
 				"currency": row.get("currency"),
+				"global_margin_percent": flt(row.get("global_margin_percent")),
 				"revision_no": cint(row.get("revision_no")),
 				"revision_status": row.get("revision_status"),
 				"active_revision": cint(row.get("is_active_revision")),

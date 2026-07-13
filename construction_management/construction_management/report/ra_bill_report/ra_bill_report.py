@@ -26,6 +26,7 @@ def get_columns(filters=None):
 		{"label": _("Bill No"), "fieldname": "bill_no", "fieldtype": "Int", "width": 90},
 		{"label": _("Project"), "fieldname": "project", "fieldtype": "Link", "options": "Project", "width": 160},
 		{"label": _("BOQ"), "fieldname": "boq", "fieldtype": "Link", "options": "BOQ", "width": 160},
+		{"label": _("Sales Order"), "fieldname": "sales_order", "fieldtype": "Link", "options": "Sales Order", "width": 160},
 		{"label": _("Customer"), "fieldname": "customer", "fieldtype": "Link", "options": "Customer", "width": 160},
 		{"label": _("Billing Period"), "fieldname": "billing_period", "fieldtype": "Data", "width": 170},
 		{"label": _("Status"), "fieldname": "status", "fieldtype": "Data", "width": 110},
@@ -39,6 +40,27 @@ def get_columns(filters=None):
 			"width": 150,
 		},
 		{"label": _("Net Payable"), "fieldname": "net_payable", "fieldtype": "Currency", "options": "currency", "width": 140},
+		{
+			"label": _("Advance Received"),
+			"fieldname": "total_advance_received",
+			"fieldtype": "Currency",
+			"options": "currency",
+			"width": 150,
+		},
+		{
+			"label": _("Advance Recovered"),
+			"fieldname": "actual_advance_recovered",
+			"fieldtype": "Currency",
+			"options": "currency",
+			"width": 160,
+		},
+		{
+			"label": _("Remaining Advance"),
+			"fieldname": "remaining_advance_after_current_bill",
+			"fieldtype": "Currency",
+			"options": "currency",
+			"width": 160,
+		},
 		{
 			"label": _("Sales Invoice"),
 			"fieldname": "sales_invoice",
@@ -58,6 +80,7 @@ def get_data(filters):
 				"bill_no": row.get("bill_no"),
 				"project": row.get("project"),
 				"boq": row.get("boq"),
+				"sales_order": row.get("sales_order"),
 				"customer": row.get("customer"),
 				"currency": row.get("currency"),
 				"billing_period": format_period(row.get("billing_period_from"), row.get("billing_period_to")),
@@ -66,6 +89,9 @@ def get_data(filters):
 				"retention_percent": row.get("retention_percent"),
 				"retention_amount": row.get("retention_amount"),
 				"net_payable": row.get("net_payable"),
+				"total_advance_received": row.get("total_advance_received"),
+				"actual_advance_recovered": row.get("actual_advance_recovered") or row.get("total_advance"),
+				"remaining_advance_after_current_bill": row.get("remaining_advance_after_current_bill"),
 				"sales_invoice": row.get("sales_invoice"),
 			}
 		)
