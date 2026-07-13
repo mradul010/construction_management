@@ -4,6 +4,10 @@ import frappe
 from frappe import _
 from frappe.utils import cint, flt, formatdate
 
+from construction_management.construction_management.advance_management import (
+	get_project_advance_summary,
+)
+
 
 INTERNAL_REPORT_ROLES = {
 	"System Manager",
@@ -163,13 +167,17 @@ def summary_metric(label, value, datatype="Currency", currency=None, indicator="
 
 
 def get_project_rows(filters):
-	project_fields = ["name", "project_name", "customer", "status", "current_boq"]
+	project_fields = ["name", "project_name", "customer", "sales_order", "company", "status", "current_boq"]
 	project_filters = {}
 
 	if filters.get("project"):
 		project_filters["name"] = filters.project
+	if filters.get("company") and doctype_has_field("Project", "company"):
+		project_filters["company"] = filters.company
 	if filters.get("customer") and doctype_has_field("Project", "customer"):
 		project_filters["customer"] = filters.customer
+	if filters.get("sales_order") and doctype_has_field("Project", "sales_order"):
+		project_filters["sales_order"] = filters.sales_order
 	if filters.get("project_status") and doctype_has_field("Project", "status"):
 		project_filters["status"] = filters.project_status
 
@@ -185,8 +193,10 @@ def get_boq_rows(filters, fields=None, project_names=None, include_cancelled=Fal
 	fields = fields or [
 		"name",
 		"project",
+		"sales_order",
 		"client",
 		"currency",
+		"global_margin_percent",
 		"revision_no",
 		"revision_status",
 		"is_active_revision",
@@ -213,6 +223,8 @@ def get_boq_rows(filters, fields=None, project_names=None, include_cancelled=Fal
 		boq_filters["project"] = filters.project
 	if filters.get("boq"):
 		boq_filters["name"] = filters.boq
+	if filters.get("sales_order") and doctype_has_field("BOQ", "sales_order"):
+		boq_filters["sales_order"] = filters.sales_order
 	if filters.get("customer") and doctype_has_field("BOQ", "client"):
 		boq_filters["client"] = filters.customer
 	if filters.get("status") and doctype_has_field("BOQ", "status"):
@@ -236,6 +248,7 @@ def get_ra_bill_rows(filters, fields=None, project_names=None, submitted_only=Fa
 		"bill_no",
 		"project",
 		"boq",
+		"sales_order",
 		"customer",
 		"currency",
 		"billing_period_from",
@@ -245,6 +258,14 @@ def get_ra_bill_rows(filters, fields=None, project_names=None, submitted_only=Fa
 		"retention_percent",
 		"retention_amount",
 		"net_payable",
+		"total_advance_received",
+		"previously_recovered_advance",
+		"remaining_advance_before_current_bill",
+		"advance_recovery_percent",
+		"proposed_advance_recovery",
+		"actual_advance_recovered",
+		"remaining_advance_after_current_bill",
+		"total_advance",
 		"sales_invoice",
 		"creation",
 		"modified",
@@ -263,6 +284,8 @@ def get_ra_bill_rows(filters, fields=None, project_names=None, submitted_only=Fa
 		rb_filters["name"] = filters.ra_bill
 	if filters.get("boq"):
 		rb_filters["boq"] = filters.boq
+	if filters.get("sales_order") and doctype_has_field("RA Bill", "sales_order"):
+		rb_filters["sales_order"] = filters.sales_order
 	if filters.get("customer"):
 		rb_filters["customer"] = filters.customer
 	if filters.get("status"):
@@ -789,10 +812,16 @@ def get_invoice_rows_for_ra_bills(ra_bill_rows):
 			rb.`name` AS ra_bill,
 			rb.`project` AS project,
 			rb.`boq` AS boq,
+			rb.`sales_order` AS sales_order,
 			rb.`customer` AS customer,
 			rb.`currency` AS currency,
 			si.`posting_date` AS posting_date,
 			si.`grand_total` AS grand_total,
+			COALESCE((
+				SELECT SUM(sia.`allocated_amount`)
+				FROM `tabSales Invoice Advance` sia
+				WHERE sia.`parent` = si.`name`
+			), 0) AS advance_allocated,
 			si.`outstanding_amount` AS outstanding_amount,
 			si.`status` AS status
 		FROM `tabRA Bill` rb
@@ -821,9 +850,15 @@ def get_project_construction_rows(filters):
 	ra_bills = get_ra_bill_rows(filters, project_names=project_names)
 	ra_by_project = {}
 	for row in ra_bills:
-		entry = ra_by_project.setdefault(row.project, {"total_ra_billed": 0, "total_net_payable": 0})
+		entry = ra_by_project.setdefault(
+			row.project,
+			{"total_ra_billed": 0, "total_net_payable": 0, "total_advance_recovered": 0},
+		)
 		entry["total_ra_billed"] += flt(row.get("gross_amount"))
 		entry["total_net_payable"] += flt(row.get("net_payable"))
+		entry["total_advance_recovered"] += flt(
+			row.get("actual_advance_recovered") or row.get("total_advance")
+		)
 
 	retention_by_project = {}
 	if table_exists("Retention Record"):
@@ -864,8 +899,12 @@ def get_project_construction_rows(filters):
 
 	invoice_rows = get_invoice_rows_for_ra_bills(ra_bills)
 	invoiced_by_project = {}
+	outstanding_by_project = {}
 	for row in invoice_rows:
 		invoiced_by_project[row.project] = invoiced_by_project.get(row.project, 0) + flt(row.grand_total)
+		outstanding_by_project[row.project] = outstanding_by_project.get(row.project, 0) + flt(
+			row.outstanding_amount
+		)
 
 	completed_by_project = {}
 	for row in get_work_progress_rows(filters):
@@ -885,18 +924,30 @@ def get_project_construction_rows(filters):
 		)
 		ra_totals = ra_by_project.get(project.name, {})
 		retention_totals = retention_by_project.get(project.name, {})
+		advance_summary = get_project_advance_summary(project.name)
 		completed_amount = completed_by_project.get(project.name, 0)
 
 		out.append(
 			{
 				"project": project.name,
 				"customer": project.get("customer"),
+				"sales_order": project.get("sales_order") or (current_boq.get("sales_order") if current_boq else None),
 				"current_active_boq": current_boq.name if current_boq else None,
-				"currency": current_boq.get("currency") if current_boq else None,
+				"currency": advance_summary.currency or (current_boq.get("currency") if current_boq else None),
+				"total_sales_order_value": flt(advance_summary.total_sales_order_value),
+				"total_customer_advance_received": flt(advance_summary.total_customer_advance_received),
+				"total_advance_recovered": flt(advance_summary.total_advance_recovered),
+				"remaining_advance_balance": flt(advance_summary.remaining_advance_balance),
+				"advance_recovery_percent": flt(advance_summary.advance_recovery_percent),
+				"sales_orders_with_advance": advance_summary.sales_orders_with_advance,
+				"last_advance_receipt_date": advance_summary.last_advance_receipt_date,
+				"last_advance_recovery_date": advance_summary.last_advance_recovery_date,
+				"advance_status": advance_summary.advance_status,
 				"boq_value": flt(boq_value),
 				"total_ra_billed": flt(ra_totals.get("total_ra_billed")),
 				"total_net_payable": flt(ra_totals.get("total_net_payable")),
 				"total_invoiced": flt(invoiced_by_project.get(project.name)),
+				"outstanding_receivable": flt(outstanding_by_project.get(project.name)),
 				"total_retention_held": flt(retention_totals.get("total_retention_held")),
 				"total_retention_invoiced": flt(retention_totals.get("total_retention_invoiced")),
 				"total_retention_paid": flt(retention_totals.get("total_retention_paid")),

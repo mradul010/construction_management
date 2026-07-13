@@ -169,14 +169,41 @@ after_migrate = "construction_management.construction_management.setup.after_mig
 
 doc_events = {
 	"Sales Invoice": {
-		"on_submit": "construction_management.construction_management.doctype.retention_record.retention_record.on_sales_invoice_submit",
-		"on_cancel": "construction_management.construction_management.doctype.retention_record.retention_record.on_sales_invoice_cancel",
-		"on_update_after_submit": "construction_management.construction_management.doctype.retention_record.retention_record.on_sales_invoice_update_after_submit",
+		"validate": [
+			"construction_management.construction_management.doctype.retention_record.retention_record.validate_sales_invoice_references",
+			"construction_management.construction_management.advance_management.validate_sales_invoice_advance_consistency",
+		],
+		"on_submit": [
+			"construction_management.construction_management.doctype.retention_record.retention_record.on_sales_invoice_submit",
+			"construction_management.construction_management.advance_management.on_sales_invoice_advance_change",
+		],
+		"on_cancel": [
+			"construction_management.construction_management.doctype.retention_record.retention_record.on_sales_invoice_cancel",
+			"construction_management.construction_management.advance_management.on_sales_invoice_advance_change",
+		],
+		"on_update_after_submit": [
+			"construction_management.construction_management.doctype.retention_record.retention_record.on_sales_invoice_update_after_submit",
+			"construction_management.construction_management.advance_management.on_sales_invoice_advance_change",
+		],
 	},
 	"Payment Entry": {
-		"on_submit": "construction_management.construction_management.doctype.retention_record.retention_record.on_payment_entry_submit",
-		"on_cancel": "construction_management.construction_management.doctype.retention_record.retention_record.on_payment_entry_cancel",
-		"on_update_after_submit": "construction_management.construction_management.doctype.retention_record.retention_record.on_payment_entry_update_after_submit",
+		"on_submit": [
+			"construction_management.construction_management.doctype.retention_record.retention_record.on_payment_entry_submit",
+			"construction_management.construction_management.advance_management.on_payment_entry_advance_change",
+		],
+		"on_cancel": [
+			"construction_management.construction_management.doctype.retention_record.retention_record.on_payment_entry_cancel",
+			"construction_management.construction_management.advance_management.on_payment_entry_advance_change",
+		],
+		"on_update_after_submit": [
+			"construction_management.construction_management.doctype.retention_record.retention_record.on_payment_entry_update_after_submit",
+			"construction_management.construction_management.advance_management.on_payment_entry_advance_change",
+		],
+	},
+	"Sales Order": {
+		"on_submit": "construction_management.construction_management.advance_management.on_sales_order_advance_context_change",
+		"on_cancel": "construction_management.construction_management.advance_management.on_sales_order_advance_context_change",
+		"on_update_after_submit": "construction_management.construction_management.advance_management.on_sales_order_advance_context_change",
 	},
 }
 
@@ -224,9 +251,11 @@ doc_events = {
 # each overriding function accepts a `data` argument;
 # generated from the base implementation of the doctype dashboard,
 # along with any modifications made in other Frappe apps
-# override_doctype_dashboards = {
-# 	"Task": "construction_management.task.get_dashboard_data"
-# }
+override_doctype_dashboards = {
+	"Project": "construction_management.construction_management.integrations.project_dashboard.get_data",
+	"Sales Invoice": "construction_management.construction_management.integrations.sales_invoice_dashboard.get_data",
+	"Sales Order": "construction_management.construction_management.integrations.sales_order_dashboard.get_data",
+}
 
 # exempt linked doctypes from being automatically cancelled
 #

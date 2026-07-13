@@ -7,6 +7,12 @@ frappe.query_reports["BOQ Report"] = {
 			options: "Project",
 		},
 		{
+			fieldname: "sales_order",
+			label: __("Sales Order"),
+			fieldtype: "Link",
+			options: "Sales Order",
+		},
+		{
 			fieldname: "customer",
 			label: __("Customer"),
 			fieldtype: "Link",

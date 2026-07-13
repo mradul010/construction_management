@@ -27,6 +27,31 @@ function calculateBoqRowAmounts(row) {
 	return row;
 }
 
+function recalculateBoqTotals(frm) {
+	let totalCost = 0;
+	let grandTotal = 0;
+
+	(frm.doc.items || []).forEach((row) => {
+		calculateBoqRowAmounts(row);
+		totalCost += boqNumber(row.amount);
+		grandTotal += boqNumber(row.amount_after_margin);
+	});
+
+	frm.doc.total_cost = totalCost;
+	frm.doc.grand_total = grandTotal;
+	frm.doc.total_margin = grandTotal - totalCost;
+	frm.doc.margin_percent = grandTotal ? ((grandTotal - totalCost) / grandTotal) * 100 : 0;
+	frm.doc.rate_per_bua = frm.doc.built_up_area ? grandTotal / boqNumber(frm.doc.built_up_area) : 0;
+
+	[
+		"total_cost",
+		"grand_total",
+		"total_margin",
+		"margin_percent",
+		"rate_per_bua",
+	].forEach((fieldname) => frm.refresh_field(fieldname));
+}
+
 function getBoqBaseAmount(row) {
 	return getBoqItemAmount(row);
 }
@@ -175,12 +200,194 @@ function validateBoqItemValues(row) {
 	return true;
 }
 
+function validateGlobalMargin(frm, requireValue = false) {
+	if (frm.doc.global_margin_percent === undefined || frm.doc.global_margin_percent === null || frm.doc.global_margin_percent === "") {
+		if (!requireValue) {
+			return true;
+		}
+		frappe.msgprint({
+			title: __("Global Margin Required"),
+			indicator: "orange",
+			message: __("Please enter Global Margin % before applying."),
+		});
+		return false;
+	}
+
+	if (boqNumber(frm.doc.global_margin_percent) < 0) {
+		frappe.msgprint({
+			title: __("Invalid Global Margin"),
+			indicator: "red",
+			message: __("Global Margin % cannot be negative."),
+		});
+		return false;
+	}
+
+	return true;
+}
+
 function validateAllBoqItemValues(frm) {
 	return (frm.doc.items || []).every((row) => validateBoqItemValues(row));
 }
 
 function canManageBoqRevisions() {
 	return BOQ_REVISION_ROLES.some((role) => frappe.user.has_role(role));
+}
+
+function canWriteBoq(frm) {
+	if (frm.has_perm) {
+		return frm.has_perm("write");
+	}
+	return Boolean(frm.perm && frm.perm[0] && frm.perm[0].write);
+}
+
+function isActiveBoqItem(row) {
+	return Boolean(row && !row.is_deleted_in_revision && row.item);
+}
+
+function applyGlobalMarginToItems(frm) {
+	if (!validateGlobalMargin(frm, true)) return;
+
+	const items = frm.doc.items || [];
+	if (!items.length) {
+		frappe.msgprint({
+			title: __("No BOQ Items"),
+			indicator: "orange",
+			message: __("No BOQ items available."),
+		});
+		return;
+	}
+
+	const globalMargin = boqNumber(frm.doc.global_margin_percent);
+	const activeItems = items.filter((row) => isActiveBoqItem(row));
+	if (!activeItems.length) {
+		frappe.msgprint({
+			title: __("No BOQ Items"),
+			indicator: "orange",
+			message: __("No BOQ items available."),
+		});
+		return;
+	}
+
+	frappe.warn(
+		__("Apply Global Margin"),
+		__(
+			"This will set Margin % to {0}% for all active BOQ items. Existing item-level margins will be overwritten. Continue?",
+			[globalMargin],
+		),
+		function () {
+			activeItems.forEach((row) => {
+				row.margin_percent = globalMargin;
+				calculateBoqRowAmounts(row);
+			});
+
+			recalculateBoqTotals(frm);
+			frm.refresh_field("items");
+			if (frm.boq_render_grid) {
+				frm.boq_render_grid();
+			}
+			if (frm.dirty) {
+				frm.dirty();
+			}
+
+			frappe.show_alert(
+				{
+					message: __("Global Margin % applied to active BOQ items. Click Save to keep changes."),
+					indicator: "blue",
+				},
+				5,
+			);
+		},
+		__("Apply"),
+	);
+}
+
+function carryGlobalMarginToItems(frm) {
+	if (!validateGlobalMargin(frm)) return;
+	if (frm.doc.global_margin_percent === undefined || frm.doc.global_margin_percent === null || frm.doc.global_margin_percent === "") {
+		return;
+	}
+
+	const items = frm.doc.items || [];
+	if (!items.length) return;
+
+	const globalMargin = boqNumber(frm.doc.global_margin_percent);
+	const activeItems = items.filter((row) => isActiveBoqItem(row));
+	if (!activeItems.length) return;
+
+	activeItems.forEach((row) => {
+		row.margin_percent = globalMargin;
+		calculateBoqRowAmounts(row);
+	});
+
+	recalculateBoqTotals(frm);
+	frm.refresh_field("items");
+	if (frm.boq_render_grid) {
+		frm.boq_render_grid();
+	}
+	if (frm.dirty) {
+		frm.dirty();
+	}
+}
+
+function addGlobalMarginButton(frm) {
+	if (frm.is_new() || frm.doc.docstatus !== 0 || frm.doc.docstatus === 2) return;
+	if (!canWriteBoq(frm)) return;
+
+	frm.add_custom_button(
+		__("Apply Global Margin to All Items"),
+		function () {
+			applyGlobalMarginToItems(frm);
+		},
+		__("Actions"),
+	);
+}
+
+function applySalesOrderToBoq(frm) {
+	if (!frm.doc.sales_order) return Promise.resolve();
+
+	const selectedSalesOrder = frm.doc.sales_order;
+	return frappe.db
+		.get_value("Sales Order", selectedSalesOrder, [
+			"customer",
+			"project",
+			"company",
+			"currency",
+		])
+		.then((r) => {
+			if (frm.doc.sales_order !== selectedSalesOrder) return;
+
+			const salesOrder = r.message || {};
+			const mappings = {
+				client: salesOrder.customer,
+				project: salesOrder.project,
+				company: salesOrder.company,
+				currency: salesOrder.currency,
+			};
+			const conflicts = [];
+			const updates = [];
+
+			Object.entries(mappings).forEach(([fieldname, value]) => {
+				if (!value) return;
+				if (!frm.doc[fieldname]) {
+					updates.push(frm.set_value(fieldname, value));
+				} else if (frm.doc[fieldname] !== value) {
+					conflicts.push(frm.fields_dict[fieldname]?.df.label || fieldname);
+				}
+			});
+
+			if (conflicts.length) {
+				frappe.msgprint({
+					title: __("Sales Order Mismatch"),
+					indicator: "orange",
+					message: __(
+						"The following BOQ values differ from Sales Order {0}: {1}. Correct them before saving.",
+						[selectedSalesOrder, conflicts.join(", ")],
+					),
+				});
+			}
+
+			return Promise.all(updates);
+		});
 }
 
 function isSubmittedApprovedOrActiveBoq(frm) {
@@ -399,6 +606,16 @@ frappe.ui.form.on("BOQ", {
 		frm._boq_cat_state = {};
 		frm._boq_sub_state = {};
 		frm._boq_registered = [];
+		frm.set_query("sales_order", function () {
+			const filters = [
+				["Sales Order", "docstatus", "=", 1],
+				["Sales Order", "status", "not in", ["Closed", "Cancelled", "On Hold"]],
+			];
+			if (frm.doc.client) filters.push(["Sales Order", "customer", "=", frm.doc.client]);
+			if (frm.doc.project) filters.push(["Sales Order", "project", "=", frm.doc.project]);
+			if (frm.doc.company) filters.push(["Sales Order", "company", "=", frm.doc.company]);
+			return { filters };
+		});
 
 		frm.boq_is_draft = function () {
 			return frm.doc.docstatus === 0;
@@ -593,7 +810,7 @@ frappe.ui.form.on("BOQ", {
 						fieldname: "margin_percent",
 						fieldtype: "Percent",
 						label: "Margin %",
-						default: 0,
+						default: boqNumber(frm.doc.global_margin_percent),
 						description: "Your profit margin — hidden from client",
 					},
 					{ fieldname: "notes", fieldtype: "Small Text", label: "Notes" },
@@ -1728,6 +1945,7 @@ title="${buildCostTooltip(row).replace(/"/g, "&quot;")}">
 
 						row.qty = qty;
 						recalculateInlineRow(row);
+						recalculateBoqTotals(frm);
 
 						if (frm.dirty) {
 							frm.dirty();
@@ -1761,6 +1979,7 @@ title="${buildCostTooltip(row).replace(/"/g, "&quot;")}">
 
 						row.unit_cost = unitCost;
 						recalculateInlineRow(row);
+						recalculateBoqTotals(frm);
 
 						if (frm.dirty) {
 							frm.dirty();
@@ -1794,13 +2013,13 @@ title="${buildCostTooltip(row).replace(/"/g, "&quot;")}">
 
 						row.margin_percent = margin;
 						recalculateInlineRow(row);
+						recalculateBoqTotals(frm);
 
 						if (frm.dirty) {
 							frm.dirty();
 						}
 						frm.refresh_field("items");
 						frm.boq_render_grid();
-						showInlineUpdateAlert();
 					});
 
 					// ── Toggle category ───────────────────────────────────
@@ -2001,10 +2220,16 @@ title="${buildCostTooltip(row).replace(/"/g, "&quot;")}">
 		if (!frm._boq_registered) frm._boq_registered = [];
 		frm.boq_render_grid();
 		addBoqRevisionButtons(frm);
+		addGlobalMarginButton(frm);
 	},
 
 	validate: function (frm) {
-		(frm.doc.items || []).forEach((row) => calculateBoqRowAmounts(row));
+		if (!validateGlobalMargin(frm)) {
+			frappe.validated = false;
+			return;
+		}
+
+		recalculateBoqTotals(frm);
 
 		if (!validateAllBoqItemValues(frm)) {
 			frappe.validated = false;
@@ -2016,6 +2241,14 @@ title="${buildCostTooltip(row).replace(/"/g, "&quot;")}">
 			frappe.validated = false;
 			return;
 		}
+	},
+
+	sales_order: function (frm) {
+		return applySalesOrderToBoq(frm);
+	},
+
+	global_margin_percent: function (frm) {
+		carryGlobalMarginToItems(frm);
 	},
 
 	after_save: function (frm) {
@@ -2034,7 +2267,7 @@ function resetBoqChildField(frm, cdt, cdn, fieldname, value) {
 
 function validateBoqChildField(frm, cdt, cdn, fieldname, resetValue) {
 	const row = locals[cdt][cdn];
-	if (!row) return;
+	if (!row) return false;
 
 	const candidate = { ...row };
 	if (fieldname === "unit_cost" || fieldname === "margin_percent") {
@@ -2045,20 +2278,41 @@ function validateBoqChildField(frm, cdt, cdn, fieldname, resetValue) {
 
 	if (!validateBoqItemValues(candidate)) {
 		resetBoqChildField(frm, cdt, cdn, fieldname, resetValue);
+		return false;
+	}
+
+	return true;
+}
+
+function recalculateBoqChildRow(frm, cdt, cdn) {
+	const row = locals[cdt][cdn];
+	if (!row) return;
+
+	calculateBoqRowAmounts(row);
+	recalculateBoqTotals(frm);
+	frm.refresh_field("items");
+	if (frm.boq_render_grid) {
+		frm.boq_render_grid();
 	}
 }
 
 frappe.ui.form.on("BOQ Item", {
 	qty: function (frm, cdt, cdn) {
-		validateBoqChildField(frm, cdt, cdn, "qty", 1);
+		if (validateBoqChildField(frm, cdt, cdn, "qty", 1)) {
+			recalculateBoqChildRow(frm, cdt, cdn);
+		}
 	},
 
 	unit_cost: function (frm, cdt, cdn) {
-		validateBoqChildField(frm, cdt, cdn, "unit_cost", 0);
+		if (validateBoqChildField(frm, cdt, cdn, "unit_cost", 0)) {
+			recalculateBoqChildRow(frm, cdt, cdn);
+		}
 	},
 
 	margin_percent: function (frm, cdt, cdn) {
-		validateBoqChildField(frm, cdt, cdn, "margin_percent", 0);
+		if (validateBoqChildField(frm, cdt, cdn, "margin_percent", 0)) {
+			recalculateBoqChildRow(frm, cdt, cdn);
+		}
 	},
 
 	unit_rate: function (frm, cdt, cdn) {

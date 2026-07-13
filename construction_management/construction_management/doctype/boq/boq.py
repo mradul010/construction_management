@@ -17,6 +17,7 @@ class BOQ(Document):
 
 	def validate(self):
 		self._set_revision_defaults()
+		self._sync_and_validate_sales_order()
 		self._validate_revision_edit_allowed()
 		self._ensure_component_keys()
 		self._fill_parent_categories()
@@ -24,6 +25,58 @@ class BOQ(Document):
 		self._calculate_totals()
 		self._calculate_revision_comparison()
 		self.validate_cost_breakdown_matches_amount()
+
+	def _sync_and_validate_sales_order(self):
+		"""Populate empty contract fields and keep the BOQ revision chain consistent."""
+		chain_source = self.parent_boq or self.original_boq
+		if chain_source and chain_source != self.name:
+			chain_sales_order = frappe.db.get_value("BOQ", chain_source, "sales_order")
+			if chain_sales_order and self.sales_order and self.sales_order != chain_sales_order:
+				frappe.throw(
+					_("BOQ revision Sales Order must match the Sales Order linked to BOQ {0}.").format(
+						chain_source
+					)
+				)
+			if chain_sales_order and not self.sales_order:
+				self.sales_order = chain_sales_order
+
+		if not self.sales_order:
+			return
+
+		sales_order = frappe.db.get_value(
+			"Sales Order",
+			self.sales_order,
+			["name", "customer", "project", "company", "currency", "docstatus", "status"],
+			as_dict=True,
+		)
+		if not sales_order:
+			frappe.throw(_("Sales Order {0} does not exist.").format(self.sales_order))
+		if sales_order.docstatus == 2 or sales_order.status == "Cancelled":
+			frappe.throw(
+				_("Sales Order {0} is cancelled and cannot be linked.").format(self.sales_order)
+			)
+		if sales_order.docstatus != 1:
+			frappe.throw(_("Sales Order {0} must be submitted before it can be linked.").format(self.sales_order))
+		if sales_order.status in ("Closed", "On Hold"):
+			frappe.throw(
+				_("Sales Order {0} has status {1} and cannot be linked.").format(
+					self.sales_order, sales_order.status
+				)
+			)
+
+		self._set_or_validate_contract_field("client", sales_order.customer, _("Customer"))
+		self._set_or_validate_contract_field("project", sales_order.project, _("Project"))
+		self._set_or_validate_contract_field("company", sales_order.company, _("Company"))
+		self._set_or_validate_contract_field("currency", sales_order.currency, _("Currency"))
+
+	def _set_or_validate_contract_field(self, fieldname, sales_order_value, label):
+		if not sales_order_value:
+			return
+		boq_value = self.get(fieldname)
+		if boq_value and boq_value != sales_order_value:
+			frappe.throw(_("BOQ {0} must match Sales Order {0}.").format(label))
+		if not boq_value:
+			self.set(fieldname, sales_order_value)
 
 	def _set_revision_defaults(self):
 		if self.revision_no is None:
@@ -101,6 +154,9 @@ class BOQ(Document):
 					) or row.boq_category
 
 	def validate_item_values(self):
+		if flt(self.global_margin_percent) < 0:
+			frappe.throw(_("Global Margin % cannot be negative."))
+
 		for row in self.items:
 			item = row.item_name or row.item or row.name
 

@@ -33,6 +33,7 @@ def get_columns(filters=None):
 		{"label": _("Customer"), "fieldname": "customer", "fieldtype": "Link", "options": "Customer", "width": 160},
 		{"label": _("Currency"), "fieldname": "currency", "fieldtype": "Link", "options": "Currency", "width": 90},
 		{"label": _("BOQ"), "fieldname": "boq", "fieldtype": "Link", "options": "BOQ", "width": 160},
+		{"label": _("Sales Order"), "fieldname": "sales_order", "fieldtype": "Link", "options": "Sales Order", "width": 160},
 		{"label": _("RA Bill"), "fieldname": "ra_bill", "fieldtype": "Link", "options": "RA Bill", "width": 160},
 		{
 			"label": _("Original Sales Invoice"),
@@ -108,6 +109,7 @@ def get_data(filters):
 		"project",
 		"customer",
 		"boq",
+		"sales_order",
 		"ra_bill",
 		"sales_invoice",
 		"retention_release_invoice",
@@ -133,6 +135,7 @@ def get_data(filters):
 			rr.`project`,
 			rr.`customer`,
 			rr.`boq`,
+			rr.`sales_order`,
 			rr.`ra_bill`,
 			rr.`sales_invoice`,
 			rr.`retention_release_invoice`,

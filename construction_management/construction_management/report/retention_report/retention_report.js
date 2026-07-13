@@ -19,6 +19,12 @@ frappe.query_reports["Retention Report"] = {
 			options: "BOQ",
 		},
 		{
+			fieldname: "sales_order",
+			label: __("Sales Order"),
+			fieldtype: "Link",
+			options: "Sales Order",
+		},
+		{
 			fieldname: "ra_bill",
 			label: __("RA Bill"),
 			fieldtype: "Link",

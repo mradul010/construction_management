@@ -32,9 +32,17 @@ def get_columns(filters=None):
 		{"label": _("RA Bill"), "fieldname": "ra_bill", "fieldtype": "Link", "options": "RA Bill", "width": 160},
 		{"label": _("Project"), "fieldname": "project", "fieldtype": "Link", "options": "Project", "width": 160},
 		{"label": _("BOQ"), "fieldname": "boq", "fieldtype": "Link", "options": "BOQ", "width": 160},
+		{"label": _("Sales Order"), "fieldname": "sales_order", "fieldtype": "Link", "options": "Sales Order", "width": 160},
 		{"label": _("Customer"), "fieldname": "customer", "fieldtype": "Link", "options": "Customer", "width": 160},
 		{"label": _("Posting Date"), "fieldname": "posting_date", "fieldtype": "Date", "width": 115},
 		{"label": _("Grand Total"), "fieldname": "grand_total", "fieldtype": "Currency", "options": "currency", "width": 140},
+		{
+			"label": _("Advance Allocated"),
+			"fieldname": "advance_allocated",
+			"fieldtype": "Currency",
+			"options": "currency",
+			"width": 150,
+		},
 		{
 			"label": _("Outstanding Amount"),
 			"fieldname": "outstanding_amount",
@@ -63,5 +71,6 @@ def get_report_summary(data):
 	currency = first_currency(data)
 	return [
 		summary_metric("Total Invoiced", sum_field(data, "grand_total"), currency=currency),
+		summary_metric("Advance Allocated", sum_field(data, "advance_allocated"), currency=currency),
 		summary_metric("Total Outstanding", sum_field(data, "outstanding_amount"), currency=currency),
 	]

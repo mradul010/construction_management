@@ -3,10 +3,18 @@ from frappe import _
 from frappe.model.document import Document
 from frappe.utils import flt, getdate, today
 
+from construction_management.construction_management.advance_management import (
+	apply_ra_bill_advances_to_sales_invoice,
+	set_item_sales_order,
+	update_ra_bill_advance_fields,
+	validate_ra_bill_advance_recovery,
+)
 from construction_management.construction_management.doctype.retention_record.retention_record import (
+	get_ra_bill_sales_order,
 	mark_cancelled_from_ra_bill,
 	set_sales_invoice_for_ra_bill,
 	sync_from_ra_bill,
+	validate_sales_invoice_references,
 )
 
 
@@ -24,6 +32,7 @@ RA_BILL_TAX_CHARGE_TYPES = {
 class RABill(Document):
 	def validate(self):
 		self._set_active_boq_for_project()
+		self._sync_and_validate_boq_contract()
 		self._validate_boq_matches_project()
 		self._validate_boq_is_active_for_new_bill()
 		self._set_bill_no()
@@ -36,6 +45,61 @@ class RABill(Document):
 		self._calculate_header_totals()
 		self._validate_payment_and_tax_fields()
 		self.calculate_taxes_and_grand_total()
+		validate_ra_bill_advance_recovery(self)
+
+	def _sync_and_validate_boq_contract(self):
+		if not self.boq:
+			return
+
+		boq = frappe.db.get_value(
+			"BOQ",
+			self.boq,
+			["name", "project", "client", "company", "currency", "sales_order"],
+			as_dict=True,
+		)
+		if not boq:
+			frappe.throw(_("BOQ {0} does not exist.").format(self.boq))
+
+		if self.sales_order and self.sales_order != boq.sales_order:
+			frappe.throw(
+				_("RA Bill Sales Order must match the Sales Order linked to BOQ {0}.").format(
+					self.boq
+				)
+			)
+		self.sales_order = boq.sales_order
+
+		self._set_or_validate_boq_field("project", boq.project, _("Project"))
+		self._set_or_validate_boq_field("customer", boq.client, _("Customer"))
+		self._set_or_validate_boq_field("currency", boq.currency, _("Currency"))
+
+		if boq.sales_order:
+			sales_order = frappe.db.get_value(
+				"Sales Order",
+				boq.sales_order,
+				["customer", "project", "company", "currency"],
+				as_dict=True,
+			)
+			if not sales_order:
+				frappe.throw(_("Sales Order {0} does not exist.").format(boq.sales_order))
+			for label, boq_value, sales_order_value in (
+				(_("Customer"), boq.client, sales_order.customer),
+				(_("Project"), boq.project, sales_order.project),
+				(_("Company"), boq.company, sales_order.company),
+				(_("Currency"), boq.currency, sales_order.currency),
+			):
+				if boq_value and sales_order_value and boq_value != sales_order_value:
+					frappe.throw(
+						_("BOQ {0} must match Sales Order {0}.").format(label)
+					)
+
+	def _set_or_validate_boq_field(self, fieldname, boq_value, label):
+		if not boq_value:
+			return
+		current_value = self.get(fieldname)
+		if current_value and current_value != boq_value:
+			frappe.throw(_("RA Bill {0} must match BOQ {0}.").format(label))
+		if not current_value:
+			self.set(fieldname, boq_value)
 
 	def _set_bill_no(self):
 		"""
@@ -342,7 +406,12 @@ class RABill(Document):
 		self.total_taxes_and_charges = total_taxes
 		self.grand_total = flt(self.net_payable) + total_taxes
 
-		self.total_advance = sum(flt(row.allocated_amount) for row in self.get("advances") or [])
+		advance_values = update_ra_bill_advance_fields(self)
+		self.total_advance = (
+			flt(advance_values.get("actual_advance_recovered"))
+			if advance_values
+			else sum(flt(row.allocated_amount) for row in self.get("advances") or [])
+		)
 		self.outstanding_amount = flt(self.grand_total) - flt(self.total_advance)
 
 	def on_submit(self):
@@ -394,6 +463,91 @@ class RABill(Document):
 		return self.name
 
 	@frappe.whitelist()
+	def get_advances_received(self):
+		source_sales_order = get_ra_bill_sales_order(self)
+		if not source_sales_order:
+			frappe.throw(_("No Sales Order is linked to this RA Bill or its BOQ."))
+
+		if not self.customer:
+			frappe.throw(_("Please set the Customer before fetching advances."))
+
+		from construction_management.construction_management.setup import (
+			get_or_create_ra_bill_receivable_account,
+		)
+
+		company = (
+			self.company
+			if self.meta.has_field("company") and self.get("company")
+			else frappe.defaults.get_user_default("Company")
+			or frappe.defaults.get_global_default("company")
+		)
+		if not company:
+			frappe.throw(_("Please set default Company before fetching advances."))
+
+		company_currency = frappe.get_cached_value("Company", company, "default_currency")
+		invoice_currency = self.currency or company_currency
+		receivable_account = get_or_create_ra_bill_receivable_account(company, invoice_currency)
+		party_account_currency = (
+			frappe.db.get_value("Account", receivable_account, "account_currency")
+			or invoice_currency
+		)
+
+		self.calculate_taxes_and_grand_total()
+		target_amount = flt(self.get("proposed_advance_recovery")) or flt(self.grand_total)
+		si = frappe.new_doc("Sales Invoice")
+		si.customer = self.customer
+		si.company = company
+		si.debit_to = receivable_account
+		si.currency = invoice_currency
+		si.party_account_currency = party_account_currency
+		si.conversion_rate = 1
+		si.posting_date = self.billing_period_to or today()
+		si.grand_total = flt(self.grand_total)
+		si.base_grand_total = flt(self.grand_total)
+		si.append(
+			"items",
+			{
+				"item_code": "RA Bill Services",
+				"qty": 1,
+				"rate": flt(self.gross_amount) or 1,
+				"sales_order": source_sales_order,
+			},
+		)
+		si.grand_total = flt(self.grand_total)
+		si.base_grand_total = flt(self.grand_total)
+
+		from construction_management.construction_management.advance_management import (
+			apply_standard_advances_to_sales_invoice,
+		)
+
+		apply_standard_advances_to_sales_invoice(si, target_amount)
+		self.set("advances", [])
+		for row in si.get("advances") or []:
+			self.append(
+				"advances",
+				{
+					"reference_type": row.reference_type,
+					"reference_name": row.reference_name,
+					"remarks": row.remarks,
+					"advance_amount": row.advance_amount,
+					"allocated_amount": row.allocated_amount,
+					"difference_posting_date": row.difference_posting_date,
+				},
+			)
+		self.calculate_taxes_and_grand_total()
+		return {
+			"advances": [row.as_dict() for row in self.get("advances")],
+			"total_advance": self.total_advance,
+			"outstanding_amount": self.outstanding_amount,
+			"total_advance_received": self.get("total_advance_received"),
+			"previously_recovered_advance": self.get("previously_recovered_advance"),
+			"remaining_advance_before_current_bill": self.get("remaining_advance_before_current_bill"),
+			"proposed_advance_recovery": self.get("proposed_advance_recovery"),
+			"actual_advance_recovered": self.get("actual_advance_recovered"),
+			"remaining_advance_after_current_bill": self.get("remaining_advance_after_current_bill"),
+		}
+
+	@frappe.whitelist()
 	def create_sales_invoice(self):
 		"""
 		Creates a draft Sales Invoice from this approved RA Bill.
@@ -440,6 +594,7 @@ class RABill(Document):
 		invoice_currency = self.currency or company_currency or "AED"
 		conversion_rate = 1.0
 		receivable_account = get_or_create_ra_bill_receivable_account(company, invoice_currency)
+		source_sales_order = get_ra_bill_sales_order(self)
 
 		def set_if_exists(doc, fieldname, value):
 			if doc.meta.has_field(fieldname) and value not in (None, ""):
@@ -503,6 +658,8 @@ class RABill(Document):
 			set_if_exists(si, "select_print_heading", self.select_print_heading)
 			set_if_exists(si, "language", self.language)
 			set_if_exists(si, "ra_bill", self.name)
+			set_if_exists(si, "boq", self.boq)
+			set_if_exists(si, "sales_order", source_sales_order)
 
 			set_link_if_valid(
 				si,
@@ -633,8 +790,12 @@ class RABill(Document):
 			}
 			si = frappe.get_doc(si_data)
 			add_advanced_fields(si)
+			validate_sales_invoice_references(si)
 			if hasattr(si, "set_missing_values"):
 				si.set_missing_values()
+			if hasattr(si, "calculate_taxes_and_totals"):
+				si.calculate_taxes_and_totals()
+			apply_ra_bill_advances_to_sales_invoice(si, self)
 			if hasattr(si, "calculate_taxes_and_totals"):
 				si.calculate_taxes_and_totals()
 			si.insert(ignore_permissions=True)
@@ -707,6 +868,8 @@ class RABill(Document):
 
 		if not invoice_items:
 			frappe.throw("No RA Bill Items with a positive current amount were found to invoice.")
+
+		set_item_sales_order(invoice_items, source_sales_order)
 
 		invoice_gross = sum(
 			flt(item.get("qty")) * flt(item.get("rate")) for item in invoice_items

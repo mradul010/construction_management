@@ -8,6 +8,7 @@
   "retention_record",
   "ra_bill",
   "boq",
+  "sales_order",
   "project",
   "retention_amount",
   "balance_amount"
@@ -33,6 +34,13 @@
    "fieldtype": "Link",
    "label": "BOQ",
    "options": "BOQ"
+  },
+  {
+   "fieldname": "sales_order",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Sales Order",
+   "options": "Sales Order"
   },
   {
    "fieldname": "project",

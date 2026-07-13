@@ -10,8 +10,44 @@ CANCEL_REMARK = "Cancelled because RA Bill was cancelled"
 
 class RetentionRecord(Document):
 	def validate(self):
+		self._sync_and_validate_ra_bill_links()
 		self._validate_amounts()
 		self._set_balance_and_status()
+
+	def _sync_and_validate_ra_bill_links(self):
+		if not self.ra_bill:
+			return
+
+		expected = get_ra_bill_reference_values(self.ra_bill)
+		if not expected:
+			frappe.throw(_("RA Bill {0} does not exist.").format(self.ra_bill))
+
+		for fieldname, label in (
+			("customer", _("Customer")),
+			("project", _("Project")),
+			("boq", _("BOQ")),
+			("sales_order", _("Sales Order")),
+		):
+			expected_value = expected.get(fieldname)
+			if not expected_value:
+				continue
+
+			current_value = self.get(fieldname)
+			if current_value and current_value != expected_value:
+				if fieldname == "sales_order":
+					frappe.throw(
+						_("Retention Record Sales Order must match the Sales Order linked to RA Bill {0}.").format(
+							self.ra_bill
+						)
+					)
+				frappe.throw(
+					_("Retention Record {0} must match the {0} linked to RA Bill {1}.").format(
+						label,
+						self.ra_bill,
+					)
+				)
+			if not current_value:
+				self.set(fieldname, expected_value)
 
 	def _validate_amounts(self):
 		if flt(self.gross_amount) < 0:
@@ -99,6 +135,8 @@ class RetentionRecord(Document):
 		ra_bill_doc = None
 		if self.ra_bill and frappe.db.exists("RA Bill", self.ra_bill):
 			ra_bill_doc = frappe.get_doc("RA Bill", self.ra_bill)
+		self._sync_and_validate_ra_bill_links()
+		sales_order = get_retention_record_sales_order(self)
 		currency = (
 			getattr(ra_bill_doc, "currency", None)
 			or company_currency
@@ -138,6 +176,9 @@ class RetentionRecord(Document):
 			invoice.boq = self.boq
 		if invoice.meta.has_field("project") and self.project:
 			invoice.project = self.project
+		if invoice.meta.has_field("sales_order") and sales_order:
+			invoice.sales_order = sales_order
+		validate_sales_invoice_references(invoice)
 		invoice.set_missing_values()
 		if hasattr(invoice, "calculate_taxes_and_totals"):
 			invoice.calculate_taxes_and_totals()
@@ -210,6 +251,7 @@ def create_sales_invoice_for_retention_records(retention_records):
 
 	customer = records[0].customer
 	project = records[0].project
+	sales_order = get_retention_record_sales_order(records[0])
 	if not customer or not frappe.db.exists("Customer", customer):
 		frappe.throw(_("Customer {0} does not exist.").format(customer or ""))
 
@@ -234,6 +276,7 @@ def create_sales_invoice_for_retention_records(retention_records):
 	)
 
 	_set_if_meta_has_field(invoice, "project", project)
+	_set_if_meta_has_field(invoice, "sales_order", sales_order)
 	if len(records) == 1:
 		_set_if_meta_has_field(invoice, "retention_record", records[0].name)
 		_set_if_meta_has_field(invoice, "ra_bill", records[0].ra_bill)
@@ -269,6 +312,7 @@ def create_sales_invoice_for_retention_records(retention_records):
 				"retention_record": record.name,
 				"ra_bill": record.ra_bill,
 				"boq": record.boq,
+				"sales_order": get_retention_record_sales_order(record),
 				"project": record.project,
 				"retention_amount": record.retention_amount,
 				"balance_amount": record.balance_amount,
@@ -282,6 +326,7 @@ def create_sales_invoice_for_retention_records(retention_records):
 				},
 			)
 
+	validate_sales_invoice_references(invoice)
 	if hasattr(invoice, "set_missing_values"):
 		invoice.set_missing_values()
 	if hasattr(invoice, "calculate_taxes_and_totals"):
@@ -309,6 +354,7 @@ def sync_from_ra_bill(ra_bill, sales_invoice=None):
 	record.project = ra_bill.project
 	record.customer = ra_bill.customer
 	record.boq = ra_bill.boq
+	record.sales_order = get_ra_bill_sales_order(ra_bill)
 	record.sales_invoice = sales_invoice or ra_bill.sales_invoice
 	record.retention_percent = ra_bill.retention_percent
 	record.gross_amount = ra_bill.gross_amount
@@ -327,13 +373,12 @@ def set_sales_invoice_for_ra_bill(ra_bill, sales_invoice):
 	if not record_name:
 		return sync_from_ra_bill(ra_bill, sales_invoice=sales_invoice)
 
-	frappe.db.set_value(
-		"Retention Record",
-		record_name,
-		"sales_invoice",
-		sales_invoice,
-		update_modified=True,
-	)
+	values = {"sales_invoice": sales_invoice}
+	sales_order = get_ra_bill_sales_order(ra_bill)
+	if frappe.get_meta("Retention Record").has_field("sales_order") and sales_order:
+		values["sales_order"] = sales_order
+
+	frappe.db.set_value("Retention Record", record_name, values, update_modified=True)
 	return record_name
 
 
@@ -384,6 +429,15 @@ def _validate_retention_records_for_invoice(records):
 	projects = {record.project for record in records if record.project}
 	if any(not record.project for record in records) or len(projects) != 1:
 		frappe.throw(_("Please select Retention Records for the same Project only."))
+
+	for record in records:
+		record._sync_and_validate_ra_bill_links()
+
+	sales_orders = {get_retention_record_sales_order(record) for record in records}
+	sales_orders.discard(None)
+	sales_orders.discard("")
+	if len(sales_orders) > 1:
+		frappe.throw(_("Please select Retention Records for the same Sales Order only."))
 
 	for record in records:
 		if record.status == "Cancelled":
@@ -465,6 +519,144 @@ def _get_retention_invoice_item_description(record):
 def _set_if_meta_has_field(doc, fieldname, value):
 	if doc.meta.has_field(fieldname) and value not in (None, ""):
 		doc.set(fieldname, value)
+
+
+def get_ra_bill_sales_order(ra_bill):
+	if not ra_bill:
+		return None
+
+	if isinstance(ra_bill, str):
+		values = get_ra_bill_reference_values(ra_bill)
+	else:
+		values = get_ra_bill_reference_values(ra_bill.name, ra_bill_doc=ra_bill)
+
+	return values.get("sales_order") if values else None
+
+
+def get_retention_record_sales_order(record):
+	if not record:
+		return None
+
+	sales_order = record.get("sales_order")
+	if sales_order:
+		return sales_order
+
+	if record.get("ra_bill"):
+		return get_ra_bill_sales_order(record.ra_bill)
+
+	if record.get("boq"):
+		return frappe.db.get_value("BOQ", record.boq, "sales_order")
+
+	return None
+
+
+def get_ra_bill_reference_values(ra_bill, ra_bill_doc=None):
+	if not ra_bill:
+		return frappe._dict()
+
+	if ra_bill_doc:
+		values = frappe._dict(
+			{
+				"name": ra_bill_doc.name,
+				"customer": ra_bill_doc.get("customer"),
+				"project": ra_bill_doc.get("project"),
+				"boq": ra_bill_doc.get("boq"),
+				"sales_order": ra_bill_doc.get("sales_order"),
+			}
+		)
+	else:
+		values = frappe.db.get_value(
+			"RA Bill",
+			ra_bill,
+			["name", "customer", "project", "boq", "sales_order"],
+			as_dict=True,
+		)
+
+	if not values:
+		return frappe._dict()
+
+	boq_values = None
+	if values.get("boq"):
+		boq_values = frappe.db.get_value(
+			"BOQ",
+			values.boq,
+			["sales_order", "client", "project"],
+			as_dict=True,
+		)
+
+	if values.get("sales_order") and boq_values and boq_values.get("sales_order"):
+		if values.sales_order != boq_values.sales_order:
+			frappe.throw(
+				_("RA Bill Sales Order must match the Sales Order linked to BOQ {0}.").format(
+					values.boq
+				)
+			)
+
+	if not values.get("sales_order") and boq_values:
+		values.sales_order = boq_values.get("sales_order")
+
+	return values
+
+
+def validate_sales_invoice_references(invoice, method=None):
+	if not invoice:
+		return
+
+	if getattr(invoice, "retention_record", None):
+		_validate_retention_sales_invoice_references(invoice)
+	elif getattr(invoice, "ra_bill", None):
+		_validate_ra_bill_sales_invoice_references(invoice)
+
+
+def _validate_ra_bill_sales_invoice_references(invoice):
+	expected = get_ra_bill_reference_values(invoice.ra_bill)
+	if not expected:
+		frappe.throw(_("RA Bill {0} does not exist.").format(invoice.ra_bill))
+
+	_validate_invoice_field(invoice, "customer", expected.customer, _("Customer"))
+	_validate_invoice_field(invoice, "project", expected.project, _("Project"))
+	_validate_invoice_field(invoice, "boq", expected.boq, _("BOQ"))
+	_validate_invoice_field(
+		invoice,
+		"sales_order",
+		expected.sales_order,
+		_("Sales Order"),
+		mismatch_message=_("Sales Invoice Sales Order must match the Sales Order linked to the originating RA Bill."),
+	)
+
+
+def _validate_retention_sales_invoice_references(invoice):
+	record = frappe.get_doc("Retention Record", invoice.retention_record)
+	record._sync_and_validate_ra_bill_links()
+	expected_sales_order = get_retention_record_sales_order(record)
+
+	_validate_invoice_field(invoice, "customer", record.customer, _("Customer"))
+	_validate_invoice_field(invoice, "project", record.project, _("Project"))
+	_validate_invoice_field(invoice, "ra_bill", record.ra_bill, _("RA Bill"))
+	_validate_invoice_field(invoice, "boq", record.boq, _("BOQ"))
+	_validate_invoice_field(
+		invoice,
+		"sales_order",
+		expected_sales_order,
+		_("Sales Order"),
+		mismatch_message=_("Retention Sales Invoice Sales Order must match the Sales Order linked to Retention Record {0}.").format(
+			record.name
+		),
+	)
+
+
+def _validate_invoice_field(invoice, fieldname, expected_value, label, mismatch_message=None):
+	if not expected_value or not invoice.meta.has_field(fieldname):
+		return
+
+	current_value = invoice.get(fieldname)
+	if current_value and current_value != expected_value:
+		frappe.throw(
+			mismatch_message
+			or _("Sales Invoice {0} must match the source document {0}.").format(label)
+		)
+	if not current_value:
+		invoice.set(fieldname, expected_value)
 
 
 def _update_retention_record_for_draft_invoice(record, invoice_name):

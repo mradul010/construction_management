@@ -1,8 +1,10 @@
 # Copyright (c) 2026, Vigisolvo Private Limited and Contributors
 # See license.txt
 
+from unittest.mock import patch
+
 import frappe
-from frappe.tests import IntegrationTestCase
+from frappe.tests import UnitTestCase
 
 
 # On IntegrationTestCase, the doctype test records and all
@@ -12,7 +14,7 @@ EXTRA_TEST_RECORD_DEPENDENCIES = []  # eg. ["User"]
 IGNORE_TEST_RECORD_DEPENDENCIES = []  # eg. ["User"]
 
 
-class IntegrationTestBOQ(IntegrationTestCase):
+class IntegrationTestBOQ(UnitTestCase):
 	"""
 	Integration tests for BOQ.
 	Use this class for testing interactions between multiple components.
@@ -55,6 +57,44 @@ class IntegrationTestBOQ(IntegrationTestCase):
 
 		with self.assertRaises(frappe.ValidationError):
 			boq.validate_cost_breakdown_matches_amount()
+
+	@patch("frappe.db.get_value")
+	def test_sales_order_populates_empty_contract_fields(self, get_value):
+		get_value.return_value = frappe._dict(
+			name="SO-TEST",
+			customer="CUSTOMER-TEST",
+			project="PROJECT-TEST",
+			company="COMPANY-TEST",
+			currency="AED",
+			docstatus=1,
+			status="To Bill",
+		)
+		boq = frappe.get_doc({"doctype": "BOQ", "sales_order": "SO-TEST"})
+
+		boq._sync_and_validate_sales_order()
+
+		self.assertEqual(boq.client, "CUSTOMER-TEST")
+		self.assertEqual(boq.project, "PROJECT-TEST")
+		self.assertEqual(boq.company, "COMPANY-TEST")
+		self.assertEqual(boq.currency, "AED")
+
+	@patch("frappe.db.get_value")
+	def test_sales_order_rejects_customer_mismatch(self, get_value):
+		get_value.return_value = frappe._dict(
+			name="SO-TEST",
+			customer="CUSTOMER-TEST",
+			project="PROJECT-TEST",
+			company="COMPANY-TEST",
+			currency="AED",
+			docstatus=1,
+			status="To Bill",
+		)
+		boq = frappe.get_doc(
+			{"doctype": "BOQ", "sales_order": "SO-TEST", "client": "OTHER-CUSTOMER"}
+		)
+
+		with self.assertRaises(frappe.ValidationError):
+			boq._sync_and_validate_sales_order()
 
 	def _make_boq_with_cost_breakdown(self, breakdown_amount):
 		boq = frappe.get_doc({

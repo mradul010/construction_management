@@ -57,7 +57,8 @@ def ensure_sales_invoice_ra_bill_field():
 	for fieldname, label, options, insert_after in [
 		("ra_bill", "RA Bill", "RA Bill", "project"),
 		("boq", "BOQ", "BOQ", "ra_bill"),
-		("retention_record", "Retention Record", "Retention Record", "boq"),
+		("sales_order", "Sales Order", "Sales Order", "boq"),
+		("retention_record", "Retention Record", "Retention Record", "sales_order"),
 	]:
 		if frappe.get_meta("Sales Invoice").has_field(fieldname):
 			continue

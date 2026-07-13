@@ -19,6 +19,7 @@
     "project",
     "customer",
     "boq",
+    "sales_order",
     "ra_bill",
     "sales_invoice",
     "retention_release_invoice",
@@ -65,6 +66,15 @@
       "in_list_view": 1,
       "label": "BOQ",
       "options": "BOQ"
+    },
+    {
+      "fieldname": "sales_order",
+      "fieldtype": "Link",
+      "in_standard_filter": 1,
+      "label": "Sales Order",
+      "options": "Sales Order",
+      "read_only": 1,
+      "search_index": 1
     },
     {
       "fieldname": "reference_column",
@@ -236,7 +246,7 @@
       "write": 1
     }
   ],
-  "search_fields": "project,customer,boq,ra_bill,sales_invoice,status",
+  "search_fields": "project,customer,boq,sales_order,ra_bill,sales_invoice,status",
   "sort_field": "creation",
   "sort_order": "DESC",
   "states": [],
