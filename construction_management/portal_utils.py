@@ -2,6 +2,17 @@ import frappe
 from frappe import _
 
 
+CONSTRUCTION_PORTAL_ITEMS = [
+	{"title": _("Dashboard"), "route": "/construction-portal"},
+	{"title": _("Projects"), "route": "/construction-projects"},
+	{"title": _("BOQ"), "route": "/boq"},
+	{"title": _("RA Bills"), "route": "/ra-bill"},
+	{"title": _("Work Progress"), "route": "/work-progress"},
+	{"title": _("Daily Progress Reports"), "route": "/dprs"},
+	{"title": _("Logout"), "route": "/?cmd=web_logout"},
+]
+
+
 def require_portal_customer():
 	if frappe.session.user == "Guest":
 		frappe.throw(_("Please login."), frappe.PermissionError)
@@ -141,6 +152,36 @@ def get_boq_customer_field():
 	frappe.throw(_("BOQ does not have a Customer field."))
 
 
+def get_project_customer_field():
+	meta = frappe.get_meta("Project")
+	if meta.has_field("customer"):
+		return "customer"
+	if meta.has_field("client"):
+		return "client"
+
+	return None
+
+
+def get_project_customer(project):
+	if not project:
+		return None
+
+	customer_field = get_project_customer_field()
+	if not customer_field:
+		return None
+
+	return frappe.db.get_value("Project", project, customer_field)
+
+
+def validate_project_customer(project_name, customer):
+	if not project_name:
+		frappe.throw(_("Document not specified."))
+
+	project_customer = get_project_customer(project_name)
+	if not project_customer or project_customer != customer:
+		frappe.throw(_("Not permitted."), frappe.PermissionError)
+
+
 def validate_boq_customer(boq_name, customer):
 	if not boq_name:
 		frappe.throw(_("Document not specified."))
@@ -159,6 +200,26 @@ def validate_ra_bill_customer(ra_bill_name, customer):
 		frappe.throw(_("Not permitted."), frappe.PermissionError)
 
 
+def validate_dpr_customer(dpr_name, customer):
+	if not dpr_name:
+		frappe.throw(_("Document not specified."))
+
+	dpr = frappe.db.get_value(
+		"Daily Progress Report",
+		dpr_name,
+		["customer", "docstatus", "publish_to_portal", "status"],
+		as_dict=True,
+	)
+	if (
+		not dpr
+		or dpr.customer != customer
+		or dpr.docstatus != 1
+		or not dpr.publish_to_portal
+		or dpr.status == "Cancelled"
+	):
+		frappe.throw(_("Not permitted."), frappe.PermissionError)
+
+
 def log_portal_access(customer):
 	try:
 		frappe.logger("construction_management.portal").debug(
@@ -172,3 +233,24 @@ def log_portal_access(customer):
 		)
 	except Exception:
 		pass
+
+
+def setup_portal_context(context, title, route=None, description=None, parents=None):
+	context.show_sidebar = True
+	context.sidebar_title = _("Construction Portal")
+	context.sidebar_items = CONSTRUCTION_PORTAL_ITEMS
+	context.title = title
+	context.portal_title = title
+	context.portal_description = description
+	context.parents = parents or [{"name": _("Construction Portal"), "route": "/construction-portal"}]
+	context.no_breadcrumbs = False
+	if route:
+		context.route = route
+
+
+def get_request_filters(*names):
+	return frappe._dict({name: (frappe.form_dict.get(name) or "").strip() for name in names})
+
+
+def build_like_filter(txt):
+	return ["like", f"%{txt}%"] if txt else None

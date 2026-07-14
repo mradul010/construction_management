@@ -157,127 +157,6 @@
   {
    "hidden": 0,
    "is_query_report": 0,
-   "label": "Project Managment",
-   "link_count": 4,
-   "link_type": "DocType",
-   "onboard": 0,
-   "type": "Card Break"
-  },
-  {
-   "hidden": 0,
-   "is_query_report": 0,
-   "label": "Project",
-   "link_count": 0,
-   "link_to": "Project",
-   "link_type": "DocType",
-   "onboard": 0,
-   "type": "Link"
-  },
-  {
-   "hidden": 0,
-   "is_query_report": 0,
-   "label": "Task",
-   "link_count": 0,
-   "link_to": "Task",
-   "link_type": "DocType",
-   "onboard": 0,
-   "type": "Link"
-  },
-  {
-   "hidden": 0,
-   "is_query_report": 0,
-   "label": "Timesheet",
-   "link_count": 0,
-   "link_to": "Timesheet",
-   "link_type": "DocType",
-   "onboard": 0,
-   "type": "Link"
-  },
-  {
-   "hidden": 0,
-   "is_query_report": 0,
-   "label": "SC Work Order",
-   "link_count": 0,
-   "link_to": "Subcontracting BOM",
-   "link_type": "DocType",
-   "onboard": 0,
-   "type": "Link"
-  },
-  {
-   "hidden": 0,
-   "is_query_report": 0,
-   "label": "Reports",
-   "link_count": 6,
-   "link_type": "DocType",
-   "onboard": 0,
-   "type": "Card Break"
-  },
-  {
-   "hidden": 0,
-   "is_query_report": 1,
-   "label": "Project Construction Report",
-   "link_count": 0,
-   "link_to": "Project Construction Report",
-   "link_type": "Report",
-   "onboard": 0,
-   "type": "Link"
-  },
-  {
-   "hidden": 0,
-   "is_query_report": 1,
-   "label": "BOQ Report",
-   "link_count": 0,
-   "link_to": "BOQ Report",
-   "link_type": "Report",
-   "onboard": 0,
-   "type": "Link"
-  },
-  {
-   "hidden": 0,
-   "is_query_report": 1,
-   "label": "RA Bill Report",
-   "link_count": 0,
-   "link_to": "RA Bill Report",
-   "link_type": "Report",
-   "onboard": 0,
-   "report_ref_doctype": "RA Bill",
-   "type": "Link"
-  },
-  {
-   "hidden": 0,
-   "is_query_report": 1,
-   "label": "Work Progress Report",
-   "link_count": 0,
-   "link_to": "Work Progress Report",
-   "link_type": "Report",
-   "onboard": 0,
-   "report_ref_doctype": "BOQ",
-   "type": "Link"
-  },
-  {
-   "hidden": 0,
-   "is_query_report": 1,
-   "label": "Retention Report",
-   "link_count": 0,
-   "link_to": "Retention Report",
-   "link_type": "Report",
-   "onboard": 0,
-   "report_ref_doctype": "Retention Record",
-   "type": "Link"
-  },
-  {
-   "hidden": 0,
-   "is_query_report": 1,
-   "label": "BOQ Revision Report",
-   "link_count": 0,
-   "link_to": "BOQ Revision Report",
-   "link_type": "Report",
-   "onboard": 0,
-   "type": "Link"
-  },
-  {
-   "hidden": 0,
-   "is_query_report": 0,
    "label": "Procurement & Costing",
    "link_count": 5,
    "link_type": "DocType",
@@ -382,9 +261,147 @@
    "link_type": "DocType",
    "onboard": 0,
    "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Project Managment",
+   "link_count": 5,
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Card Break"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Project",
+   "link_count": 0,
+   "link_to": "Project",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "DPR",
+   "link_count": 0,
+   "link_to": "Daily Progress Report",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Task",
+   "link_count": 0,
+   "link_to": "Task",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Timesheet",
+   "link_count": 0,
+   "link_to": "Timesheet",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "SC Work Order",
+   "link_count": 0,
+   "link_to": "Subcontracting BOM",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Reports",
+   "link_count": 7,
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Card Break"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 1,
+   "label": "Project Construction Report",
+   "link_count": 0,
+   "link_to": "Project Construction Report",
+   "link_type": "Report",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 1,
+   "label": "DPR Report",
+   "link_count": 0,
+   "link_to": "DPR Register",
+   "link_type": "Report",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 1,
+   "label": "BOQ Report",
+   "link_count": 0,
+   "link_to": "BOQ Report",
+   "link_type": "Report",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 1,
+   "label": "RA Bill Report",
+   "link_count": 0,
+   "link_to": "RA Bill Report",
+   "link_type": "Report",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 1,
+   "label": "Work Progress Report",
+   "link_count": 0,
+   "link_to": "Work Progress Report",
+   "link_type": "Report",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 1,
+   "label": "Retention Report",
+   "link_count": 0,
+   "link_to": "Retention Report",
+   "link_type": "Report",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 1,
+   "label": "BOQ Revision Report",
+   "link_count": 0,
+   "link_to": "BOQ Revision Report",
+   "link_type": "Report",
+   "onboard": 0,
+   "type": "Link"
   }
  ],
- "modified": "2026-07-09 11:56:33.878210",
+ "modified": "2026-07-14 13:29:24.553185",
  "modified_by": "Administrator",
  "module": "Construction Management",
  "name": "Construction Management",

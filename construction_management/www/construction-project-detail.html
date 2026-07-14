@@ -1,0 +1,179 @@
+{% extends "templates/web.html" %}
+
+{% block page_content %}
+<div class="construction-portal">
+	{% include "construction_management/templates/includes/construction_portal/header.html" %}
+
+	<div class="construction-card">
+		<div class="construction-detail-list">
+			<div>
+				<dt>Project Name</dt>
+				<dd>{{ project.project_name or project.name }}</dd>
+			</div>
+			<div>
+				<dt>Customer</dt>
+				<dd>{{ project.customer or project.client or customer }}</dd>
+			</div>
+			<div>
+				<dt>Status</dt>
+				<dd>{{ project.status or "-" }}</dd>
+			</div>
+			<div>
+				<dt>Project Code</dt>
+				<dd>{{ project.project_code or project.name }}</dd>
+			</div>
+			<div>
+				<dt>Progress</dt>
+				<dd>{{ project.percent_complete or 0 }}%</dd>
+			</div>
+			<div>
+				<dt>Expected End Date</dt>
+				<dd>{{ project.expected_end_date or "-" }}</dd>
+			</div>
+		</div>
+	</div>
+
+	<div class="construction-section">
+		<div class="construction-section-header">
+			<h2>BOQs</h2>
+			<a class="btn btn-sm btn-light" href="/boq?project={{ project.name | urlencode }}">View All</a>
+		</div>
+		<div class="construction-table table-responsive">
+			<table class="table table-hover table-sm">
+				<thead>
+					<tr>
+						<th>BOQ</th>
+						<th>Revision</th>
+						<th>Status</th>
+						<th>Total Value</th>
+						<th></th>
+					</tr>
+				</thead>
+				<tbody>
+					{% for boq in boqs %}
+					<tr>
+						<td>{{ boq.name }}</td>
+						<td>Rev {{ boq.revision_no or 0 }}</td>
+						<td>{{ boq.revision_status or boq.status or "-" }}</td>
+						<td>{{ boq.grand_total or 0 }}</td>
+						<td class="text-right"><a class="btn btn-sm btn-primary" href="/boq-detail?name={{ boq.name | urlencode }}">View</a></td>
+					</tr>
+					{% else %}
+						{% set columns = 5 %}
+						{% set message = "No BOQs found." %}
+						{% include "construction_management/templates/includes/construction_portal/table_empty.html" %}
+					{% endfor %}
+				</tbody>
+			</table>
+		</div>
+	</div>
+
+	<div class="construction-section">
+		<div class="construction-section-header">
+			<h2>RA Bills</h2>
+			<a class="btn btn-sm btn-light" href="/ra-bill?project={{ project.name | urlencode }}">View All</a>
+		</div>
+		<div class="construction-table table-responsive">
+			<table class="table table-hover table-sm">
+				<thead>
+					<tr>
+						<th>RA Bill</th>
+						<th>Billing Period</th>
+						<th>Gross Amount</th>
+						<th>Net Payable</th>
+						<th>Status</th>
+						<th></th>
+					</tr>
+				</thead>
+				<tbody>
+					{% for bill in ra_bills %}
+					<tr>
+						<td>{{ bill.name }}</td>
+						<td>{{ bill.billing_period_from or "-" }} to {{ bill.billing_period_to or "-" }}</td>
+						<td>{{ bill.gross_amount or 0 }}</td>
+						<td>{{ bill.net_payable or 0 }}</td>
+						<td>{{ bill.status or "-" }}</td>
+						<td class="text-right"><a class="btn btn-sm btn-primary" href="/ra-bill-detail?name={{ bill.name | urlencode }}">View</a></td>
+					</tr>
+					{% else %}
+						{% set columns = 6 %}
+						{% set message = "No RA Bills found." %}
+						{% include "construction_management/templates/includes/construction_portal/table_empty.html" %}
+					{% endfor %}
+				</tbody>
+			</table>
+		</div>
+	</div>
+
+	<div class="row">
+		<div class="col-lg-6">
+			<div class="construction-section">
+				<div class="construction-section-header">
+					<h2>Work Progress</h2>
+					<a class="btn btn-sm btn-light" href="/work-progress?project={{ project.name | urlencode }}">View All</a>
+				</div>
+				<div class="construction-table table-responsive">
+					<table class="table table-hover table-sm">
+						<thead>
+							<tr>
+								<th>BOQ</th>
+								<th>Item</th>
+								<th>Completion %</th>
+								<th></th>
+							</tr>
+						</thead>
+						<tbody>
+							{% for row in work_progress %}
+							<tr>
+								<td>{{ row.boq or "-" }}</td>
+								<td>{{ row.item_name or row.boq_item or "-" }}</td>
+								<td>{{ "%.2f"|format(row.progress_percent or 0) }}</td>
+								<td class="text-right"><a class="btn btn-sm btn-primary" href="/work-progress-detail?boq={{ row.boq | urlencode }}">View</a></td>
+							</tr>
+							{% else %}
+								{% set columns = 4 %}
+								{% set message = "No submitted work progress found." %}
+								{% include "construction_management/templates/includes/construction_portal/table_empty.html" %}
+							{% endfor %}
+						</tbody>
+					</table>
+				</div>
+			</div>
+		</div>
+		<div class="col-lg-6">
+			<div class="construction-section">
+				<div class="construction-section-header">
+					<h2>Daily Progress Reports</h2>
+					<a class="btn btn-sm btn-light" href="/dprs?project={{ project.name | urlencode }}">View All</a>
+				</div>
+				<div class="construction-table table-responsive">
+					<table class="table table-hover table-sm">
+						<thead>
+							<tr>
+								<th>DPR</th>
+								<th>Date</th>
+								<th>Status</th>
+								<th></th>
+							</tr>
+						</thead>
+						<tbody>
+							{% for dpr in dprs %}
+							<tr>
+								<td>{{ dpr.name }}</td>
+								<td>{{ dpr.dpr_date or "-" }}</td>
+								<td>{{ dpr.status or "-" }}</td>
+								<td class="text-right"><a class="btn btn-sm btn-primary" href="/dpr-detail?name={{ dpr.name | urlencode }}">View</a></td>
+							</tr>
+							{% else %}
+								{% set columns = 4 %}
+								{% set message = "No Daily Progress Reports found." %}
+								{% include "construction_management/templates/includes/construction_portal/table_empty.html" %}
+							{% endfor %}
+						</tbody>
+					</table>
+				</div>
+			</div>
+		</div>
+	</div>
+</div>
+{% endblock %}

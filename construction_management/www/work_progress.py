@@ -3,8 +3,10 @@ from frappe.utils import flt
 
 from construction_management.portal_utils import (
 	get_boq_customer_field,
+	get_request_filters,
 	log_portal_access,
 	require_portal_customer,
+	setup_portal_context,
 )
 
 
@@ -14,9 +16,20 @@ no_cache = 1
 def get_context(context):
 	customer = require_portal_customer()
 	log_portal_access(customer)
-	context.title = "Work Progress"
+	setup_portal_context(
+		context,
+		"Work Progress",
+		description="Review completed quantity, remaining quantity and progress against BOQ items.",
+		parents=[
+			{"name": "Construction Portal", "route": "/construction-portal"},
+			{"name": "Work Progress", "route": "/work-progress"},
+		],
+	)
 	context.customer = customer
-	context.rows = get_work_progress(customer)
+	context.filters = get_request_filters("search", "project", "completion")
+	all_rows = get_work_progress(customer)
+	context.projects = sorted({row.project for row in all_rows if row.project})
+	context.rows = filter_work_progress_rows(all_rows, context.filters)
 
 
 def get_work_progress(customer):
@@ -43,6 +56,7 @@ def get_work_progress_from_transactions(customer, boq_customer_field):
 		"""
 		SELECT
 			b.name AS boq,
+			b.project AS project,
 			bi.name AS boq_item,
 			bi.boq_parent_category AS category_name,
 			bi.boq_category AS sub_category,
@@ -99,6 +113,7 @@ def get_work_progress_from_ra_bill_items(customer, boq_customer_field):
 		"""
 		SELECT
 			b.name AS boq,
+			b.project AS project,
 			bi.name AS boq_item,
 			bi.boq_parent_category AS category_name,
 			bi.boq_category AS sub_category,
@@ -174,3 +189,25 @@ def add_progress_values(rows):
 		row.remaining_qty = max(0, row.boq_qty - row.completed_qty)
 		row.progress_percent = (row.completed_qty / row.boq_qty * 100) if row.boq_qty else 0
 	return rows
+
+
+def filter_work_progress_rows(rows, request_filters):
+	search = (request_filters.search or "").lower()
+	filtered_rows = []
+	for row in rows:
+		if request_filters.project and row.project != request_filters.project:
+			continue
+		if search and not any(
+			search in str(value or "").lower()
+			for value in (row.project, row.boq, row.category_name, row.sub_category, row.item_name)
+		):
+			continue
+		if request_filters.completion == "complete" and flt(row.progress_percent) < 100:
+			continue
+		if request_filters.completion == "in_progress" and not (0 < flt(row.progress_percent) < 100):
+			continue
+		if request_filters.completion == "not_started" and flt(row.progress_percent) > 0:
+			continue
+		filtered_rows.append(row)
+
+	return filtered_rows

@@ -1,0 +1,131 @@
+{% extends "templates/web.html" %}
+
+{% block page_content %}
+<div class="construction-portal">
+	{% include "construction_management/templates/includes/construction_portal/header.html" %}
+
+	<div class="construction-card mb-4">
+		<div class="construction-detail-list">
+			<div>
+				<dt>Project</dt>
+				<dd>{{ dpr.project or "-" }}</dd>
+			</div>
+			<div>
+				<dt>Date</dt>
+				<dd>{{ dpr.dpr_date or "-" }}</dd>
+			</div>
+			<div>
+				<dt>Prepared By</dt>
+				<dd>{{ dpr.prepared_by or "-" }}</dd>
+			</div>
+			<div>
+				<dt>Status</dt>
+				<dd>{{ dpr.status or "-" }}</dd>
+			</div>
+			<div>
+				<dt>Title</dt>
+				<dd>{{ dpr.title or "-" }}</dd>
+			</div>
+			<div>
+				<dt>Tasks / Photos</dt>
+				<dd>{{ tasks | length }} / {{ photos | length }}</dd>
+			</div>
+		</div>
+	</div>
+
+	<div class="construction-section">
+		<div class="construction-section-header">
+			<h2>Summary</h2>
+			<a href="/dprs" class="btn btn-sm btn-light">Back</a>
+		</div>
+		<div class="construction-card">
+			<p class="mb-0">{{ dpr.summary or "-" }}</p>
+		</div>
+	</div>
+
+	<div class="construction-section">
+		<div class="construction-section-header">
+			<h2>Notes</h2>
+		</div>
+		<div class="construction-card">
+			<p class="mb-0">{{ dpr.notes or "-" }}</p>
+		</div>
+	</div>
+
+	<div class="construction-section">
+		<div class="construction-section-header">
+			<h2>Completed Tasks</h2>
+		</div>
+		<div class="construction-table table-responsive">
+			<table class="table table-hover table-sm">
+				<thead>
+					<tr>
+						<th>Sr.</th>
+						<th>Task Completed</th>
+						<th>Description</th>
+						<th>Status</th>
+						<th>Quantity</th>
+						<th>UOM</th>
+						<th>Location</th>
+						<th>Notes</th>
+					</tr>
+				</thead>
+				<tbody>
+					{% for row in tasks %}
+					<tr>
+						<td>{{ loop.index }}</td>
+						<td>{{ row.task_title or "-" }}</td>
+						<td>{{ row.description or "-" }}</td>
+						<td>{{ row.status or "-" }}</td>
+						<td>{{ row.quantity or "" }}</td>
+						<td>{{ row.uom or "" }}</td>
+						<td>{{ row.location or "-" }}</td>
+						<td>{{ row.notes or "-" }}</td>
+					</tr>
+					{% else %}
+						{% set columns = 8 %}
+						{% set message = "No completed tasks recorded." %}
+						{% include "construction_management/templates/includes/construction_portal/table_empty.html" %}
+					{% endfor %}
+				</tbody>
+			</table>
+		</div>
+	</div>
+
+	<div class="construction-section">
+		<div class="construction-section-header">
+			<h2>Photos</h2>
+		</div>
+		{% if photos %}
+		<div class="construction-photo-grid">
+			{% for row in photos %}
+			<div class="construction-card">
+				<img src="{{ row.photo }}" class="img-fluid rounded border" alt="{{ row.caption or dpr.name }}">
+				{% if row.caption %}<div class="font-weight-bold mt-2">{{ row.caption }}</div>{% endif %}
+				{% if row.notes %}<div class="text-muted small">{{ row.notes }}</div>{% endif %}
+			</div>
+			{% endfor %}
+		</div>
+		{% else %}
+			{% set message = "No photos attached." %}
+			{% include "construction_management/templates/includes/construction_portal/empty.html" %}
+		{% endif %}
+	</div>
+
+	<div class="construction-section">
+		<div class="construction-section-header">
+			<h2>Attachments</h2>
+		</div>
+		{% if attachments %}
+		<div class="list-group">
+			{% for file in attachments %}
+			<a class="list-group-item list-group-item-action" href="{{ file.file_url }}" target="_blank" rel="noopener">{{ file.file_name }}</a>
+			{% endfor %}
+		</div>
+		{% else %}
+			{% set message = "No attachments found." %}
+			{% include "construction_management/templates/includes/construction_portal/empty.html" %}
+		{% endif %}
+	</div>
+</div>
+{% endblock %}

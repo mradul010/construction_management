@@ -1,0 +1,221 @@
+.construction-portal {
+	background: var(--fg-color, #fff);
+}
+
+.construction-portal .page-breadcrumbs {
+	margin-bottom: 0.75rem;
+}
+
+.construction-portal-header {
+	border-bottom: 1px solid var(--border-color, #e5e7eb);
+	margin-bottom: 1.25rem;
+	padding-bottom: 1rem;
+}
+
+.construction-portal-header h1 {
+	font-size: 1.75rem;
+	font-weight: 650;
+	letter-spacing: 0;
+	margin: 0;
+}
+
+.construction-portal-header p {
+	color: var(--text-muted, #6c757d);
+	margin: 0.35rem 0 0;
+}
+
+.construction-card {
+	background: var(--card-bg, #fff);
+	border: 1px solid var(--border-color, #e5e7eb);
+	border-radius: 8px;
+	height: 100%;
+	padding: 1rem;
+}
+
+.construction-card-label {
+	color: var(--text-muted, #6c757d);
+	font-size: 0.8125rem;
+	margin-bottom: 0.25rem;
+}
+
+.construction-card-value {
+	font-size: 1.35rem;
+	font-weight: 650;
+	line-height: 1.25;
+}
+
+.construction-section {
+	margin-top: 1.5rem;
+}
+
+.construction-section-header {
+	align-items: center;
+	display: flex;
+	gap: 1rem;
+	justify-content: space-between;
+	margin-bottom: 0.75rem;
+}
+
+.construction-section-header h2,
+.construction-section-header h3 {
+	font-size: 1.05rem;
+	font-weight: 650;
+	margin: 0;
+}
+
+.construction-filter-bar {
+	background: var(--fg-color, #fff);
+	border: 1px solid var(--border-color, #e5e7eb);
+	border-radius: 8px;
+	margin-bottom: 1rem;
+	padding: 1rem;
+}
+
+.construction-table {
+	border: 1px solid var(--border-color, #e5e7eb);
+	border-radius: 8px;
+	overflow-x: auto;
+	overflow-y: hidden;
+	-webkit-overflow-scrolling: touch;
+}
+
+.construction-table .table {
+	margin-bottom: 0;
+	min-width: 860px;
+	white-space: nowrap;
+}
+
+.construction-table .table th,
+.construction-table .table td {
+	vertical-align: middle;
+}
+
+.construction-table thead th {
+	background: var(--subtle-fg, #f8f9fa);
+	border-bottom-width: 1px;
+	color: var(--text-muted, #6c757d);
+	font-size: 0.78rem;
+	font-weight: 650;
+	position: sticky;
+	text-transform: uppercase;
+	top: 0;
+	z-index: 1;
+}
+
+.construction-table tbody tr:nth-child(even) {
+	background: var(--subtle-fg, #fafafa);
+}
+
+.construction-detail-list {
+	display: grid;
+	gap: 0.75rem 1.5rem;
+	grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.construction-detail-list dt {
+	color: var(--text-muted, #6c757d);
+	font-size: 0.8125rem;
+	font-weight: 500;
+	margin-bottom: 0.15rem;
+}
+
+.construction-detail-list dd {
+	margin-bottom: 0;
+}
+
+.construction-photo-grid {
+	display: grid;
+	gap: 1rem;
+	grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+}
+
+.construction-photo-grid img {
+	aspect-ratio: 4 / 3;
+	object-fit: cover;
+	width: 100%;
+}
+
+.web-sidebar {
+	position: sticky;
+	top: 1rem;
+}
+
+.web-sidebar .title {
+	font-weight: 650;
+	list-style: none;
+	margin-bottom: 0.75rem;
+}
+
+.web-sidebar .sidebar-item a {
+	border-radius: 6px;
+	display: block;
+	padding: 0.55rem 0.75rem;
+}
+
+.web-sidebar .sidebar-item a.active {
+	background: var(--control-bg-on, #f3f5f7);
+	color: var(--primary, #2490ef);
+	font-weight: 600;
+}
+
+@media (max-width: 767.98px) {
+	.construction-portal-header h1 {
+		font-size: 1.35rem;
+	}
+
+	.construction-detail-list {
+		grid-template-columns: 1fr;
+	}
+
+	.construction-section-header {
+		align-items: flex-start;
+		flex-direction: column;
+		gap: 0.5rem;
+	}
+
+	.web-sidebar {
+		position: static;
+	}
+}
+
+.construction-sidebar-toggle {
+	align-items: center;
+	background: var(--card-bg, #fff);
+	border: 1px solid var(--border-color, #e5e7eb);
+	border-radius: 999px;
+	box-shadow: 0 8px 22px rgba(31, 39, 46, 0.08);
+	color: var(--text-color, #1f272e);
+	display: inline-flex;
+	font-size: 1.35rem;
+	font-weight: 600;
+	gap: 0.4rem;
+	margin-bottom: 1rem;
+	height: 36px;
+	justify-content: center;
+	line-height: 1;
+	padding: 0;
+	position: sticky;
+	top: 0.75rem;
+	width: 36px;
+	z-index: 2;
+}
+
+.construction-sidebar-toggle:hover {
+	background: var(--subtle-fg, #f8f9fa);
+	border-color: var(--primary, #2490ef);
+	color: var(--primary, #2490ef);
+}
+
+body.construction-portal-page.construction-sidebar-collapsed .sidebar-column {
+	display: none;
+}
+
+body.construction-portal-page.construction-sidebar-collapsed .main-column {
+	flex: 0 0 100%;
+	max-width: 100%;
+	width: 100%;
+}
+
+body.construction-portal-page.construction-sidebar-collapsed .construction-sidebar-toggle {
+	margin-left: 0;
+}

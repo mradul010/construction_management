@@ -3,6 +3,7 @@ import frappe
 from construction_management.portal_utils import (
 	log_portal_access,
 	require_portal_customer,
+	setup_portal_context,
 	validate_ra_bill_customer,
 )
 
@@ -17,7 +18,16 @@ def get_context(context):
 	validate_ra_bill_customer(name, customer)
 
 	ra_bill = frappe.get_doc("RA Bill", name)
-	context.title = ra_bill.name
+	setup_portal_context(
+		context,
+		ra_bill.name,
+		description="RA Bill summary, billing period and measured item details.",
+		parents=[
+			{"name": "Construction Portal", "route": "/construction-portal"},
+			{"name": "RA Bills", "route": "/ra-bill"},
+			{"name": ra_bill.name, "route": f"/ra-bill-detail?name={ra_bill.name}"},
+		],
+	)
 	context.customer = customer
 	context.ra_bill = ra_bill
 	context.items = get_ra_bill_items(ra_bill)

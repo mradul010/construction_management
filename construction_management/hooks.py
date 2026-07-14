@@ -21,20 +21,8 @@ add_to_apps_screen = [
 
 portal_menu_items = [
     {
-        "title": "BOQ",
-        "route": "/boq",
-        "reference_doctype": "BOQ",
-        "role": "Customer",
-    },
-    {
-        "title": "RA Bill",
-        "route": "/ra-bill",
-        "reference_doctype": "RA Bill",
-        "role": "Customer",
-    },
-    {
-        "title": "Work Progress",
-        "route": "/work-progress",
+        "title": "Construction Portal",
+        "route": "/construction-portal",
         "role": "Customer",
     },
 ]
@@ -62,9 +50,13 @@ portal_menu_items = [
 app_include_css = "/assets/construction_management/css/report_summary.css"
 app_include_js = "/assets/construction_management/js/report_summary.js"
 
+doctype_js = {
+    "Project": "public/js/project_dpr.js",
+}
+
 # include js, css files in header of web template
-# web_include_css = "/assets/construction_management/css/construction_management.css"
-# web_include_js = "/assets/construction_management/js/construction_management.js"
+web_include_css = "/assets/construction_management/css/portal.css"
+web_include_js = "/assets/construction_management/js/portal.js"
 
 # include custom scss in every website theme (without file extension ".scss")
 # website_theme_scss = "construction_management/public/scss/website"
@@ -162,6 +154,14 @@ after_migrate = "construction_management.construction_management.setup.after_mig
 # has_permission = {
 # 	"Event": "frappe.desk.doctype.event.event.has_permission",
 # }
+
+permission_query_conditions = {
+    "Daily Progress Report": "construction_management.construction_management.doctype.daily_progress_report.daily_progress_report.get_permission_query_conditions",
+}
+
+has_permission = {
+    "Daily Progress Report": "construction_management.construction_management.doctype.daily_progress_report.daily_progress_report.has_permission",
+}
 
 # Document Events
 # ---------------

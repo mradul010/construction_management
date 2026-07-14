@@ -1,47 +1,96 @@
 {% extends "templates/web.html" %}
 
 {% block page_content %}
-<div class="container my-5">
-	<a href="/boq" class="btn btn-sm btn-light mb-3">Back</a>
-	<h2>{{ boq.name }}</h2>
+<div class="construction-portal">
+	{% include "construction_management/templates/includes/construction_portal/header.html" %}
 
-	<div class="row mb-4">
-		<div class="col-md-4"><strong>Project:</strong> {{ boq.project or "-" }}</div>
-		<div class="col-md-4"><strong>Client:</strong> {{ boq.client or "-" }}</div>
-		<div class="col-md-4"><strong>Currency:</strong> {{ boq.currency or "-" }}</div>
-		<div class="col-md-4"><strong>Status:</strong> {{ boq.status or "-" }}</div>
-		<div class="col-md-4"><strong>Total Contract Value:</strong> {{ boq.grand_total or 0 }}</div>
+	<div class="row mb-3">
+		<div class="col-md-4 mb-3">
+			<div class="construction-card">
+				<div class="construction-card-label">BOQ Value</div>
+				<div class="construction-card-value">{{ boq.total_cost or 0 }}</div>
+			</div>
+		</div>
+		<div class="col-md-4 mb-3">
+			<div class="construction-card">
+				<div class="construction-card-label">Amount After Margin</div>
+				<div class="construction-card-value">{{ boq.grand_total or 0 }}</div>
+			</div>
+		</div>
+		<div class="col-md-4 mb-3">
+			<div class="construction-card">
+				<div class="construction-card-label">Total Items</div>
+				<div class="construction-card-value">{{ items | length }}</div>
+			</div>
+		</div>
 	</div>
 
-	<table class="table table-bordered table-hover table-sm">
-		<thead>
-			<tr>
-				<th>Category</th>
-				<th>Sub Category</th>
-				<th>Item Name</th>
-				<th>Qty</th>
-				<th>UOM</th>
-				<th>Rate</th>
-				<th>Amount</th>
-			</tr>
-		</thead>
-		<tbody>
-			{% for row in items %}
-			<tr>
-				<td>{{ row.boq_parent_category or "-" }}</td>
-				<td>{{ row.boq_category or "-" }}</td>
-				<td>{{ row.item_name or row.item or "-" }}</td>
-				<td>{{ row.qty or 0 }}</td>
-				<td>{{ row.uom or "-" }}</td>
-				<td>{{ row.unit_rate or 0 }}</td>
-				<td>{{ row.amount_after_margin or ((row.qty or 0) * (row.unit_rate or 0)) }}</td>
-			</tr>
-			{% else %}
-			<tr>
-				<td colspan="7" class="text-muted text-center">No BOQ items found.</td>
-			</tr>
-			{% endfor %}
-		</tbody>
-	</table>
+	<div class="construction-card mb-4">
+		<div class="construction-detail-list">
+			<div>
+				<dt>Project</dt>
+				<dd>{{ boq.project or "-" }}</dd>
+			</div>
+			<div>
+				<dt>Revision</dt>
+				<dd>Rev {{ boq.revision_no or 0 }}</dd>
+			</div>
+			<div>
+				<dt>Status</dt>
+				<dd>{{ boq.revision_status or boq.status or "-" }}</dd>
+			</div>
+			<div>
+				<dt>Client</dt>
+				<dd>{{ boq.client or customer }}</dd>
+			</div>
+			<div>
+				<dt>Currency</dt>
+				<dd>{{ boq.currency or "-" }}</dd>
+			</div>
+			<div>
+				<dt>Built-Up Area</dt>
+				<dd>{{ boq.built_up_area or "-" }} {{ boq.bua_uom or "" }}</dd>
+			</div>
+		</div>
+	</div>
+
+	<div class="construction-section">
+		<div class="construction-section-header">
+			<h2>Items</h2>
+			<a href="/boq" class="btn btn-sm btn-light">Back</a>
+		</div>
+		<div class="construction-table table-responsive">
+			<table class="table table-hover table-sm">
+				<thead>
+					<tr>
+						<th>Category</th>
+						<th>Sub Category</th>
+						<th>Item Name</th>
+						<th>Qty</th>
+						<th>UOM</th>
+						<th>Rate</th>
+						<th>Amount</th>
+					</tr>
+				</thead>
+				<tbody>
+					{% for row in items %}
+					<tr>
+						<td>{{ row.boq_parent_category or "-" }}</td>
+						<td>{{ row.boq_category or "-" }}</td>
+						<td>{{ row.item_name or row.item or "-" }}</td>
+						<td>{{ row.qty or 0 }}</td>
+						<td>{{ row.uom or "-" }}</td>
+						<td>{{ row.unit_rate or 0 }}</td>
+						<td>{{ row.amount_after_margin or ((row.qty or 0) * (row.unit_rate or 0)) }}</td>
+					</tr>
+					{% else %}
+						{% set columns = 7 %}
+						{% set message = "No BOQ items found." %}
+						{% include "construction_management/templates/includes/construction_portal/table_empty.html" %}
+					{% endfor %}
+				</tbody>
+			</table>
+		</div>
+	</div>
 </div>
 {% endblock %}

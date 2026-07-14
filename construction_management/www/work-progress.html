@@ -1,42 +1,71 @@
 {% extends "templates/web.html" %}
 
 {% block page_content %}
-<div class="container my-5">
-	<h2>Work Progress</h2>
-	<table class="table table-bordered table-hover table-sm">
-		<thead>
-			<tr>
-				<th>BOQ</th>
-				<th>Category</th>
-				<th>Sub Category</th>
-				<th>Item Name</th>
-				<th>BOQ Qty</th>
-				<th>Completed Qty</th>
-				<th>Remaining Qty</th>
-				<th>Progress %</th>
-				<th>Completed Amount</th>
-			</tr>
-		</thead>
-		<tbody>
-			{% for row in rows %}
-			<tr>
-				<td>{{ row.boq or "-" }}</td>
-				<td>{{ row.category_name or "-" }}</td>
-				<td>{{ row.sub_category or "-" }}</td>
-				<td>{{ row.item_name or row.boq_item or "-" }}</td>
-				<td>{{ row.boq_qty or 0 }}</td>
-				<td>{{ row.completed_qty or 0 }}</td>
-				<td>{{ row.remaining_qty or 0 }}</td>
-				<td>{{ row.progress_percent or 0 }}</td>
-				<td>{{ row.completed_amount or 0 }}</td>
-			</tr>
-			{% else %}
-			<tr>
-				<td colspan="9" class="text-muted text-center">No submitted work progress found.</td>
-			</tr>
-			{% endfor %}
-		</tbody>
-	</table>
+<div class="construction-portal">
+	{% include "construction_management/templates/includes/construction_portal/header.html" %}
+
+	<form class="construction-filter-bar" method="get">
+		<div class="form-row">
+			<div class="col-md-4 mb-2 mb-md-0">
+				<input class="form-control" type="search" name="search" value="{{ filters.search }}" placeholder="Search project, BOQ or item">
+			</div>
+			<div class="col-md-3 mb-2 mb-md-0">
+				<select class="form-control" name="project">
+					<option value="">All Projects</option>
+					{% for project in projects %}
+					<option value="{{ project }}" {{ "selected" if filters.project == project else "" }}>{{ project }}</option>
+					{% endfor %}
+				</select>
+			</div>
+			<div class="col-md-3 mb-2 mb-md-0">
+				<select class="form-control" name="completion">
+					<option value="">All Completion</option>
+					<option value="not_started" {{ "selected" if filters.completion == "not_started" else "" }}>Not Started</option>
+					<option value="in_progress" {{ "selected" if filters.completion == "in_progress" else "" }}>In Progress</option>
+					<option value="complete" {{ "selected" if filters.completion == "complete" else "" }}>Complete</option>
+				</select>
+			</div>
+			<div class="col-md-2">
+				<button class="btn btn-primary btn-block" type="submit">Filter</button>
+			</div>
+		</div>
+	</form>
+
+	<div class="construction-table table-responsive">
+		<table class="table table-hover table-sm">
+			<thead>
+				<tr>
+					<th>Project</th>
+					<th>BOQ</th>
+					<th>Completion %</th>
+					<th>Completed Qty</th>
+					<th>Remaining Qty</th>
+					<th>Status</th>
+					<th>Item</th>
+					<th></th>
+				</tr>
+			</thead>
+			<tbody>
+				{% for row in rows %}
+				<tr>
+					<td>{{ row.project or "-" }}</td>
+					<td>{{ row.boq or "-" }}</td>
+					<td>{{ "%.2f"|format(row.progress_percent or 0) }}</td>
+					<td>{{ row.completed_qty or 0 }}</td>
+					<td>{{ row.remaining_qty or 0 }}</td>
+					<td>
+						{% if (row.progress_percent or 0) >= 100 %}Complete{% elif (row.progress_percent or 0) > 0 %}In Progress{% else %}Not Started{% endif %}
+					</td>
+					<td>{{ row.item_name or row.boq_item or "-" }}</td>
+					<td class="text-right"><a class="btn btn-sm btn-primary" href="/work-progress-detail?boq={{ row.boq | urlencode }}">View</a></td>
+				</tr>
+				{% else %}
+					{% set columns = 8 %}
+					{% set message = "No submitted work progress found." %}
+					{% include "construction_management/templates/includes/construction_portal/table_empty.html" %}
+				{% endfor %}
+			</tbody>
+		</table>
+	</div>
 </div>
 {% endblock %}
-
