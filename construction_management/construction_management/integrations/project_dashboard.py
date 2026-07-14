@@ -5,7 +5,7 @@ def get_data(data):
 	data = data or {}
 	data.setdefault("fieldname", "project")
 	transactions = data.setdefault("transactions", [])
-	_add_items(transactions, _("Construction"), ["BOQ", "RA Bill"])
+	_add_items(transactions, _("Construction"), ["Daily Progress Report", "BOQ", "RA Bill"])
 	_add_items(transactions, _("Advance"), ["Payment Entry"])
 	return data
 

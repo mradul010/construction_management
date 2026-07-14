@@ -3,6 +3,7 @@ import frappe
 from construction_management.portal_utils import (
 	log_portal_access,
 	require_portal_customer,
+	setup_portal_context,
 	validate_boq_customer,
 )
 
@@ -22,7 +23,16 @@ def get_context(context):
 			"Only the active BOQ revision is available in the portal.",
 			frappe.PermissionError,
 		)
-	context.title = boq.name
+	setup_portal_context(
+		context,
+		boq.name,
+		description="BOQ details, values and item breakdown.",
+		parents=[
+			{"name": "Construction Portal", "route": "/construction-portal"},
+			{"name": "BOQ", "route": "/boq"},
+			{"name": boq.name, "route": f"/boq-detail?name={boq.name}"},
+		],
+	)
 	context.customer = customer
 	context.boq = boq
 	context.items = sorted(

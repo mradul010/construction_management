@@ -1,0 +1,86 @@
+{% extends "templates/web.html" %}
+
+{% block page_content %}
+<div class="construction-portal">
+	{% include "construction_management/templates/includes/construction_portal/header.html" %}
+
+	<div class="row mb-3">
+		<div class="col-md-4 mb-3">
+			<div class="construction-card">
+				<div class="construction-card-label">Completed Qty</div>
+				<div class="construction-card-value">{{ completed_qty }}</div>
+			</div>
+		</div>
+		<div class="col-md-4 mb-3">
+			<div class="construction-card">
+				<div class="construction-card-label">Remaining Qty</div>
+				<div class="construction-card-value">{{ remaining_qty }}</div>
+			</div>
+		</div>
+		<div class="col-md-4 mb-3">
+			<div class="construction-card">
+				<div class="construction-card-label">Completion %</div>
+				<div class="construction-card-value">{{ "%.2f"|format(progress_percent or 0) }}</div>
+			</div>
+		</div>
+	</div>
+
+	<div class="construction-card mb-4">
+		<div class="construction-detail-list">
+			<div>
+				<dt>Project</dt>
+				<dd>{{ project or "-" }}</dd>
+			</div>
+			<div>
+				<dt>BOQ</dt>
+				<dd>{{ boq or "-" }}</dd>
+			</div>
+			<div>
+				<dt>Total BOQ Qty</dt>
+				<dd>{{ boq_qty }}</dd>
+			</div>
+		</div>
+	</div>
+
+	<div class="construction-section">
+		<div class="construction-section-header">
+			<h2>Items</h2>
+			<a href="/work-progress" class="btn btn-sm btn-light">Back</a>
+		</div>
+		<div class="construction-table table-responsive">
+			<table class="table table-hover table-sm">
+				<thead>
+					<tr>
+						<th>Category</th>
+						<th>Sub Category</th>
+						<th>Item Name</th>
+						<th>BOQ Qty</th>
+						<th>Completed Qty</th>
+						<th>Remaining Qty</th>
+						<th>Completion %</th>
+						<th>Completed Amount</th>
+					</tr>
+				</thead>
+				<tbody>
+					{% for row in rows %}
+					<tr>
+						<td>{{ row.category_name or "-" }}</td>
+						<td>{{ row.sub_category or "-" }}</td>
+						<td>{{ row.item_name or row.boq_item or "-" }}</td>
+						<td>{{ row.boq_qty or 0 }}</td>
+						<td>{{ row.completed_qty or 0 }}</td>
+						<td>{{ row.remaining_qty or 0 }}</td>
+						<td>{{ "%.2f"|format(row.progress_percent or 0) }}</td>
+						<td>{{ row.completed_amount or 0 }}</td>
+					</tr>
+					{% else %}
+						{% set columns = 8 %}
+						{% set message = "No submitted work progress found." %}
+						{% include "construction_management/templates/includes/construction_portal/table_empty.html" %}
+					{% endfor %}
+				</tbody>
+			</table>
+		</div>
+	</div>
+</div>
+{% endblock %}
