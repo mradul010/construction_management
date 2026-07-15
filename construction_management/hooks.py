@@ -47,7 +47,7 @@ portal_menu_items = [
 # ------------------
 
 # include js, css files in header of desk.html
-app_include_css = "/assets/construction_management/css/report_summary.css"
+app_include_css = "/assets/construction_management/css/report.css"
 app_include_js = "/assets/construction_management/js/report_summary.js"
 
 doctype_js = {
@@ -114,6 +114,7 @@ web_include_js = "/assets/construction_management/js/portal.js"
 # before_install = "construction_management.install.before_install"
 after_install = "construction_management.construction_management.setup.after_install"
 after_migrate = "construction_management.construction_management.setup.after_migrate"
+on_session_creation = "construction_management.portal_utils.sync_customer_portal_user"
 
 # Uninstallation
 # ------------

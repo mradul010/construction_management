@@ -1,7 +1,7 @@
 {
  "app": "construction_management",
  "charts": [],
- "content": "[{\"id\":\"cm_header\",\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h4\\\"><b>Construction Management</b></span>\",\"col\":12}},{\"id\":\"UFIRveYcC_\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"New BOQ\",\"col\":3}},{\"id\":\"xSq_1k8YKt\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"New RA Bill\",\"col\":3}},{\"id\":\"LJbxVOmvyk\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Project\",\"col\":3}},{\"id\":\"PBkLVAWSQX\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Purchase Order\",\"col\":3}},{\"id\":\"NRS70vW3g_\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Sales Invoice\",\"col\":3}},{\"id\":\"NACpOuZ7Un\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Customer\",\"col\":3}},{\"id\":\"6xIamZ58m4\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Supplier\",\"col\":3}},{\"id\":\"2k2nvkXGgF\",\"type\":\"card\",\"data\":{\"card_name\":\"Estimation & BOQ\",\"col\":4}},{\"id\":\"ydqxBfjE8q\",\"type\":\"card\",\"data\":{\"card_name\":\"Billing & Revenue\",\"col\":4}},{\"id\":\"tynLVoNpZJ\",\"type\":\"card\",\"data\":{\"card_name\":\"Procurement & Costing\",\"col\":4}},{\"id\":\"0RvPsVNEQT\",\"type\":\"card\",\"data\":{\"card_name\":\"Sales Record\",\"col\":4}},{\"id\":\"FXiwO4Ytfe\",\"type\":\"card\",\"data\":{\"card_name\":\"Project Managment\",\"col\":4}},{\"id\":\"NEwmwBYXcx\",\"type\":\"card\",\"data\":{\"card_name\":\"Reports\",\"col\":4}}]",
+ "content": "[{\"id\":\"cm_header\",\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h4\\\"><b>Construction Management</b></span>\",\"col\":12}},{\"id\":\"UFIRveYcC_\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"New BOQ\",\"col\":3}},{\"id\":\"xSq_1k8YKt\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"New RA Bill\",\"col\":3}},{\"id\":\"hMk9j4kqNw\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"New DPR\",\"col\":3}},{\"id\":\"LJbxVOmvyk\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Project\",\"col\":3}},{\"id\":\"PBkLVAWSQX\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Purchase Order\",\"col\":3}},{\"id\":\"NRS70vW3g_\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Sales Invoice\",\"col\":3}},{\"id\":\"NACpOuZ7Un\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Customer\",\"col\":3}},{\"id\":\"6xIamZ58m4\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Supplier\",\"col\":3}},{\"id\":\"2k2nvkXGgF\",\"type\":\"card\",\"data\":{\"card_name\":\"Estimation & BOQ\",\"col\":4}},{\"id\":\"ydqxBfjE8q\",\"type\":\"card\",\"data\":{\"card_name\":\"Billing & Revenue\",\"col\":4}},{\"id\":\"tynLVoNpZJ\",\"type\":\"card\",\"data\":{\"card_name\":\"Procurement & Costing\",\"col\":4}},{\"id\":\"0RvPsVNEQT\",\"type\":\"card\",\"data\":{\"card_name\":\"Sales Record\",\"col\":4}},{\"id\":\"FXiwO4Ytfe\",\"type\":\"card\",\"data\":{\"card_name\":\"Project Managment\",\"col\":4}},{\"id\":\"NEwmwBYXcx\",\"type\":\"card\",\"data\":{\"card_name\":\"Reports\",\"col\":4}}]",
  "creation": "2026-07-09 11:57:10.554586",
  "custom_blocks": [],
  "docstatus": 0,
@@ -401,7 +401,7 @@
    "type": "Link"
   }
  ],
- "modified": "2026-07-14 13:29:24.553185",
+ "modified": "2026-07-14 17:15:27.273519",
  "modified_by": "Administrator",
  "module": "Construction Management",
  "name": "Construction Management",
@@ -467,6 +467,12 @@
    "link_to": "Supplier",
    "stats_filter": "[]",
    "type": "DocType"
+  },
+  {
+   "doc_view": "",
+   "label": "New DPR",
+   "type": "URL",
+   "url": "/app/daily-progress-report/new-daily-progress-report"
   }
  ],
  "title": "Construction Management",

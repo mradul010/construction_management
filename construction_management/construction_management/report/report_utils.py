@@ -2,7 +2,7 @@ from functools import lru_cache
 
 import frappe
 from frappe import _
-from frappe.utils import cint, flt, formatdate
+from frappe.utils import cint, flt, fmt_money, formatdate
 
 from construction_management.construction_management.advance_management import (
 	get_project_advance_summary,
@@ -154,7 +154,25 @@ def first_currency(rows):
 	return None
 
 
+def normalize_currency_code(currency):
+	return (currency or "").strip().upper()
+
+
+def format_currency_with_code(value, currency, precision=2):
+	currency = normalize_currency_code(currency)
+	amount = fmt_money(flt(value), precision=precision, currency=None)
+	return f"{currency} {amount}" if currency else amount
+
+
 def summary_metric(label, value, datatype="Currency", currency=None, indicator="Blue"):
+	if datatype == "Currency":
+		return {
+			"value": format_currency_with_code(value, currency),
+			"label": _(label),
+			"datatype": "Data",
+			"indicator": indicator,
+		}
+
 	metric = {
 		"value": flt(value),
 		"label": _(label),
