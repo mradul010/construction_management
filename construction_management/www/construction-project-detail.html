@@ -52,7 +52,7 @@
 				<tbody>
 					{% for boq in boqs %}
 					<tr>
-						<td>{{ boq.name }}</td>
+						<td><a href="/boq-detail?name={{ boq.name | urlencode }}">{{ boq.name }}</a></td>
 						<td>Rev {{ boq.revision_no or 0 }}</td>
 						<td>{{ boq.revision_status or boq.status or "-" }}</td>
 						<td>{{ boq.grand_total or 0 }}</td>
@@ -88,7 +88,7 @@
 				<tbody>
 					{% for bill in ra_bills %}
 					<tr>
-						<td>{{ bill.name }}</td>
+						<td><a href="/ra-bill-detail?name={{ bill.name | urlencode }}">{{ bill.name }}</a></td>
 						<td>{{ bill.billing_period_from or "-" }} to {{ bill.billing_period_to or "-" }}</td>
 						<td>{{ bill.gross_amount or 0 }}</td>
 						<td>{{ bill.net_payable or 0 }}</td>
@@ -125,7 +125,7 @@
 						<tbody>
 							{% for row in work_progress %}
 							<tr>
-								<td>{{ row.boq or "-" }}</td>
+								<td><a href="/work-progress-detail?boq={{ row.boq | urlencode }}">{{ row.boq or "-" }}</a></td>
 								<td>{{ row.item_name or row.boq_item or "-" }}</td>
 								<td>{{ "%.2f"|format(row.progress_percent or 0) }}</td>
 								<td class="text-right"><a class="btn btn-sm btn-primary" href="/work-progress-detail?boq={{ row.boq | urlencode }}">View</a></td>
@@ -159,7 +159,7 @@
 						<tbody>
 							{% for dpr in dprs %}
 							<tr>
-								<td>{{ dpr.name }}</td>
+								<td><a href="/dpr-detail?name={{ dpr.name | urlencode }}">{{ dpr.name }}</a></td>
 								<td>{{ dpr.dpr_date or "-" }}</td>
 								<td>{{ dpr.status or "-" }}</td>
 								<td class="text-right"><a class="btn btn-sm btn-primary" href="/dpr-detail?name={{ dpr.name | urlencode }}">View</a></td>

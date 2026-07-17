@@ -96,17 +96,17 @@
   },
   {
    "fieldname": "summary",
-   "fieldtype": "Small Text",
+   "fieldtype": "Text Editor",
    "label": "Summary"
   },
   {
-   "fieldname": "notes",
-   "fieldtype": "Small Text",
-   "label": "Notes"
+    "fieldname": "notes",
+    "fieldtype": "Text Editor",
+    "label": "Notes"
   },
   {
    "fieldname": "remarks",
-   "fieldtype": "Small Text",
+   "fieldtype": "Text Editor",
    "label": "Internal Remarks"
   },
   {

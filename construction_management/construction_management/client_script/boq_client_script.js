@@ -1721,7 +1721,7 @@ frappe.ui.form.on("BOQ", {
 </th>
 
 <th style="width:14%;text-align:center;padding:8px;">
-    AAM
+    Costing Amount
 </th>
 
 <th style="width:6%;text-align:center;padding:8px;">
