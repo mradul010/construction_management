@@ -1,7 +1,7 @@
 {
  "app": "construction_management",
  "charts": [],
- "content": "[{\"id\":\"cm_header\",\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h4\\\"><b>Construction Management</b></span>\",\"col\":12}},{\"id\":\"UFIRveYcC_\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"New BOQ\",\"col\":3}},{\"id\":\"xSq_1k8YKt\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"New RA Bill\",\"col\":3}},{\"id\":\"hMk9j4kqNw\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"New DPR\",\"col\":3}},{\"id\":\"LJbxVOmvyk\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Project\",\"col\":3}},{\"id\":\"PBkLVAWSQX\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Purchase Order\",\"col\":3}},{\"id\":\"NRS70vW3g_\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Sales Invoice\",\"col\":3}},{\"id\":\"NACpOuZ7Un\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Customer\",\"col\":3}},{\"id\":\"6xIamZ58m4\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Supplier\",\"col\":3}},{\"id\":\"2k2nvkXGgF\",\"type\":\"card\",\"data\":{\"card_name\":\"Estimation & BOQ\",\"col\":4}},{\"id\":\"ydqxBfjE8q\",\"type\":\"card\",\"data\":{\"card_name\":\"Billing & Revenue\",\"col\":4}},{\"id\":\"tynLVoNpZJ\",\"type\":\"card\",\"data\":{\"card_name\":\"Procurement & Costing\",\"col\":4}},{\"id\":\"0RvPsVNEQT\",\"type\":\"card\",\"data\":{\"card_name\":\"Sales Record\",\"col\":4}},{\"id\":\"FXiwO4Ytfe\",\"type\":\"card\",\"data\":{\"card_name\":\"Project Managment\",\"col\":4}},{\"id\":\"NEwmwBYXcx\",\"type\":\"card\",\"data\":{\"card_name\":\"Reports\",\"col\":4}}]",
+ "content": "[{\"id\":\"cm_header\",\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h4\\\"><b>Construction Management</b></span>\",\"col\":12}},{\"id\":\"UFIRveYcC_\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"New BOQ\",\"col\":3}},{\"id\":\"xSq_1k8YKt\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"New RA Bill\",\"col\":3}},{\"id\":\"hMk9j4kqNw\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"New DPR\",\"col\":3}},{\"id\":\"new_sc_work_order\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"New SC Work Order\",\"col\":3}},{\"id\":\"LJbxVOmvyk\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Project\",\"col\":3}},{\"id\":\"PBkLVAWSQX\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Purchase Order\",\"col\":3}},{\"id\":\"NRS70vW3g_\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Sales Invoice\",\"col\":3}},{\"id\":\"NACpOuZ7Un\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Customer\",\"col\":3}},{\"id\":\"6xIamZ58m4\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Supplier\",\"col\":12}},{\"id\":\"2k2nvkXGgF\",\"type\":\"card\",\"data\":{\"card_name\":\"Estimation & BOQ\",\"col\":4}},{\"id\":\"tynLVoNpZJ\",\"type\":\"card\",\"data\":{\"card_name\":\"Procurement & Costing\",\"col\":4}},{\"id\":\"0RvPsVNEQT\",\"type\":\"card\",\"data\":{\"card_name\":\"Sales Record\",\"col\":4}},{\"id\":\"ydqxBfjE8q\",\"type\":\"card\",\"data\":{\"card_name\":\"Billing & Revenue\",\"col\":4}},{\"id\":\"FXiwO4Ytfe\",\"type\":\"card\",\"data\":{\"card_name\":\"Project Managment\",\"col\":4}},{\"id\":\"HGOIoiEW6R\",\"type\":\"card\",\"data\":{\"card_name\":\"Reports\",\"col\":4}}]",
  "creation": "2026-07-09 11:57:10.554586",
  "custom_blocks": [],
  "docstatus": 0,
@@ -108,7 +108,167 @@
   {
    "hidden": 0,
    "is_query_report": 0,
-   "label": "Billing & Revenue",
+   "label": "Reports",
+   "link_count": 8,
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Card Break"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 1,
+   "label": "Project Construction Report",
+   "link_count": 0,
+   "link_to": "Project Construction Report",
+   "link_type": "Report",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 1,
+   "label": "DPR Register",
+   "link_count": 0,
+   "link_to": "DPR Register",
+   "link_type": "Report",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 1,
+   "label": "BOQ Report",
+   "link_count": 0,
+   "link_to": "BOQ Report",
+   "link_type": "Report",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 1,
+   "label": "RA Bill Report",
+   "link_count": 0,
+   "link_to": "RA Bill Report",
+   "link_type": "Report",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 1,
+   "label": "Work Progress Report",
+   "link_count": 0,
+   "link_to": "Work Progress Report",
+   "link_type": "Report",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 1,
+   "label": "Retention Report",
+   "link_count": 0,
+   "link_to": "Retention Report",
+   "link_type": "Report",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 1,
+   "label": "BOQ Revision Report",
+   "link_count": 0,
+   "link_to": "BOQ Revision Report",
+   "link_type": "Report",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 1,
+   "label": "RA Bill Sales Invoice Report",
+   "link_count": 0,
+   "link_to": "RA Bill Sales Invoice Report",
+   "link_type": "Report",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Project Managment",
+   "link_count": 6,
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Card Break"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Project",
+   "link_count": 0,
+   "link_to": "Project",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "DPR",
+   "link_count": 0,
+   "link_to": "Daily Progress Report",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Task",
+   "link_count": 0,
+   "link_to": "Task",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Timesheet",
+   "link_count": 0,
+   "link_to": "Timesheet",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "dependencies": "Project, Supplier",
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "SC Work Order",
+   "link_count": 0,
+   "link_to": "SC Work Order",
+   "link_type": "DocType",
+   "onboard": 1,
+   "type": "Link"
+  },
+  {
+   "dependencies": "SC Work Order",
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "SC Bill",
+   "link_count": 0,
+   "link_to": "SC Bill",
+   "link_type": "DocType",
+   "onboard": 1,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Sales Record",
    "link_count": 4,
    "link_type": "DocType",
    "onboard": 0,
@@ -117,9 +277,9 @@
   {
    "hidden": 0,
    "is_query_report": 0,
-   "label": "RA Bill",
+   "label": "Sales Order",
    "link_count": 0,
-   "link_to": "RA Bill",
+   "link_to": "Sales Order",
    "link_type": "DocType",
    "onboard": 0,
    "type": "Link"
@@ -137,9 +297,9 @@
   {
    "hidden": 0,
    "is_query_report": 0,
-   "label": "Payment Entry",
+   "label": "Stock Entry",
    "link_count": 0,
-   "link_to": "Payment Entry",
+   "link_to": "Stock Entry",
    "link_type": "DocType",
    "onboard": 0,
    "type": "Link"
@@ -147,9 +307,9 @@
   {
    "hidden": 0,
    "is_query_report": 0,
-   "label": "Retention Record",
+   "label": "Delivery Note",
    "link_count": 0,
-   "link_to": "Retention Record",
+   "link_to": "Delivery Note",
    "link_type": "DocType",
    "onboard": 0,
    "type": "Link"
@@ -216,7 +376,7 @@
   {
    "hidden": 0,
    "is_query_report": 0,
-   "label": "Sales Record",
+   "label": "Billing & Revenue",
    "link_count": 4,
    "link_type": "DocType",
    "onboard": 0,
@@ -225,9 +385,9 @@
   {
    "hidden": 0,
    "is_query_report": 0,
-   "label": "Sales Order",
+   "label": "RA Bill",
    "link_count": 0,
-   "link_to": "Sales Order",
+   "link_to": "RA Bill",
    "link_type": "DocType",
    "onboard": 0,
    "type": "Link"
@@ -245,9 +405,9 @@
   {
    "hidden": 0,
    "is_query_report": 0,
-   "label": "Stock Entry",
+   "label": "Payment Entry",
    "link_count": 0,
-   "link_to": "Stock Entry",
+   "link_to": "Payment Entry",
    "link_type": "DocType",
    "onboard": 0,
    "type": "Link"
@@ -255,153 +415,15 @@
   {
    "hidden": 0,
    "is_query_report": 0,
-   "label": "Delivery Note",
+   "label": "Retention Record",
    "link_count": 0,
-   "link_to": "Delivery Note",
+   "link_to": "Retention Record",
    "link_type": "DocType",
-   "onboard": 0,
-   "type": "Link"
-  },
-  {
-   "hidden": 0,
-   "is_query_report": 0,
-   "label": "Project Managment",
-   "link_count": 5,
-   "link_type": "DocType",
-   "onboard": 0,
-   "type": "Card Break"
-  },
-  {
-   "hidden": 0,
-   "is_query_report": 0,
-   "label": "Project",
-   "link_count": 0,
-   "link_to": "Project",
-   "link_type": "DocType",
-   "onboard": 0,
-   "type": "Link"
-  },
-  {
-   "hidden": 0,
-   "is_query_report": 0,
-   "label": "DPR",
-   "link_count": 0,
-   "link_to": "Daily Progress Report",
-   "link_type": "DocType",
-   "onboard": 0,
-   "type": "Link"
-  },
-  {
-   "hidden": 0,
-   "is_query_report": 0,
-   "label": "Task",
-   "link_count": 0,
-   "link_to": "Task",
-   "link_type": "DocType",
-   "onboard": 0,
-   "type": "Link"
-  },
-  {
-   "hidden": 0,
-   "is_query_report": 0,
-   "label": "Timesheet",
-   "link_count": 0,
-   "link_to": "Timesheet",
-   "link_type": "DocType",
-   "onboard": 0,
-   "type": "Link"
-  },
-  {
-   "hidden": 0,
-   "is_query_report": 0,
-   "label": "SC Work Order",
-   "link_count": 0,
-   "link_to": "Subcontracting BOM",
-   "link_type": "DocType",
-   "onboard": 0,
-   "type": "Link"
-  },
-  {
-   "hidden": 0,
-   "is_query_report": 0,
-   "label": "Reports",
-   "link_count": 7,
-   "link_type": "DocType",
-   "onboard": 0,
-   "type": "Card Break"
-  },
-  {
-   "hidden": 0,
-   "is_query_report": 1,
-   "label": "Project Construction Report",
-   "link_count": 0,
-   "link_to": "Project Construction Report",
-   "link_type": "Report",
-   "onboard": 0,
-   "type": "Link"
-  },
-  {
-   "hidden": 0,
-   "is_query_report": 1,
-   "label": "DPR Report",
-   "link_count": 0,
-   "link_to": "DPR Register",
-   "link_type": "Report",
-   "onboard": 0,
-   "type": "Link"
-  },
-  {
-   "hidden": 0,
-   "is_query_report": 1,
-   "label": "BOQ Report",
-   "link_count": 0,
-   "link_to": "BOQ Report",
-   "link_type": "Report",
-   "onboard": 0,
-   "type": "Link"
-  },
-  {
-   "hidden": 0,
-   "is_query_report": 1,
-   "label": "RA Bill Report",
-   "link_count": 0,
-   "link_to": "RA Bill Report",
-   "link_type": "Report",
-   "onboard": 0,
-   "type": "Link"
-  },
-  {
-   "hidden": 0,
-   "is_query_report": 1,
-   "label": "Work Progress Report",
-   "link_count": 0,
-   "link_to": "Work Progress Report",
-   "link_type": "Report",
-   "onboard": 0,
-   "type": "Link"
-  },
-  {
-   "hidden": 0,
-   "is_query_report": 1,
-   "label": "Retention Report",
-   "link_count": 0,
-   "link_to": "Retention Report",
-   "link_type": "Report",
-   "onboard": 0,
-   "type": "Link"
-  },
-  {
-   "hidden": 0,
-   "is_query_report": 1,
-   "label": "BOQ Revision Report",
-   "link_count": 0,
-   "link_to": "BOQ Revision Report",
-   "link_type": "Report",
    "onboard": 0,
    "type": "Link"
   }
  ],
- "modified": "2026-07-14 17:15:27.273519",
+ "modified": "2026-07-17 15:27:35.062127",
  "modified_by": "Administrator",
  "module": "Construction Management",
  "name": "Construction Management",
@@ -473,6 +495,13 @@
    "label": "New DPR",
    "type": "URL",
    "url": "/app/daily-progress-report/new-daily-progress-report"
+  },
+  {
+   "color": "Grey",
+   "doc_view": "List",
+   "label": "New SC Work Order",
+   "type": "URL",
+   "url": "/app/sc-work-order/new-sc-work-order"
   }
  ],
  "title": "Construction Management",

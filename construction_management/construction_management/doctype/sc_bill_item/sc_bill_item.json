@@ -1,0 +1,144 @@
+{
+ "actions": [],
+ "creation": "2026-07-17 00:00:00.000000",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "sc_work_order_item",
+  "boq_item",
+  "description",
+  "assigned_qty",
+  "previous_qty",
+  "current_qty",
+  "cumulative_qty",
+  "balance_qty",
+  "uom",
+  "sc_rate",
+  "current_amount",
+  "previous_amount",
+  "cumulative_amount",
+  "balance_amount",
+  "bill_amount"
+ ],
+ "fields": [
+  {
+   "fieldname": "sc_work_order_item",
+   "fieldtype": "Data",
+   "hidden": 1,
+   "label": "SC Work Order Item"
+  },
+  {
+   "fieldname": "boq_item",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "BOQ Item",
+   "options": "BOQ Item",
+   "read_only": 1
+  },
+  {
+   "fieldname": "description",
+   "fieldtype": "Small Text",
+   "in_list_view": 1,
+   "label": "Description",
+   "read_only": 1
+  },
+  {
+   "fieldname": "assigned_qty",
+   "fieldtype": "Float",
+   "label": "Assigned Qty",
+   "read_only": 1
+  },
+  {
+   "default": "0",
+   "fieldname": "previous_qty",
+   "fieldtype": "Float",
+   "label": "Previous Qty",
+   "read_only": 1
+  },
+  {
+   "default": "0",
+   "fieldname": "current_qty",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "Current Qty"
+  },
+  {
+   "fieldname": "cumulative_qty",
+   "fieldtype": "Float",
+   "label": "Cumulative Qty",
+   "read_only": 1
+  },
+  {
+   "fieldname": "balance_qty",
+   "fieldtype": "Float",
+   "label": "Balance Qty",
+   "read_only": 1
+  },
+  {
+   "fieldname": "uom",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "UOM",
+   "options": "UOM",
+   "read_only": 1
+  },
+  {
+   "fieldname": "sc_rate",
+   "fieldtype": "Currency",
+   "in_list_view": 1,
+   "label": "Subcontract Rate",
+   "options": "currency",
+   "read_only": 1
+  },
+  {
+   "fieldname": "current_amount",
+   "fieldtype": "Currency",
+   "in_list_view": 1,
+   "label": "Current Amount",
+   "options": "currency",
+   "read_only": 1
+  },
+  {
+   "fieldname": "previous_amount",
+   "fieldtype": "Currency",
+   "label": "Previous Amount",
+   "options": "currency",
+   "read_only": 1
+  },
+  {
+   "fieldname": "cumulative_amount",
+   "fieldtype": "Currency",
+   "label": "Cumulative Amount",
+   "options": "currency",
+   "read_only": 1
+  },
+  {
+   "fieldname": "balance_amount",
+   "fieldtype": "Currency",
+   "label": "Balance Amount",
+   "options": "currency",
+   "read_only": 1
+  },
+  {
+   "default": "0",
+   "fieldname": "bill_amount",
+   "fieldtype": "Currency",
+   "in_list_view": 1,
+   "label": "Bill Amount",
+   "options": "currency"
+  }
+ ],
+ "istable": 1,
+ "links": [],
+ "modified": "2026-07-17 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Construction Management",
+ "name": "SC Bill Item",
+ "owner": "Administrator",
+ "permissions": [],
+ "row_format": "Dynamic",
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": []
+}

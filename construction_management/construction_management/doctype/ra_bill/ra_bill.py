@@ -559,8 +559,8 @@ class RABill(Document):
 		Creates a draft Sales Invoice from this approved RA Bill.
 		Detailed lines:
 		  1. One line per RA Bill Item current_amount (positive)
-		  2. Retention Deduction -> -retention_amount (negative)
-		Net total = net_payable.
+		The Sales Invoice remains at the full certified value. Retention is tracked
+		on the RA Bill/Retention Record and deducted later through Payment Entry.
 		Status set to Invoiced after creation.
 		"""
 		if self.status != "Approved":
@@ -905,52 +905,17 @@ class RABill(Document):
 				f"Gross amount: {frappe.format(self.gross_amount, {'fieldtype': 'Currency'})}."
 			)
 
-		if self.retention_amount and self.retention_amount > 0:
-			retention_description = (
-				f"Retention held @ {self.retention_percent}%\n"
-				f"To be released at project completion\n"
-				f"RA Bill #{self.bill_no} | {self.project}"
-			)
-			invoice_items.append(
-				{
-					"item_code": "Retention Deduction",
-					"item_name": "Retention Deduction",
-					"description": retention_description,
-					"qty": 1,
-					"rate": -self.retention_amount,
-					"uom": "Nos",
-					"income_account": income_account,
-				}
-			)
-
-		invoice_net_total = sum(
+		invoice_certified_total = sum(
 			flt(item.get("qty")) * flt(item.get("rate")) for item in invoice_items
 		)
-		if flt(invoice_net_total, 2) != flt(self.net_payable, 2):
+		if flt(invoice_certified_total, 2) != flt(self.gross_amount, 2):
 			frappe.throw(
-				"Sales Invoice item total does not match the RA Bill net payable. "
-				f"Invoice total: {frappe.format(invoice_net_total, {'fieldtype': 'Currency'})}, "
-				f"Net payable: {frappe.format(self.net_payable, {'fieldtype': 'Currency'})}."
+				"Sales Invoice item total does not match the RA Bill certified amount. "
+				f"Invoice total: {frappe.format(invoice_certified_total, {'fieldtype': 'Currency'})}, "
+				f"Certified amount: {frappe.format(self.gross_amount, {'fieldtype': 'Currency'})}."
 			)
 
-		try:
-			si = make_sales_invoice(invoice_items)
-		except Exception as negative_rate_error:
-			if not (self.retention_amount and self.retention_amount > 0):
-				raise
-
-			fallback_items = []
-			for item in invoice_items:
-				item = item.copy()
-				if item["item_code"] == "Retention Deduction":
-					item["qty"] = -1
-					item["rate"] = self.retention_amount
-				fallback_items.append(item)
-
-			try:
-				si = make_sales_invoice(fallback_items)
-			except Exception:
-				raise negative_rate_error
+		si = make_sales_invoice(invoice_items)
 
 		self.db_set("sales_invoice", si.name)
 		allocated_advance = sum(flt(row.allocated_amount) for row in si.get("advances") or [])
@@ -971,7 +936,7 @@ class RABill(Document):
 
 		frappe.msgprint(
 			f"Draft Sales Invoice <b>{si.name}</b> created successfully. "
-			f"Net payable: {frappe.format(self.net_payable, {'fieldtype': 'Currency'})}. "
+			f"Certified amount: {frappe.format(self.gross_amount, {'fieldtype': 'Currency'})}. "
 			f"Please review and submit from the Accounts module.",
 			title="Sales Invoice Created",
 			indicator="green",

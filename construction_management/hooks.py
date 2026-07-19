@@ -245,17 +245,19 @@ doc_events = {
 # Overriding Methods
 # ------------------------------
 #
-# override_whitelisted_methods = {
-# 	"frappe.desk.doctype.event.event.get_events": "construction_management.event.get_events"
-# }
+override_whitelisted_methods = {
+	"erpnext.accounts.doctype.payment_entry.payment_entry.get_payment_entry": "construction_management.construction_management.retention_payment.get_payment_entry",
+}
 #
 # each overriding function accepts a `data` argument;
 # generated from the base implementation of the doctype dashboard,
 # along with any modifications made in other Frappe apps
 override_doctype_dashboards = {
 	"Project": "construction_management.construction_management.integrations.project_dashboard.get_data",
+	"Purchase Invoice": "construction_management.construction_management.integrations.purchase_invoice_dashboard.get_data",
 	"Sales Invoice": "construction_management.construction_management.integrations.sales_invoice_dashboard.get_data",
 	"Sales Order": "construction_management.construction_management.integrations.sales_order_dashboard.get_data",
+	"Supplier": "construction_management.construction_management.integrations.supplier_dashboard.get_data",
 }
 
 # exempt linked doctypes from being automatically cancelled

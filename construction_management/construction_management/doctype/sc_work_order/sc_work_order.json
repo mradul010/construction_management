@@ -1,0 +1,349 @@
+{
+ "actions": [],
+ "autoname": "SC-WO-YYYY-.####",
+ "creation": "2026-07-17 00:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "details_tab",
+  "contract_details_section",
+  "project",
+  "supplier",
+  "scope_type",
+  "billing_type",
+  "status",
+  "contract_details_column",
+  "boq",
+  "company",
+  "currency",
+  "conversion_rate",
+  "dates_section",
+  "start_date",
+  "dates_column",
+  "end_date",
+  "scope_section",
+  "items",
+  "standalone_section",
+  "standalone_description",
+  "standalone_contract_value",
+  "totals_section",
+  "boq_amount",
+  "sc_amount",
+  "margin_amount",
+  "totals_column",
+  "contract_value",
+  "total_billed",
+  "balance_amount",
+  "margin_percent",
+  "more_info_tab",
+  "terms",
+  "remarks",
+  "amended_from",
+  "connections_tab",
+  "connections_section",
+  "connections_html"
+ ],
+ "fields": [
+  {
+   "fieldname": "details_tab",
+   "fieldtype": "Tab Break",
+   "label": "Details"
+  },
+  {
+   "fieldname": "contract_details_section",
+   "fieldtype": "Section Break",
+   "label": "Contract Details"
+  },
+  {
+   "fieldname": "project",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Project",
+   "options": "Project",
+   "reqd": 1,
+   "search_index": 1
+  },
+  {
+   "fieldname": "supplier",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Subcontractor",
+   "options": "Supplier",
+   "reqd": 1,
+   "search_index": 1
+  },
+  {
+   "default": "BOQ Linked",
+   "fieldname": "scope_type",
+   "fieldtype": "Select",
+   "in_standard_filter": 1,
+   "label": "Scope Type",
+   "options": "BOQ Linked\nStandalone",
+   "reqd": 1
+  },
+  {
+   "default": "Measured",
+   "fieldname": "billing_type",
+   "fieldtype": "Select",
+   "in_standard_filter": 1,
+   "label": "Billing Type",
+   "options": "Measured\nMilestone\nLump Sum",
+   "reqd": 1
+  },
+  {
+   "default": "Draft",
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "Status",
+   "options": "Draft\nSubmitted\nBilling In Progress\nCompleted\nCancelled",
+   "read_only": 1
+  },
+  {
+   "fieldname": "contract_details_column",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "boq",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "BOQ",
+   "options": "BOQ"
+  },
+  {
+   "fetch_from": "project.company",
+   "fetch_if_empty": 1,
+   "fieldname": "company",
+   "fieldtype": "Link",
+   "label": "Company",
+   "options": "Company",
+   "reqd": 1
+  },
+  {
+   "default": "AED",
+   "fieldname": "currency",
+   "fieldtype": "Link",
+   "label": "Currency",
+   "options": "Currency",
+   "reqd": 1
+  },
+  {
+   "default": "1",
+   "fieldname": "conversion_rate",
+   "fieldtype": "Float",
+   "label": "Conversion Rate"
+  },
+  {
+   "fieldname": "dates_section",
+   "fieldtype": "Section Break",
+   "label": "Dates"
+  },
+  {
+   "fieldname": "start_date",
+   "fieldtype": "Date",
+   "label": "Start Date"
+  },
+  {
+   "fieldname": "dates_column",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "end_date",
+   "fieldtype": "Date",
+   "label": "End Date"
+  },
+  {
+   "fieldname": "scope_section",
+   "fieldtype": "Section Break",
+   "label": "BOQ Scope"
+  },
+  {
+   "fieldname": "items",
+   "fieldtype": "Table",
+   "label": "Scope Items",
+   "options": "SC Work Order Item"
+  },
+  {
+   "depends_on": "eval:doc.scope_type=='Standalone'",
+   "fieldname": "standalone_section",
+   "fieldtype": "Section Break",
+   "label": "Standalone Scope"
+  },
+  {
+   "fieldname": "standalone_description",
+   "fieldtype": "Small Text",
+   "label": "Standalone Description"
+  },
+  {
+   "fieldname": "standalone_contract_value",
+   "fieldtype": "Currency",
+   "label": "Standalone Contract Value",
+   "options": "currency"
+  },
+  {
+   "fieldname": "totals_section",
+   "fieldtype": "Section Break",
+   "label": "Financial Summary"
+  },
+  {
+   "fieldname": "boq_amount",
+   "fieldtype": "Currency",
+   "label": "BOQ Amount",
+   "options": "currency",
+   "read_only": 1
+  },
+  {
+   "fieldname": "sc_amount",
+   "fieldtype": "Currency",
+   "label": "SC Amount",
+   "options": "currency",
+   "read_only": 1
+  },
+  {
+   "fieldname": "margin_amount",
+   "fieldtype": "Currency",
+   "label": "Total Margin",
+   "options": "currency",
+   "read_only": 1
+  },
+  {
+   "fieldname": "totals_column",
+   "fieldtype": "Column Break"
+  },
+  {
+   "bold": 1,
+   "fieldname": "contract_value",
+   "fieldtype": "Currency",
+   "in_list_view": 1,
+   "label": "Contract Value",
+   "options": "currency",
+   "read_only": 1
+  },
+  {
+   "fieldname": "total_billed",
+   "fieldtype": "Currency",
+   "label": "Total Billed",
+   "options": "currency",
+   "read_only": 1
+  },
+  {
+   "fieldname": "balance_amount",
+   "fieldtype": "Currency",
+   "label": "Balance",
+   "options": "currency",
+   "read_only": 1
+  },
+  {
+   "fieldname": "margin_percent",
+   "fieldtype": "Percent",
+   "label": "Margin %",
+   "read_only": 1
+  },
+  {
+   "fieldname": "more_info_tab",
+   "fieldtype": "Tab Break",
+   "label": "More Info"
+  },
+  {
+   "fieldname": "terms",
+   "fieldtype": "Text Editor",
+   "label": "Terms"
+  },
+  {
+   "fieldname": "remarks",
+   "fieldtype": "Small Text",
+   "label": "Remarks"
+  },
+  {
+   "fieldname": "amended_from",
+   "fieldtype": "Link",
+   "label": "Amended From",
+   "no_copy": 1,
+   "options": "SC Work Order",
+   "print_hide": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "connections_tab",
+   "fieldtype": "Tab Break",
+   "label": "Connections",
+   "show_dashboard": 1
+  },
+  {
+   "fieldname": "connections_section",
+   "fieldtype": "Section Break",
+   "label": "Connections"
+  },
+  {
+   "fieldname": "connections_html",
+   "fieldtype": "HTML",
+   "label": "Connections"
+  }
+ ],
+ "is_submittable": 1,
+ "links": [
+  {
+   "group": "Subcontracting",
+   "link_doctype": "SC Bill",
+   "link_fieldname": "sc_work_order"
+  }
+ ],
+ "modified": "2026-07-17 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Construction Management",
+ "name": "SC Work Order",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "amend": 1,
+   "cancel": 1,
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "submit": 1,
+   "write": 1
+  },
+  {
+   "amend": 1,
+   "cancel": 0,
+   "create": 1,
+   "delete": 0,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Construction Manager",
+   "share": 1,
+   "submit": 1,
+   "write": 1
+  },
+  {
+   "amend": 0,
+   "cancel": 0,
+   "create": 1,
+   "delete": 0,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Construction User",
+   "share": 1,
+   "submit": 0,
+   "write": 1
+  }
+ ],
+ "search_fields": "project,supplier,boq,status",
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": [],
+ "title_field": "supplier",
+ "track_changes": 1
+}

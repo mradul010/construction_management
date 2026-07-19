@@ -7,6 +7,7 @@ def after_install():
 	ensure_project_current_boq_field()
 	ensure_sales_invoice_ra_bill_field()
 	ensure_sales_invoice_retention_records_field()
+	ensure_retention_receivable_account()
 	backfill_sales_invoice_ra_bill_links()
 	ensure_ra_bill_items()
 	backfill_boq_revision_fields()
@@ -17,6 +18,7 @@ def after_migrate():
 	ensure_project_current_boq_field()
 	ensure_sales_invoice_ra_bill_field()
 	ensure_sales_invoice_retention_records_field()
+	ensure_retention_receivable_account()
 	backfill_sales_invoice_ra_bill_links()
 	ensure_ra_bill_items()
 	backfill_boq_revision_fields()
@@ -115,6 +117,20 @@ def ensure_sales_invoice_retention_records_field():
 	frappe.clear_cache(doctype="Sales Invoice")
 	frappe.db.commit()
 	print("Sales Invoice Retention Records custom field created successfully")
+
+
+def ensure_retention_receivable_account():
+	"""
+	Ensure the standard Payment Entry deduction account used for retention exists.
+	"""
+	from construction_management.construction_management.retention_payment import (
+		ensure_retention_receivable_account as ensure_account,
+	)
+
+	account = ensure_account()
+	if account:
+		frappe.db.commit()
+		print(f"Retention Receivable account ready: {account}")
 
 
 def ensure_project_current_boq_field():
@@ -486,7 +502,7 @@ def get_or_create_ra_bill_receivable_account(company, currency):
 
 def ensure_ra_bill_items():
 	"""
-	Ensure the two service items used in RA Bill Sales Invoices exist.
+	Ensure the service item used in RA Bill Sales Invoices exists.
 	Safe to run multiple times - skips if already exists.
 	"""
 	import frappe
@@ -499,16 +515,6 @@ def ensure_ra_bill_items():
 			"item_code": "RA Bill Services",
 			"item_name": "RA Bill Services",
 			"description": "Construction progress billing services",
-			"item_group": "Services",
-			"stock_uom": "Nos",
-			"is_stock_item": 0,
-			"is_purchase_item": 0,
-			"is_sales_item": 1,
-		},
-		{
-			"item_code": "Retention Deduction",
-			"item_name": "Retention Deduction",
-			"description": "Retention amount held per contract terms",
 			"item_group": "Services",
 			"stock_uom": "Nos",
 			"is_stock_item": 0,

@@ -22,7 +22,7 @@ def get_data():
 			},
 			{
 				"label": _("Billing"),
-				"items": ["RA Bill"],
+				"items": ["RA Bill", "SC Work Order", "SC Bill"],
 			},
 		],
 	}

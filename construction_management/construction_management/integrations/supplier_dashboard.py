@@ -2,16 +2,16 @@ from frappe import _
 
 
 def get_data(data):
+	"""Extend the Supplier dashboard with subcontract work and billing links."""
 	data = data or {}
-	data.setdefault("fieldname", "project")
+	data.setdefault("fieldname", "supplier")
+
 	transactions = data.setdefault("transactions", [])
 	_add_items(
 		transactions,
-		_("Construction"),
-		["Daily Progress Report", "BOQ", "RA Bill", "SC Work Order", "SC Bill"],
+		_("Subcontract Management"),
+		["SC Work Order", "SC Bill", "Purchase Invoice"],
 	)
-	_add_items(transactions, _("Subcontract Management"), ["SC Work Order", "SC Bill"])
-	_add_items(transactions, _("Advance"), ["Payment Entry"])
 	return data
 
 
