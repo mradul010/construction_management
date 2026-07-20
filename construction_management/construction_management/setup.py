@@ -7,6 +7,7 @@ def after_install():
 	ensure_project_current_boq_field()
 	ensure_sales_invoice_ra_bill_field()
 	ensure_sales_invoice_retention_records_field()
+	ensure_payment_entry_retention_record_field()
 	ensure_retention_receivable_account()
 	backfill_sales_invoice_ra_bill_links()
 	ensure_ra_bill_items()
@@ -18,6 +19,7 @@ def after_migrate():
 	ensure_project_current_boq_field()
 	ensure_sales_invoice_ra_bill_field()
 	ensure_sales_invoice_retention_records_field()
+	ensure_payment_entry_retention_record_field()
 	ensure_retention_receivable_account()
 	backfill_sales_invoice_ra_bill_links()
 	ensure_ra_bill_items()
@@ -117,6 +119,84 @@ def ensure_sales_invoice_retention_records_field():
 	frappe.clear_cache(doctype="Sales Invoice")
 	frappe.db.commit()
 	print("Sales Invoice Retention Records custom field created successfully")
+
+
+def ensure_payment_entry_retention_record_field():
+	fields = [
+		{
+			"fieldname": "retention_record",
+			"label": "Retention Record",
+			"fieldtype": "Link",
+			"options": "Retention Record",
+			"insert_after": "project",
+		},
+		{
+			"fieldname": "custom_is_retention_payment",
+			"label": "Is Retention Payment",
+			"fieldtype": "Check",
+			"insert_after": "retention_record",
+		},
+		{
+			"fieldname": "custom_retention_record",
+			"label": "Retention Record",
+			"fieldtype": "Link",
+			"options": "Retention Record",
+			"insert_after": "custom_is_retention_payment",
+		},
+		{
+			"fieldname": "custom_original_sales_invoice",
+			"label": "Original Sales Invoice",
+			"fieldtype": "Link",
+			"options": "Sales Invoice",
+			"insert_after": "custom_retention_record",
+		},
+		{
+			"fieldname": "custom_ra_bill",
+			"label": "RA Bill",
+			"fieldtype": "Link",
+			"options": "RA Bill",
+			"insert_after": "custom_original_sales_invoice",
+		},
+		{
+			"fieldname": "custom_retention_release_amount",
+			"label": "Retention Release Amount",
+			"fieldtype": "Currency",
+			"insert_after": "custom_ra_bill",
+		},
+		{
+			"fieldname": "custom_retention_receivable_account",
+			"label": "Retention Receivable Account",
+			"fieldtype": "Link",
+			"options": "Account",
+			"insert_after": "custom_retention_release_amount",
+		},
+	]
+
+	created_fields = []
+	for field in fields:
+		fieldname = field["fieldname"]
+		if frappe.get_meta("Payment Entry").has_field(fieldname):
+			continue
+
+		if frappe.db.exists("Custom Field", f"Payment Entry-{fieldname}"):
+			continue
+
+		field.update(
+			{
+				"doctype": "Custom Field",
+				"dt": "Payment Entry",
+				"read_only": 1,
+				"no_copy": 1,
+				"module": "Construction Management",
+			}
+		)
+		frappe.get_doc(field).insert(ignore_permissions=True)
+		created_fields.append(fieldname)
+
+	frappe.clear_cache(doctype="Payment Entry")
+	if created_fields:
+		frappe.db.commit()
+		print(f"Payment Entry retention custom fields created: {', '.join(created_fields)}")
 
 
 def ensure_retention_receivable_account():

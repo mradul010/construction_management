@@ -2,6 +2,11 @@ import frappe
 from frappe import _
 from frappe.utils import flt
 
+from construction_management.construction_management.accounting_dimensions import (
+	apply_ra_bill_cost_center_to_payment_entry,
+	get_ra_bill_project_cost_center,
+)
+
 
 RETENTION_ACCOUNT_NAME = "Retention Receivable"
 RETENTION_COMPANY = "Qatra Building Contracting"
@@ -52,6 +57,7 @@ def apply_retention_deduction(payment_entry):
 
 	account = get_or_create_retention_receivable_account(retention_context.company)
 	if _has_retention_deduction(payment_entry, account):
+		apply_ra_bill_cost_center_to_payment_entry(payment_entry, retention_account=account)
 		return payment_entry
 
 	retention_amount = flt(retention_context.retention_amount)
@@ -62,11 +68,19 @@ def apply_retention_deduction(payment_entry):
 	if retention_amount <= AMOUNT_TOLERANCE:
 		return payment_entry
 
+	cost_center = get_ra_bill_project_cost_center(
+		retention_context.ra_bill,
+		project=retention_context.project,
+		company=retention_context.company,
+	)
+	if payment_entry.meta.has_field("project") and retention_context.project and not payment_entry.get("project"):
+		payment_entry.project = retention_context.project
+
 	payment_entry.append(
 		"deductions",
 		{
 			"account": account,
-			"cost_center": _get_retention_cost_center(retention_context.company),
+			"cost_center": cost_center,
 			"amount": retention_amount,
 			"description": _get_retention_deduction_description(retention_context.ra_bill),
 		},
@@ -152,7 +166,7 @@ def _get_payment_entry_retention_context(payment_entry):
 		invoice_values = frappe.db.get_value(
 			"Sales Invoice",
 			reference.reference_name,
-			["name", "company", "ra_bill", "retention_record"],
+			["name", "company", "project", "ra_bill", "retention_record"],
 			as_dict=True,
 		)
 		if not invoice_values or not _is_initial_ra_bill_invoice(invoice_values):
@@ -170,6 +184,7 @@ def _get_payment_entry_retention_context(payment_entry):
 		return frappe._dict(
 			{
 				"company": invoice_values.company,
+				"project": invoice_values.project or frappe.db.get_value("RA Bill", invoice_values.ra_bill, "project"),
 				"ra_bill": ra_bill_values.name,
 				"retention_amount": ra_bill_values.retention_amount,
 				"allocated_amount": reference.allocated_amount,

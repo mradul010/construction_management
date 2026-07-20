@@ -11,6 +11,10 @@ from construction_management.construction_management.advance_management import (
 	update_ra_bill_advance_fields,
 	validate_ra_bill_advance_recovery,
 )
+from construction_management.construction_management.accounting_dimensions import (
+	apply_ra_bill_cost_center_to_sales_invoice,
+	get_ra_bill_project_cost_center,
+)
 from construction_management.construction_management.doctype.retention_record.retention_record import (
 	get_ra_bill_sales_order,
 	mark_cancelled_from_ra_bill,
@@ -602,6 +606,11 @@ class RABill(Document):
 			invoice_currency,
 		)
 		source_sales_order = get_ra_bill_sales_order(self)
+		project_cost_center = get_ra_bill_project_cost_center(
+			self.name,
+			project=self.project,
+			company=company,
+		)
 
 		def set_if_exists(doc, fieldname, value):
 			if doc.meta.has_field(fieldname) and value not in (None, ""):
@@ -668,6 +677,7 @@ class RABill(Document):
 			set_if_exists(si, "company", company)
 			set_if_exists(si, "debit_to", receivable_account)
 			set_if_exists(si, "project", self.project)
+			set_if_exists(si, "cost_center", project_cost_center)
 			set_if_exists(si, "currency", invoice_currency)
 			set_if_exists(si, "conversion_rate", conversion_rate)
 			set_if_exists(si, "posting_date", get_posting_date())
@@ -802,9 +812,11 @@ class RABill(Document):
 			}
 			si = frappe.get_doc(si_data)
 			add_advanced_fields(si)
+			apply_ra_bill_cost_center_to_sales_invoice(si)
 			validate_sales_invoice_references(si)
 			if hasattr(si, "set_missing_values"):
 				si.set_missing_values()
+			apply_ra_bill_cost_center_to_sales_invoice(si)
 			if hasattr(si, "calculate_taxes_and_totals"):
 				si.calculate_taxes_and_totals()
 			recovery_target = get_ra_bill_advance_recovery_target(self)
@@ -887,6 +899,7 @@ class RABill(Document):
 					"rate": rate,
 					"uom": row.uom or "Nos",
 					"income_account": income_account,
+					"cost_center": project_cost_center,
 				}
 			)
 

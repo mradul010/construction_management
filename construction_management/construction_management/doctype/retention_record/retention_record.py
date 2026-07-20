@@ -3,6 +3,13 @@ from frappe import _
 from frappe.model.document import Document
 from frappe.utils import add_days, flt, getdate, today
 
+from construction_management.construction_management.retention_payment import (
+	get_or_create_retention_receivable_account,
+)
+from construction_management.construction_management.accounting_dimensions import (
+	get_ra_bill_project_cost_center,
+)
+
 
 AMOUNT_TOLERANCE = 0.0001
 CANCEL_REMARK = "Cancelled because RA Bill was cancelled"
@@ -95,8 +102,12 @@ class RetentionRecord(Document):
 
 	@frappe.whitelist()
 	def create_sales_invoice(self):
-		if self.status == "Cancelled":
-			frappe.throw(_("Cannot create a Sales Invoice for a Cancelled Retention Record."))
+		frappe.throw(
+			_(
+				"Retention release is now recorded directly through a Payment Entry against Retention Receivable. "
+				"Please use Create Payment Entry."
+			)
+		)
 
 		if not flt(self.retention_amount):
 			frappe.throw(_("Retention Amount must be greater than 0 to create a Sales Invoice."))
@@ -218,29 +229,98 @@ class RetentionRecord(Document):
 		return self.name
 
 	@frappe.whitelist()
+	def receive_retention(self):
+		return self.make_payment_entry()
+
+	@frappe.whitelist()
 	def make_payment_entry(self):
-		if not self.retention_release_invoice:
-			frappe.throw(_("No retention invoice exists to pay against."))
+		if self.status == "Cancelled":
+			frappe.throw(_("Cannot create a Payment Entry for a Cancelled Retention Record."))
 
-		invoice = frappe.get_doc("Sales Invoice", self.retention_release_invoice)
-		if invoice.docstatus != 1:
-			frappe.throw(_("The retention invoice must be submitted before making payment."))
+		release_amount = flt(self.balance_amount)
+		if release_amount <= AMOUNT_TOLERANCE:
+			frappe.throw(_("No remaining retention balance is available for payment."))
 
-		if flt(invoice.outstanding_amount) <= 0:
-			frappe.throw(_("The retention invoice has no outstanding balance."))
+		if not self.customer:
+			frappe.throw(_("Customer is required to receive retention."))
 
-		payment_entry = invoice.get_payment_entry()
-		if not payment_entry:
-			frappe.throw(_("Unable to create a standard Payment Entry for this invoice."))
+		company = _get_retention_payment_company(self)
+		if not company:
+			frappe.throw(_("Company is required to receive retention."))
 
-		payment_entry.insert(ignore_permissions=True)
-		self.last_payment_entry = payment_entry.name
-		self.save(ignore_permissions=True)
+		retention_account = get_or_create_retention_receivable_account(company)
+		existing_payment_entry = _get_open_retention_payment_entry(self.name)
+		if existing_payment_entry:
+			frappe.msgprint(
+				_("Draft Payment Entry {0} already exists for this Retention Record.").format(
+					frappe.bold(existing_payment_entry)
+				)
+			)
+			return existing_payment_entry
+
+		bank_account = _get_retention_release_bank_account(company, self.customer)
+		retention_account_currency = frappe.get_cached_value(
+			"Account",
+			retention_account,
+			"account_currency",
+		)
+
+		payment_entry = frappe.new_doc("Payment Entry")
+		payment_entry.flags.ignore_permissions = True
+		payment_entry.flags.ignore_mandatory = True
+		payment_entry.payment_type = "Receive"
+		payment_entry.company = company
+		payment_entry.posting_date = today()
+		payment_entry.party_type = "Customer"
+		payment_entry.party = self.customer
+		payment_entry.paid_from = retention_account
+		payment_entry.paid_from_account_currency = retention_account_currency
+		if bank_account:
+			payment_entry.paid_to = bank_account
+			payment_entry.paid_to_account_currency = frappe.get_cached_value(
+				"Account",
+				bank_account,
+				"account_currency",
+			)
+		payment_entry.paid_amount = release_amount
+		payment_entry.received_amount = release_amount
+		payment_entry.cost_center = get_ra_bill_project_cost_center(
+			self.ra_bill,
+			project=self.project,
+			company=company,
+		)
+		if self.project:
+			payment_entry.project = self.project
+		_set_if_meta_has_field(payment_entry, "custom_is_retention_payment", 1)
+		_set_if_meta_has_field(payment_entry, "custom_retention_record", self.name)
+		_set_if_meta_has_field(payment_entry, "custom_original_sales_invoice", self.sales_invoice)
+		_set_if_meta_has_field(payment_entry, "custom_ra_bill", self.ra_bill)
+		_set_if_meta_has_field(payment_entry, "custom_retention_release_amount", release_amount)
+		_set_if_meta_has_field(payment_entry, "custom_retention_receivable_account", retention_account)
+		if payment_entry.meta.has_field("retention_record"):
+			payment_entry.retention_record = self.name
+		payment_entry.remarks = _("Retention Release against Retention Record {0}").format(self.name)
+
+		if hasattr(payment_entry, "setup_party_account_field"):
+			payment_entry.setup_party_account_field()
+
+		payment_entry.insert(ignore_permissions=True, ignore_mandatory=True)
+		frappe.msgprint(
+			_("Draft Payment Entry {0} has been created for retention receipt.").format(
+				frappe.bold(payment_entry.name)
+			)
+		)
 		return payment_entry.name
 
 
 @frappe.whitelist()
 def create_sales_invoice_for_retention_records(retention_records):
+	frappe.throw(
+		_(
+			"Retention release is now recorded directly through Payment Entry against Retention Receivable."
+		)
+	)
+
 	names = _parse_retention_record_names(retention_records)
 	records = _get_retention_records_for_invoice(names)
 	_validate_retention_records_for_invoice(records)
@@ -746,6 +826,15 @@ def sync_from_sales_invoice(invoice, payment_entry=None):
 		if payment_entry:
 			record.last_payment_entry = payment_entry.name
 
+		if record.status == "Released" and not record.release_date:
+			record.release_date = (
+				getattr(payment_entry, "posting_date", None)
+				or getattr(invoice, "posting_date", None)
+				or today()
+			)
+		elif record.status != "Released":
+			record.release_date = None
+
 		record.save(ignore_permissions=True)
 		updated_records.append(record.name)
 
@@ -824,6 +913,9 @@ def sync_from_payment_entry(payment_entry):
 	if not payment_entry:
 		return None
 
+	if _is_retention_release_payment(payment_entry):
+		return sync_retention_record_from_release_payments(payment_entry)
+
 	for reference in payment_entry.get("references") or []:
 		if reference.reference_doctype != "Sales Invoice" or not reference.reference_name:
 			continue
@@ -855,6 +947,203 @@ def on_payment_entry_cancel(doc, method=None):
 
 def on_payment_entry_update_after_submit(doc, method=None):
 	sync_from_payment_entry(doc)
+
+
+def _is_retention_release_payment(payment_entry):
+	if not payment_entry or payment_entry.payment_type != "Receive" or payment_entry.party_type != "Customer":
+		return False
+
+	if payment_entry.meta.has_field("custom_is_retention_payment") and payment_entry.get("custom_is_retention_payment"):
+		return True
+
+	retention_account = get_or_create_retention_receivable_account(payment_entry.company)
+	if payment_entry.paid_from != retention_account:
+		return False
+
+	if payment_entry.meta.has_field("custom_retention_record"):
+		return bool(payment_entry.get("custom_retention_record"))
+
+	if payment_entry.meta.has_field("retention_record"):
+		return bool(payment_entry.get("retention_record"))
+
+	return True
+
+
+def sync_retention_record_from_release_payments(payment_entry):
+	if not payment_entry or not payment_entry.company:
+		return None
+
+	record_name = _get_payment_entry_retention_record(payment_entry)
+	if not record_name:
+		return sync_retention_records_from_release_payments(
+			payment_entry.party,
+			payment_entry.company,
+			payment_entry=payment_entry,
+		)
+
+	record = frappe.get_doc("Retention Record", record_name)
+	retention_account = get_or_create_retention_receivable_account(payment_entry.company)
+	released_amount = min(
+		_get_total_retention_release_payments(payment_entry.company, retention_account, record_name=record.name),
+		flt(record.retention_amount),
+	)
+	_update_retention_record_release_status(record, released_amount, payment_entry=payment_entry)
+	return record.name
+
+
+def sync_retention_records_from_release_payments(customer, company, payment_entry=None):
+	if not customer or not company:
+		return None
+
+	retention_account = get_or_create_retention_receivable_account(company)
+	total_released = _get_total_retention_release_payments(company, retention_account, customer=customer)
+	records = frappe.get_all(
+		"Retention Record",
+		filters={"customer": customer, "status": ["!=", "Cancelled"]},
+		fields=["name"],
+		order_by="creation asc, name asc",
+	)
+
+	updated_records = []
+	for row in records:
+		record = frappe.get_doc("Retention Record", row.name)
+		retention_amount = flt(record.retention_amount)
+		released_amount = min(total_released, retention_amount)
+		total_released = max(0, total_released - released_amount)
+		_update_retention_record_release_status(record, released_amount, payment_entry=payment_entry)
+		updated_records.append(record.name)
+
+	return updated_records[0] if len(updated_records) == 1 else updated_records
+
+
+def _update_retention_record_release_status(record, released_amount, payment_entry=None):
+	retention_amount = flt(record.retention_amount)
+	released_amount = min(flt(released_amount), retention_amount)
+	record.paid_amount = released_amount
+	record.released_amount = released_amount
+	record.outstanding_amount = max(0, retention_amount - released_amount)
+	record.balance_amount = max(0, retention_amount - released_amount)
+	record.status = _get_retention_status(released_amount, retention_amount)
+	if payment_entry and payment_entry.docstatus == 1:
+		record.last_payment_entry = payment_entry.name
+	if record.status == "Released" and not record.release_date:
+		record.release_date = getattr(payment_entry, "posting_date", None) or today()
+	elif record.status != "Released":
+		record.release_date = None
+	record.save(ignore_permissions=True)
+
+
+def _get_total_retention_release_payments(company, retention_account, customer=None, record_name=None):
+	base_filters = {
+			"docstatus": 1,
+			"payment_type": "Receive",
+			"party_type": "Customer",
+			"company": company,
+			"paid_from": retention_account,
+	}
+	if customer:
+		base_filters["party"] = customer
+	if record_name:
+		total = 0
+		seen_payment_entries = set()
+		for record_field in _get_payment_entry_retention_record_fields():
+			filters = base_filters.copy()
+			filters[record_field] = record_name
+			for row in frappe.get_all("Payment Entry", filters=filters, fields=["name", "paid_amount"]):
+				if row.name in seen_payment_entries:
+					continue
+
+				seen_payment_entries.add(row.name)
+				total += flt(row.paid_amount)
+
+		return total
+
+	rows = frappe.get_all("Payment Entry", filters=base_filters, fields=["paid_amount"])
+	return sum(flt(row.paid_amount) for row in rows)
+
+
+def _get_open_retention_payment_entry(record_name):
+	record_field = _get_payment_entry_retention_record_field()
+	if not record_field:
+		return None
+
+	filters = {record_field: record_name, "docstatus": 0}
+
+	return frappe.db.get_value("Payment Entry", filters, "name", order_by="modified desc")
+
+
+def _get_payment_entry_retention_record(payment_entry):
+	if not payment_entry:
+		return None
+
+	for fieldname in ("custom_retention_record", "retention_record"):
+		if payment_entry.meta.has_field(fieldname) and payment_entry.get(fieldname):
+			return payment_entry.get(fieldname)
+
+	return None
+
+
+def _get_payment_entry_retention_record_field():
+	fields = _get_payment_entry_retention_record_fields()
+	return fields[0] if fields else None
+
+
+def _get_payment_entry_retention_record_fields():
+	meta = frappe.get_meta("Payment Entry")
+	return [
+		fieldname
+		for fieldname in ("custom_retention_record", "retention_record")
+		if meta.has_field(fieldname)
+	]
+
+
+def _get_retention_payment_company(record):
+	if record.sales_invoice:
+		company = frappe.db.get_value("Sales Invoice", record.sales_invoice, "company")
+		if company:
+			return company
+
+	if record.ra_bill:
+		company = frappe.db.get_value("RA Bill", record.ra_bill, "company")
+		if company:
+			return company
+
+	if record.project and frappe.get_meta("Project").has_field("company"):
+		company = frappe.db.get_value("Project", record.project, "company")
+		if company:
+			return company
+
+	return frappe.defaults.get_user_default("Company") or frappe.defaults.get_global_default("company")
+
+
+def _get_retention_release_bank_account(company, customer):
+	from erpnext.accounts.doctype.bank_account.bank_account import get_default_company_bank_account
+
+	bank_account_name = get_default_company_bank_account(company, "Customer", customer)
+	if isinstance(bank_account_name, dict):
+		bank_account_name = bank_account_name.get("name")
+	if bank_account_name:
+		account = frappe.db.get_value("Bank Account", bank_account_name, "account")
+		if account:
+			return account
+
+	return None
+
+
+def _get_retention_clearing_cost_center(company):
+	cost_center = frappe.db.get_value("Company", company, "cost_center")
+	if cost_center:
+		return cost_center
+
+	cost_center = frappe.db.get_value(
+		"Cost Center",
+		{"company": company, "is_group": 0, "disabled": 0},
+		"name",
+	)
+	if cost_center:
+		return cost_center
+
+	frappe.throw(_("Please set a default Cost Center for company {0}.").format(company))
 
 
 def mark_cancelled_from_ra_bill(ra_bill):

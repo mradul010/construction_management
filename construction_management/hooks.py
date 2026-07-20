@@ -171,6 +171,7 @@ has_permission = {
 doc_events = {
 	"Sales Invoice": {
 		"validate": [
+			"construction_management.construction_management.accounting_dimensions.apply_ra_bill_cost_center_to_sales_invoice",
 			"construction_management.construction_management.doctype.retention_record.retention_record.validate_sales_invoice_references",
 			"construction_management.construction_management.advance_management.validate_sales_invoice_advance_consistency",
 		],
@@ -233,6 +234,13 @@ doc_events = {
 # -------
 
 # before_tests = "construction_management.install.before_tests"
+
+# Override DocType Class
+# ------------------------------
+#
+override_doctype_class = {
+	"Payment Entry": "construction_management.construction_management.overrides.payment_entry.ConstructionPaymentEntry",
+}
 
 # Extend DocType Class
 # ------------------------------
