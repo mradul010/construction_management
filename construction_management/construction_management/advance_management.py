@@ -47,13 +47,19 @@ def get_ra_bill_sales_order(ra_bill):
 
 def get_ra_bill_sales_invoice_receivable_account(customer, company, currency):
 	"""
-	Use ERPNext's normal Customer receivable account when it can carry this
-	invoice currency. Standard advance lookup filters Payment Entries by the
-	Sales Invoice party account, so a custom RA Bill receivable account can hide
-	valid Sales Order advances.
+	Use the construction RA Bill receivable account first so RA Bill debit_to
+	comes from Company Construction Accounting Settings.
 	"""
 	if not company:
 		return None
+
+	from construction_management.construction_management.accounting import (
+		get_or_create_ra_bill_receivable_account,
+	)
+
+	construction_account = get_or_create_ra_bill_receivable_account(company, currency)
+	if construction_account:
+		return construction_account
 
 	from erpnext.accounts.party import get_party_account
 
@@ -63,11 +69,7 @@ def get_ra_bill_sales_invoice_receivable_account(customer, company, currency):
 		if account_currency == currency:
 			return party_account
 
-	from construction_management.construction_management.setup import (
-		get_or_create_ra_bill_receivable_account,
-	)
-
-	return get_or_create_ra_bill_receivable_account(company, currency)
+	return None
 
 
 def get_sales_order_advance_received(sales_order):

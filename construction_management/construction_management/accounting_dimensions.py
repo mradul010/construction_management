@@ -68,11 +68,16 @@ def apply_ra_bill_cost_center_to_payment_entry(payment_entry, retention_account=
 		payment_entry.project = context.project
 
 	if not retention_account:
-		from construction_management.construction_management.retention_payment import (
-			get_or_create_retention_receivable_account,
+		from construction_management.construction_management.accounting import (
+			get_construction_account,
 		)
 
-		retention_account = get_or_create_retention_receivable_account(context.company)
+		retention_account = get_construction_account(
+			context.company,
+			"retention_receivable",
+			project=context.project,
+			transaction=payment_entry,
+		)
 
 	for row in payment_entry.get("deductions") or []:
 		if row.account == retention_account:
@@ -188,6 +193,11 @@ def _get_construction_settings_cost_center():
 def _get_company_cost_center(company):
 	if not company:
 		return None
+
+	if frappe.get_meta("Company").has_field("default_project_cost_center"):
+		cost_center = frappe.db.get_value("Company", company, "default_project_cost_center")
+		if cost_center:
+			return cost_center
 
 	return frappe.db.get_value("Company", company, "cost_center")
 

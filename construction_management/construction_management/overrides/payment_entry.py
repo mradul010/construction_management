@@ -8,8 +8,9 @@ from erpnext.accounts.utils import get_account_currency
 from construction_management.construction_management.accounting_dimensions import (
 	apply_ra_bill_cost_center_to_payment_entry,
 )
-from construction_management.construction_management.retention_payment import (
-	get_or_create_retention_receivable_account,
+from construction_management.construction_management.accounting import (
+	apply_construction_accounts_to_payment_entry,
+	get_construction_account,
 )
 
 
@@ -21,6 +22,7 @@ PARTY_TYPE_BY_ACCOUNT_TYPE = {
 
 class ConstructionPaymentEntry(PaymentEntry):
 	def validate(self):
+		apply_construction_accounts_to_payment_entry(self)
 		apply_ra_bill_cost_center_to_payment_entry(self)
 
 		if self.is_retention_payment() and self.docstatus == 0 and getattr(self, "_action", None) != "submit":
@@ -125,7 +127,12 @@ class ConstructionPaymentEntry(PaymentEntry):
 		if self.company != company:
 			frappe.throw(_("Retention Payment Entry Company must match Retention Record company {0}.").format(company))
 
-		retention_account = get_or_create_retention_receivable_account(company)
+		retention_account = get_construction_account(
+			company,
+			"retention_receivable",
+			project=record.project,
+			transaction=self,
+		)
 		if self.paid_from != retention_account:
 			frappe.throw(
 				_("Paid From must be the Retention Receivable account {0}.").format(

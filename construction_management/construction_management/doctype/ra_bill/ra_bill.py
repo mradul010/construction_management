@@ -15,6 +15,7 @@ from construction_management.construction_management.accounting_dimensions impor
 	apply_ra_bill_cost_center_to_sales_invoice,
 	get_ra_bill_project_cost_center,
 )
+from construction_management.construction_management.accounting import get_construction_account
 from construction_management.construction_management.doctype.retention_record.retention_record import (
 	get_ra_bill_sales_order,
 	mark_cancelled_from_ra_bill,
@@ -597,7 +598,12 @@ class RABill(Document):
 			frappe.throw("Please set default Company before creating Sales Invoice.")
 
 		company_currency = frappe.get_cached_value("Company", company, "default_currency")
-		income_account = frappe.db.get_value("Company", company, "default_income_account")
+		income_account = get_construction_account(
+			company,
+			"ra_bill_income",
+			project=self.project,
+			transaction=self,
+		)
 		invoice_currency = self.currency or company_currency or "AED"
 		conversion_rate = 1.0
 		receivable_account = get_ra_bill_sales_invoice_receivable_account(

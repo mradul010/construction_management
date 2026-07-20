@@ -9,6 +9,7 @@ from construction_management.construction_management.doctype.sc_work_order.sc_wo
 	get_submitted_bill_total,
 	update_sc_work_order_summary,
 )
+from construction_management.construction_management.accounting import get_construction_account
 
 
 class SCBill(Document):
@@ -204,7 +205,12 @@ class SCBill(Document):
 			"uom": "Nos",
 			"project": self.project,
 		}
-		expense_account = frappe.db.get_value("Company", company, "default_expense_account")
+		expense_account = get_construction_account(
+			company,
+			"subcontract_expense",
+			project=self.project,
+			transaction=self,
+		)
 		if expense_account:
 			row["expense_account"] = expense_account
 		pi.append("items", row)

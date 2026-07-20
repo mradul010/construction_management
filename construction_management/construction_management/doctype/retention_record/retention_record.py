@@ -3,9 +3,7 @@ from frappe import _
 from frappe.model.document import Document
 from frappe.utils import add_days, flt, getdate, today
 
-from construction_management.construction_management.retention_payment import (
-	get_or_create_retention_receivable_account,
-)
+from construction_management.construction_management.accounting import get_construction_account
 from construction_management.construction_management.accounting_dimensions import (
 	get_ra_bill_project_cost_center,
 )
@@ -141,7 +139,12 @@ class RetentionRecord(Document):
 			frappe.throw(_("Customer {0} does not exist.").format(customer or ""))
 
 		item_code = _ensure_retention_release_item(company)
-		income_account = frappe.db.get_value("Company", company, "default_income_account")
+		income_account = get_construction_account(
+			company,
+			"ra_bill_income",
+			project=self.project,
+			transaction=self,
+		)
 		company_currency = frappe.get_cached_value("Company", company, "default_currency")
 		ra_bill_doc = None
 		if self.ra_bill and frappe.db.exists("RA Bill", self.ra_bill):
@@ -248,7 +251,12 @@ class RetentionRecord(Document):
 		if not company:
 			frappe.throw(_("Company is required to receive retention."))
 
-		retention_account = get_or_create_retention_receivable_account(company)
+		retention_account = get_construction_account(
+			company,
+			"retention_receivable",
+			project=self.project,
+			transaction=self,
+		)
 		existing_payment_entry = _get_open_retention_payment_entry(self.name)
 		if existing_payment_entry:
 			frappe.msgprint(
@@ -258,7 +266,15 @@ class RetentionRecord(Document):
 			)
 			return existing_payment_entry
 
-		bank_account = _get_retention_release_bank_account(company, self.customer)
+		receipt_account = (
+			get_construction_account(
+				company,
+				"construction_receipt",
+				project=self.project,
+				transaction=self,
+			)
+			or _get_retention_release_bank_account(company, self.customer)
+		)
 		retention_account_currency = frappe.get_cached_value(
 			"Account",
 			retention_account,
@@ -275,11 +291,11 @@ class RetentionRecord(Document):
 		payment_entry.party = self.customer
 		payment_entry.paid_from = retention_account
 		payment_entry.paid_from_account_currency = retention_account_currency
-		if bank_account:
-			payment_entry.paid_to = bank_account
+		if receipt_account:
+			payment_entry.paid_to = receipt_account
 			payment_entry.paid_to_account_currency = frappe.get_cached_value(
 				"Account",
-				bank_account,
+				receipt_account,
 				"account_currency",
 			)
 		payment_entry.paid_amount = release_amount
@@ -337,7 +353,7 @@ def create_sales_invoice_for_retention_records(retention_records):
 
 	currency = _get_retention_invoice_currency(records, company)
 	item_code = _ensure_retention_release_item(company)
-	income_account = frappe.db.get_value("Company", company, "default_income_account")
+	income_account = get_construction_account(company, "ra_bill_income", project=project)
 	remarks = _("Retention Release for selected Retention Records: {0}").format(
 		", ".join(record.name for record in records)
 	)
@@ -956,7 +972,11 @@ def _is_retention_release_payment(payment_entry):
 	if payment_entry.meta.has_field("custom_is_retention_payment") and payment_entry.get("custom_is_retention_payment"):
 		return True
 
-	retention_account = get_or_create_retention_receivable_account(payment_entry.company)
+	retention_account = get_construction_account(
+		payment_entry.company,
+		"retention_receivable",
+		transaction=payment_entry,
+	)
 	if payment_entry.paid_from != retention_account:
 		return False
 
@@ -982,7 +1002,11 @@ def sync_retention_record_from_release_payments(payment_entry):
 		)
 
 	record = frappe.get_doc("Retention Record", record_name)
-	retention_account = get_or_create_retention_receivable_account(payment_entry.company)
+	retention_account = get_construction_account(
+		payment_entry.company,
+		"retention_receivable",
+		transaction=payment_entry,
+	)
 	released_amount = min(
 		_get_total_retention_release_payments(payment_entry.company, retention_account, record_name=record.name),
 		flt(record.retention_amount),
@@ -995,7 +1019,7 @@ def sync_retention_records_from_release_payments(customer, company, payment_entr
 	if not customer or not company:
 		return None
 
-	retention_account = get_or_create_retention_receivable_account(company)
+	retention_account = get_construction_account(company, "retention_receivable")
 	total_released = _get_total_retention_release_payments(company, retention_account, customer=customer)
 	records = frappe.get_all(
 		"Retention Record",
@@ -1181,7 +1205,7 @@ def _ensure_retention_release_item(company):
 			}
 		)
 		if company:
-			item_defaults = frappe.db.get_value("Company", company, "default_income_account")
+			item_defaults = get_construction_account(company, "ra_bill_income")
 			item.append(
 				"item_defaults",
 				{

@@ -4,6 +4,7 @@ import os
 
 def after_install():
 	create_boq_client_script()
+	ensure_company_construction_accounting_fields()
 	ensure_project_current_boq_field()
 	ensure_sales_invoice_ra_bill_field()
 	ensure_sales_invoice_retention_records_field()
@@ -16,6 +17,7 @@ def after_install():
 
 def after_migrate():
 	create_boq_client_script()
+	ensure_company_construction_accounting_fields()
 	ensure_project_current_boq_field()
 	ensure_sales_invoice_ra_bill_field()
 	ensure_sales_invoice_retention_records_field()
@@ -52,6 +54,200 @@ def create_boq_client_script():
 		doc.insert()
 	frappe.db.commit()
 	print("BOQ client script created/updated successfully")
+
+
+def ensure_company_construction_accounting_fields():
+	fields = [
+		{
+			"fieldname": "construction_accounting_settings_section",
+			"label": "Construction Accounting Settings",
+			"fieldtype": "Section Break",
+			"insert_after": "write_off_account",
+			"collapsible": 1,
+		},
+		{
+			"fieldname": "default_ra_bill_receivable_account",
+			"label": "Default RA Bill Receivable Account",
+			"fieldtype": "Link",
+			"options": "Account",
+			"insert_after": "construction_accounting_settings_section",
+		},
+		{
+			"fieldname": "default_ra_bill_income_account",
+			"label": "Default RA Bill Income Account",
+			"fieldtype": "Link",
+			"options": "Account",
+			"insert_after": "default_ra_bill_receivable_account",
+		},
+		{
+			"fieldname": "default_retention_receivable_account",
+			"label": "Default Retention Receivable Account",
+			"fieldtype": "Link",
+			"options": "Account",
+			"insert_after": "default_ra_bill_income_account",
+		},
+		{
+			"fieldname": "default_customer_advance_account",
+			"label": "Default Customer Advance Account",
+			"fieldtype": "Link",
+			"options": "Account",
+			"insert_after": "default_retention_receivable_account",
+		},
+		{
+			"fieldname": "default_advance_recovery_account",
+			"label": "Default Advance Recovery Account",
+			"fieldtype": "Link",
+			"options": "Account",
+			"insert_after": "default_customer_advance_account",
+		},
+		{
+			"fieldname": "default_construction_receipt_account",
+			"label": "Default Construction Receipt Account",
+			"fieldtype": "Link",
+			"options": "Account",
+			"insert_after": "default_advance_recovery_account",
+		},
+		{
+			"fieldname": "subcontract_accounting_column",
+			"fieldtype": "Column Break",
+			"insert_after": "default_construction_receipt_account",
+		},
+		{
+			"fieldname": "default_subcontractor_payable_account",
+			"label": "Default Subcontractor Payable Account",
+			"fieldtype": "Link",
+			"options": "Account",
+			"insert_after": "subcontract_accounting_column",
+		},
+		{
+			"fieldname": "default_subcontractor_retention_payable_account",
+			"label": "Default Subcontractor Retention Payable Account",
+			"fieldtype": "Link",
+			"options": "Account",
+			"insert_after": "default_subcontractor_payable_account",
+		},
+		{
+			"fieldname": "default_subcontractor_advance_account",
+			"label": "Default Subcontractor Advance Account",
+			"fieldtype": "Link",
+			"options": "Account",
+			"insert_after": "default_subcontractor_retention_payable_account",
+		},
+		{
+			"fieldname": "default_subcontract_expense_account",
+			"label": "Default Subcontract Expense Account",
+			"fieldtype": "Link",
+			"options": "Account",
+			"insert_after": "default_subcontractor_advance_account",
+		},
+		{
+			"fieldname": "project_costing_accounts_section",
+			"label": "Project Costing",
+			"fieldtype": "Section Break",
+			"insert_after": "default_subcontract_expense_account",
+			"collapsible": 1,
+		},
+		{
+			"fieldname": "default_material_cost_account",
+			"label": "Default Material Cost Account",
+			"fieldtype": "Link",
+			"options": "Account",
+			"insert_after": "project_costing_accounts_section",
+		},
+		{
+			"fieldname": "default_labour_cost_account",
+			"label": "Default Labour Cost Account",
+			"fieldtype": "Link",
+			"options": "Account",
+			"insert_after": "default_material_cost_account",
+		},
+		{
+			"fieldname": "default_equipment_cost_account",
+			"label": "Default Equipment Cost Account",
+			"fieldtype": "Link",
+			"options": "Account",
+			"insert_after": "default_labour_cost_account",
+		},
+		{
+			"fieldname": "default_subcontract_cost_account",
+			"label": "Default Subcontract Cost Account",
+			"fieldtype": "Link",
+			"options": "Account",
+			"insert_after": "default_equipment_cost_account",
+		},
+		{
+			"fieldname": "default_site_overhead_account",
+			"label": "Default Site Overhead Account",
+			"fieldtype": "Link",
+			"options": "Account",
+			"insert_after": "default_subcontract_cost_account",
+		},
+		{
+			"fieldname": "default_project_wip_account",
+			"label": "Default Project WIP Account",
+			"fieldtype": "Link",
+			"options": "Account",
+			"insert_after": "default_site_overhead_account",
+		},
+		{
+			"fieldname": "project_accounting_settings_column",
+			"fieldtype": "Column Break",
+			"insert_after": "default_project_wip_account",
+		},
+		{
+			"fieldname": "default_project_cost_center",
+			"label": "Default Project Cost Center",
+			"fieldtype": "Link",
+			"options": "Cost Center",
+			"insert_after": "project_accounting_settings_column",
+		},
+		{
+			"fieldname": "auto_fetch_project_cost_center",
+			"label": "Automatically Fetch Project Cost Center",
+			"fieldtype": "Check",
+			"default": "1",
+			"insert_after": "default_project_cost_center",
+		},
+		{
+			"fieldname": "require_project_cost_center",
+			"label": "Require Cost Center on Accounting Transactions",
+			"fieldtype": "Check",
+			"default": "1",
+			"insert_after": "auto_fetch_project_cost_center",
+		},
+	]
+
+	created_fields = []
+	for field in fields:
+		fieldname = field["fieldname"]
+		field.update(
+			{
+				"doctype": "Custom Field",
+				"dt": "Company",
+				"module": "Construction Management",
+			}
+		)
+		existing_name = f"Company-{fieldname}"
+		if frappe.db.exists("Custom Field", existing_name):
+			doc = frappe.get_doc("Custom Field", existing_name)
+			changed = False
+			for key, value in field.items():
+				if doc.get(key) != value:
+					doc.set(key, value)
+					changed = True
+			if changed:
+				doc.save(ignore_permissions=True)
+			continue
+		if frappe.get_meta("Company").has_field(fieldname):
+			continue
+
+		frappe.get_doc(field).insert(ignore_permissions=True)
+		created_fields.append(fieldname)
+
+	frappe.clear_cache(doctype="Company")
+	if created_fields:
+		frappe.db.commit()
+		print(f"Company construction accounting fields created: {', '.join(created_fields)}")
 
 
 def ensure_sales_invoice_ra_bill_field():
@@ -512,72 +708,11 @@ def get_or_create_ra_bill_receivable_account(company, currency):
 	Return a receivable account whose currency matches the RA Bill invoice currency.
 	ERPNext requires Sales Invoice debit_to currency to match document currency.
 	"""
-	import frappe
-
-	if not company:
-		return None
-
-	company_currency = frappe.get_cached_value("Company", company, "default_currency")
-	if not currency or currency == company_currency:
-		return frappe.get_cached_value("Company", company, "default_receivable_account")
-
-	account = frappe.db.get_value(
-		"Account",
-		{
-			"company": company,
-			"account_type": "Receivable",
-			"account_currency": currency,
-			"is_group": 0,
-			"disabled": 0,
-		},
-		"name",
+	from construction_management.construction_management.accounting import (
+		get_or_create_ra_bill_receivable_account as get_account,
 	)
-	if account:
-		return account
 
-	account_name = f"RA Bill Receivable {currency}"
-	account = frappe.db.get_value(
-		"Account",
-		{
-			"company": company,
-			"account_name": account_name,
-			"is_group": 0,
-		},
-		"name",
-	)
-	if account:
-		return account
-
-	parent_account = frappe.db.get_value(
-		"Account",
-		{
-			"company": company,
-			"account_name": "Accounts Receivable",
-			"root_type": "Asset",
-			"is_group": 1,
-		},
-		"name",
-	)
-	if not parent_account:
-		frappe.throw("Please create an Accounts Receivable group before creating RA Bill invoices.")
-
-	account_doc = frappe.get_doc(
-		{
-			"doctype": "Account",
-			"account_name": account_name,
-			"parent_account": parent_account,
-			"company": company,
-			"root_type": "Asset",
-			"report_type": "Balance Sheet",
-			"account_type": "Receivable",
-			"account_currency": currency,
-			"is_group": 0,
-		}
-	)
-	account_doc.insert(ignore_permissions=True)
-	frappe.db.commit()
-	print(f"Created receivable account: {account_doc.name}")
-	return account_doc.name
+	return get_account(company, currency)
 
 
 def ensure_ra_bill_items():
@@ -588,7 +723,12 @@ def ensure_ra_bill_items():
 	import frappe
 
 	company = frappe.defaults.get_user_default("Company") or frappe.defaults.get_global_default("company")
-	income_account = frappe.db.get_value("Company", company, "default_income_account") if company else None
+	if company:
+		from construction_management.construction_management.accounting import get_construction_account
+
+		income_account = get_construction_account(company, "ra_bill_income")
+	else:
+		income_account = None
 
 	items = [
 		{

@@ -6,6 +6,12 @@ from construction_management.construction_management.accounting_dimensions impor
 	apply_ra_bill_cost_center_to_payment_entry,
 	get_ra_bill_project_cost_center,
 )
+from construction_management.construction_management.accounting import (
+	apply_construction_accounts_to_payment_entry,
+	ensure_retention_receivable_account as ensure_retention_account,
+	get_construction_account,
+	get_or_create_retention_receivable_account as get_or_create_retention_account,
+)
 
 
 RETENTION_ACCOUNT_NAME = "Retention Receivable"
@@ -44,6 +50,7 @@ def get_payment_entry(
 		created_from_payment_request=created_from_payment_request,
 	)
 	apply_retention_deduction(payment_entry)
+	apply_construction_accounts_to_payment_entry(payment_entry)
 	return payment_entry
 
 
@@ -55,7 +62,12 @@ def apply_retention_deduction(payment_entry):
 	if not retention_context:
 		return payment_entry
 
-	account = get_or_create_retention_receivable_account(retention_context.company)
+	account = get_construction_account(
+		retention_context.company,
+		"retention_receivable",
+		project=retention_context.project,
+		transaction=payment_entry,
+	)
 	if _has_retention_deduction(payment_entry, account):
 		apply_ra_bill_cost_center_to_payment_entry(payment_entry, retention_account=account)
 		return payment_entry
@@ -94,49 +106,11 @@ def apply_retention_deduction(payment_entry):
 
 
 def get_or_create_retention_receivable_account(company=None):
-	parent_account = _get_retention_parent_account(company)
-	parent_company = frappe.db.get_value("Account", parent_account, "company")
-
-	company = company or parent_company
-	if company != parent_company:
-		frappe.throw(
-			_("Parent Account {0} belongs to company {1}, not {2}.").format(
-				parent_account,
-				parent_company,
-				company,
-			)
-		)
-
-	account = frappe.db.get_value(
-		"Account",
-		{
-			"account_name": RETENTION_ACCOUNT_NAME,
-			"company": company,
-			"is_group": 0,
-		},
-		"name",
-	)
-	if account:
-		return account
-
-	account_doc = frappe.get_doc(
-		{
-			"doctype": "Account",
-			"account_name": RETENTION_ACCOUNT_NAME,
-			"parent_account": parent_account,
-			"account_type": "Receivable",
-			"is_group": 0,
-			"company": company,
-		}
-	)
-	account_doc.insert(ignore_permissions=True)
-	return account_doc.name
+	return get_or_create_retention_account(company)
 
 
 def ensure_retention_receivable_account():
-	if _get_retention_parent_account():
-		return get_or_create_retention_receivable_account()
-	return None
+	return ensure_retention_account()
 
 
 def _get_retention_parent_account(company=None):
