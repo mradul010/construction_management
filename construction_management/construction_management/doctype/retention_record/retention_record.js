@@ -9,24 +9,23 @@ frappe.ui.form.on("Retention Record", {
 			return;
 		}
 
-		const can_create_invoice =
+		const can_create_payment =
 			frm.doc.docstatus !== 2 &&
 			["Held", "Partially Released"].includes(frm.doc.status || "") &&
-			getNumber(frm.doc.balance_amount) > 0 &&
-			!frm.doc.retention_release_invoice;
+			getNumber(frm.doc.balance_amount) > 0;
 
-		if (can_create_invoice) {
+		if (can_create_payment) {
 			frm.add_custom_button(
-				__("Create Sales Invoice"),
+				__("Receive Retention"),
 				() => {
 					frm.call({
 						doc: frm.doc,
-						method: "create_sales_invoice",
+						method: "receive_retention",
 						freeze: true,
-						freeze_message: __("Creating sales invoice..."),
+						freeze_message: __("Creating draft Payment Entry..."),
 						callback: (r) => {
 							if (r.message) {
-								frappe.set_route("Form", "Sales Invoice", r.message);
+								frappe.set_route("Form", "Payment Entry", r.message);
 								frm.reload_doc();
 							}
 						},

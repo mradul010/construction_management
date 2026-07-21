@@ -43,8 +43,8 @@
 			<tbody>
 				{% for dpr in dprs %}
 				<tr>
-					<td>{{ dpr.name }}</td>
-					<td>{{ dpr.project or "-" }}</td>
+					<td><a href="/dpr-detail?name={{ dpr.name | urlencode }}">{{ dpr.name }}</a></td>
+					<td><a href="/project-detail?name={{ dpr.project | urlencode }}">{{ dpr.project or "-" }}</a></td>
 					<td>{{ dpr.dpr_date or "-" }}</td>
 					<td>{{ dpr.prepared_by or "-" }}</td>
 					<td>{{ dpr.status or "-" }}</td>

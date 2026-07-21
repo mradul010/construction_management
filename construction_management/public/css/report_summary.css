@@ -1,17 +1,25 @@
-.construction-management-report .report-summary {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: 16px;
+.construction-management-report .report-summary,
+.report-summary.construction-management-report-summary {
+  display: grid !important;
+  grid-template-columns: repeat(3, minmax(0, 240px));
+  gap: 32px;
   margin: 16px 0 24px;
   padding: 0;
   border: none;
+  align-items: stretch;
+  justify-content: space-around;
 }
 
-.construction-management-report .report-summary .summary-item {
+.construction-management-report .report-summary .summary-item,
+.report-summary.construction-management-report-summary .summary-item {
   display: flex;
   flex-direction: column;
   justify-content: space-between;
+  width: 100%;
+  max-width: none;
   min-height: 120px;
+  height: auto;
+  margin: 0;
   padding: 20px;
   border-radius: 8px;
   background: #ffffff;
@@ -22,12 +30,14 @@
   overflow: visible;
 }
 
-.construction-management-report .report-summary .summary-item:hover {
+.construction-management-report .report-summary .summary-item:hover,
+.report-summary.construction-management-report-summary .summary-item:hover {
   transform: translateY(-1px);
   box-shadow: 0 3px 8px rgba(0, 0, 0, 0.08);
 }
 
-.construction-management-report .report-summary .summary-label {
+.construction-management-report .report-summary .summary-label,
+.report-summary.construction-management-report-summary .summary-label {
   font-size: 12px;
   font-weight: 600;
   color: #6b7280;
@@ -41,7 +51,8 @@
   overflow-wrap: anywhere;
 }
 
-.construction-management-report .report-summary .summary-value {
+.construction-management-report .report-summary .summary-value,
+.report-summary.construction-management-report-summary .summary-value {
   font-size: 20px;
   font-weight: 700;
   color: #111827;
@@ -52,44 +63,68 @@
   overflow-wrap: anywhere;
 }
 
-.construction-management-report .report-summary .summary-item .ellipsis {
+.construction-management-report .report-summary .summary-item .ellipsis,
+.report-summary.construction-management-report-summary .summary-item .ellipsis {
   overflow: visible !important;
   text-overflow: clip !important;
   white-space: normal !important;
 }
 
 .construction-management-report .report-summary .summary-subtitle,
-.construction-management-report .report-summary .summary-item .summary-subtitle {
+.construction-management-report .report-summary .summary-item .summary-subtitle,
+.report-summary.construction-management-report-summary .summary-subtitle,
+.report-summary.construction-management-report-summary .summary-item .summary-subtitle {
   font-size: 10px;
   color: #9ca3af;
   line-height: 1.2;
   margin-top: 2px;
 }
 
-.construction-management-report .report-summary .summary-item.cm-summary-blue {
+.construction-management-report .report-summary .summary-item.cm-summary-blue,
+.report-summary.construction-management-report-summary .summary-item.cm-summary-blue {
   border-left-color: #2563eb;
 }
 
-.construction-management-report .report-summary .summary-item.cm-summary-green {
+.construction-management-report .report-summary .summary-item.cm-summary-green,
+.report-summary.construction-management-report-summary .summary-item.cm-summary-green {
   border-left-color: #16a34a;
 }
 
-.construction-management-report .report-summary .summary-item.cm-summary-orange {
+.construction-management-report .report-summary .summary-item.cm-summary-orange,
+.report-summary.construction-management-report-summary .summary-item.cm-summary-orange {
   border-left-color: #f59e0b;
 }
 
-.construction-management-report .report-summary .summary-item.cm-summary-red {
+.construction-management-report .report-summary .summary-item.cm-summary-red,
+.report-summary.construction-management-report-summary .summary-item.cm-summary-red {
   border-left-color: #ef4444;
 }
 
-.construction-management-report .report-summary .summary-item.cm-summary-purple {
+.construction-management-report .report-summary .summary-item.cm-summary-purple,
+.report-summary.construction-management-report-summary .summary-item.cm-summary-purple {
   border-left-color: #7c3aed;
 }
 
-.construction-management-report .report-summary .summary-item.cm-summary-indigo {
+.construction-management-report .report-summary .summary-item.cm-summary-indigo,
+.report-summary.construction-management-report-summary .summary-item.cm-summary-indigo {
   border-left-color: #4f46e5;
 }
 
-.construction-management-report .report-summary .summary-item.cm-summary-teal {
+.construction-management-report .report-summary .summary-item.cm-summary-teal,
+.report-summary.construction-management-report-summary .summary-item.cm-summary-teal {
   border-left-color: #0891b2;
+}
+
+@media (max-width: 991px) {
+  .construction-management-report .report-summary,
+  .report-summary.construction-management-report-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 575px) {
+  .construction-management-report .report-summary,
+  .report-summary.construction-management-report-summary {
+    grid-template-columns: 1fr;
+  }
 }

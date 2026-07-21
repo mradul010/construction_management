@@ -5,10 +5,17 @@ from frappe.utils import flt, getdate, today
 
 from construction_management.construction_management.advance_management import (
 	apply_ra_bill_advances_to_sales_invoice,
+	get_ra_bill_advance_recovery_target,
+	get_ra_bill_sales_invoice_receivable_account,
 	set_item_sales_order,
 	update_ra_bill_advance_fields,
 	validate_ra_bill_advance_recovery,
 )
+from construction_management.construction_management.accounting_dimensions import (
+	apply_ra_bill_cost_center_to_sales_invoice,
+	get_ra_bill_project_cost_center,
+)
+from construction_management.construction_management.utils.accounting import get_construction_account
 from construction_management.construction_management.doctype.retention_record.retention_record import (
 	get_ra_bill_sales_order,
 	mark_cancelled_from_ra_bill,
@@ -471,10 +478,6 @@ class RABill(Document):
 		if not self.customer:
 			frappe.throw(_("Please set the Customer before fetching advances."))
 
-		from construction_management.construction_management.setup import (
-			get_or_create_ra_bill_receivable_account,
-		)
-
 		company = (
 			self.company
 			if self.meta.has_field("company") and self.get("company")
@@ -486,7 +489,11 @@ class RABill(Document):
 
 		company_currency = frappe.get_cached_value("Company", company, "default_currency")
 		invoice_currency = self.currency or company_currency
-		receivable_account = get_or_create_ra_bill_receivable_account(company, invoice_currency)
+		receivable_account = get_ra_bill_sales_invoice_receivable_account(
+			self.customer,
+			company,
+			invoice_currency,
+		)
 		party_account_currency = (
 			frappe.db.get_value("Account", receivable_account, "account_currency")
 			or invoice_currency
@@ -515,6 +522,10 @@ class RABill(Document):
 		)
 		si.grand_total = flt(self.grand_total)
 		si.base_grand_total = flt(self.grand_total)
+		if hasattr(si, "set_missing_values"):
+			si.set_missing_values()
+		if hasattr(si, "calculate_taxes_and_totals"):
+			si.calculate_taxes_and_totals()
 
 		from construction_management.construction_management.advance_management import (
 			apply_standard_advances_to_sales_invoice,
@@ -553,8 +564,8 @@ class RABill(Document):
 		Creates a draft Sales Invoice from this approved RA Bill.
 		Detailed lines:
 		  1. One line per RA Bill Item current_amount (positive)
-		  2. Retention Deduction -> -retention_amount (negative)
-		Net total = net_payable.
+		The Sales Invoice remains at the full certified value. Retention is tracked
+		on the RA Bill/Retention Record and deducted later through Payment Entry.
 		Status set to Invoiced after creation.
 		"""
 		if self.status != "Approved":
@@ -578,10 +589,7 @@ class RABill(Document):
 		if not self.gross_amount or self.gross_amount <= 0:
 			frappe.throw("Gross amount must be greater than 0 to create a Sales Invoice.")
 
-		from construction_management.construction_management.setup import (
-			ensure_ra_bill_items,
-			get_or_create_ra_bill_receivable_account,
-		)
+		from construction_management.construction_management.setup import ensure_ra_bill_items
 
 		ensure_ra_bill_items()
 
@@ -590,11 +598,25 @@ class RABill(Document):
 			frappe.throw("Please set default Company before creating Sales Invoice.")
 
 		company_currency = frappe.get_cached_value("Company", company, "default_currency")
-		income_account = frappe.db.get_value("Company", company, "default_income_account")
+		income_account = get_construction_account(
+			company,
+			"ra_bill_income",
+			project=self.project,
+			transaction=self,
+		)
 		invoice_currency = self.currency or company_currency or "AED"
 		conversion_rate = 1.0
-		receivable_account = get_or_create_ra_bill_receivable_account(company, invoice_currency)
+		receivable_account = get_ra_bill_sales_invoice_receivable_account(
+			self.customer,
+			company,
+			invoice_currency,
+		)
 		source_sales_order = get_ra_bill_sales_order(self)
+		project_cost_center = get_ra_bill_project_cost_center(
+			self.name,
+			project=self.project,
+			company=company,
+		)
 
 		def set_if_exists(doc, fieldname, value):
 			if doc.meta.has_field(fieldname) and value not in (None, ""):
@@ -613,6 +635,18 @@ class RABill(Document):
 			}
 			if filtered_row:
 				doc.append(table_field, filtered_row)
+
+		def get_advance_row_data(row):
+			return {
+				"reference_type": row.reference_type,
+				"reference_name": row.reference_name,
+				"reference_row": row.get("reference_row"),
+				"remarks": row.remarks,
+				"advance_amount": row.advance_amount,
+				"allocated_amount": row.allocated_amount,
+				"ref_exchange_rate": row.get("ref_exchange_rate"),
+				"difference_posting_date": row.difference_posting_date,
+			}
 
 		def set_link_if_valid(doc, fieldname, value, parenttype, link_doctype, link_name):
 			if not doc.meta.has_field(fieldname) or value in (None, ""):
@@ -649,6 +683,7 @@ class RABill(Document):
 			set_if_exists(si, "company", company)
 			set_if_exists(si, "debit_to", receivable_account)
 			set_if_exists(si, "project", self.project)
+			set_if_exists(si, "cost_center", project_cost_center)
 			set_if_exists(si, "currency", invoice_currency)
 			set_if_exists(si, "conversion_rate", conversion_rate)
 			set_if_exists(si, "posting_date", get_posting_date())
@@ -760,14 +795,7 @@ class RABill(Document):
 				append_child_if_table_exists(
 					si,
 					"advances",
-					{
-						"reference_type": row.reference_type,
-						"reference_name": row.reference_name,
-						"remarks": row.remarks,
-						"advance_amount": row.advance_amount,
-						"allocated_amount": row.allocated_amount,
-						"difference_posting_date": row.difference_posting_date,
-					},
+					get_advance_row_data(row),
 				)
 
 			for row in self.get("timesheets") or []:
@@ -790,14 +818,28 @@ class RABill(Document):
 			}
 			si = frappe.get_doc(si_data)
 			add_advanced_fields(si)
+			apply_ra_bill_cost_center_to_sales_invoice(si)
 			validate_sales_invoice_references(si)
 			if hasattr(si, "set_missing_values"):
 				si.set_missing_values()
+			apply_ra_bill_cost_center_to_sales_invoice(si)
 			if hasattr(si, "calculate_taxes_and_totals"):
 				si.calculate_taxes_and_totals()
+			recovery_target = get_ra_bill_advance_recovery_target(self)
 			apply_ra_bill_advances_to_sales_invoice(si, self)
 			if hasattr(si, "calculate_taxes_and_totals"):
 				si.calculate_taxes_and_totals()
+			allocated = sum(flt(row.allocated_amount) for row in si.get("advances") or [])
+			if recovery_target and flt(allocated, 2) != flt(recovery_target, 2):
+				frappe.throw(
+					_(
+						"Sales Invoice advance allocation {0} does not match RA Bill "
+						"advance recovery {1}."
+					).format(
+						frappe.format_value(allocated, {"fieldtype": "Currency"}),
+						frappe.format_value(recovery_target, {"fieldtype": "Currency"}),
+					)
+				)
 			si.insert(ignore_permissions=True)
 			return si
 
@@ -863,6 +905,7 @@ class RABill(Document):
 					"rate": rate,
 					"uom": row.uom or "Nos",
 					"income_account": income_account,
+					"cost_center": project_cost_center,
 				}
 			)
 
@@ -881,60 +924,38 @@ class RABill(Document):
 				f"Gross amount: {frappe.format(self.gross_amount, {'fieldtype': 'Currency'})}."
 			)
 
-		if self.retention_amount and self.retention_amount > 0:
-			retention_description = (
-				f"Retention held @ {self.retention_percent}%\n"
-				f"To be released at project completion\n"
-				f"RA Bill #{self.bill_no} | {self.project}"
-			)
-			invoice_items.append(
-				{
-					"item_code": "Retention Deduction",
-					"item_name": "Retention Deduction",
-					"description": retention_description,
-					"qty": 1,
-					"rate": -self.retention_amount,
-					"uom": "Nos",
-					"income_account": income_account,
-				}
-			)
-
-		invoice_net_total = sum(
+		invoice_certified_total = sum(
 			flt(item.get("qty")) * flt(item.get("rate")) for item in invoice_items
 		)
-		if flt(invoice_net_total, 2) != flt(self.net_payable, 2):
+		if flt(invoice_certified_total, 2) != flt(self.gross_amount, 2):
 			frappe.throw(
-				"Sales Invoice item total does not match the RA Bill net payable. "
-				f"Invoice total: {frappe.format(invoice_net_total, {'fieldtype': 'Currency'})}, "
-				f"Net payable: {frappe.format(self.net_payable, {'fieldtype': 'Currency'})}."
+				"Sales Invoice item total does not match the RA Bill certified amount. "
+				f"Invoice total: {frappe.format(invoice_certified_total, {'fieldtype': 'Currency'})}, "
+				f"Certified amount: {frappe.format(self.gross_amount, {'fieldtype': 'Currency'})}."
 			)
 
-		try:
-			si = make_sales_invoice(invoice_items)
-		except Exception as negative_rate_error:
-			if not (self.retention_amount and self.retention_amount > 0):
-				raise
-
-			fallback_items = []
-			for item in invoice_items:
-				item = item.copy()
-				if item["item_code"] == "Retention Deduction":
-					item["qty"] = -1
-					item["rate"] = self.retention_amount
-				fallback_items.append(item)
-
-			try:
-				si = make_sales_invoice(fallback_items)
-			except Exception:
-				raise negative_rate_error
+		si = make_sales_invoice(invoice_items)
 
 		self.db_set("sales_invoice", si.name)
+		allocated_advance = sum(flt(row.allocated_amount) for row in si.get("advances") or [])
+		field_updates = {
+			"actual_advance_recovered": allocated_advance,
+			"total_advance": allocated_advance,
+			"outstanding_amount": flt(si.outstanding_amount),
+			"remaining_advance_after_current_bill": max(
+				flt(self.remaining_advance_before_current_bill) - allocated_advance,
+				0,
+			),
+		}
+		for fieldname, value in field_updates.items():
+			if self.meta.has_field(fieldname):
+				self.db_set(fieldname, value, update_modified=False)
 		set_sales_invoice_for_ra_bill(self, si.name)
 		self.db_set("status", "Invoiced")
 
 		frappe.msgprint(
 			f"Draft Sales Invoice <b>{si.name}</b> created successfully. "
-			f"Net payable: {frappe.format(self.net_payable, {'fieldtype': 'Currency'})}. "
+			f"Certified amount: {frappe.format(self.gross_amount, {'fieldtype': 'Currency'})}. "
 			f"Please review and submit from the Accounts module.",
 			title="Sales Invoice Created",
 			indicator="green",

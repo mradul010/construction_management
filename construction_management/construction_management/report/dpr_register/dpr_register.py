@@ -92,8 +92,12 @@ def get_report_summary(data):
 	return [
 		{"value": len(data), "label": _("Total DPRs"), "datatype": "Int", "indicator": "Blue"},
 		{
-			"value": sum(1 for row in data if row.status in ("Submitted", "Published")),
-			"label": _("Submitted DPRs"),
+			"value": sum(
+				1
+				for row in data
+				if row.status in ("Submitted", "Published") and cint(row.publish_to_portal)
+			),
+			"label": _("Published DPRs"),
 			"datatype": "Int",
 			"indicator": "Green",
 		},
@@ -101,11 +105,11 @@ def get_report_summary(data):
 			"value": sum(1 for row in data if row.status == "Draft"),
 			"label": _("Draft DPRs"),
 			"datatype": "Int",
-			"indicator": "Grey",
+			"indicator": "Gray",
 		},
 		{
 			"value": sum(cint(row.tasks_completed_count) for row in data),
-			"label": _("Total Completed Task Rows"),
+			"label": _("Total Task Entries"),
 			"datatype": "Int",
 			"indicator": "Blue",
 		},
@@ -113,6 +117,12 @@ def get_report_summary(data):
 			"value": sum(cint(row.photos_count) for row in data),
 			"label": _("Total Photos"),
 			"datatype": "Int",
-			"indicator": "Blue",
+			"indicator": "Orange",
+		},
+		{
+			"value": len({row.project for row in data if row.project}),
+			"label": _("Projects with DPRs"),
+			"datatype": "Int",
+			"indicator": "Green",
 		},
 	]

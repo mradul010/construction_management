@@ -1,0 +1,164 @@
+{
+ "actions": [],
+ "creation": "2026-07-17 00:00:00.000000",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "boq_item",
+  "boq_item_key",
+  "category",
+  "item",
+  "description",
+  "boq_qty",
+  "assigned_qty",
+  "uom",
+  "boq_rate",
+  "sc_rate",
+  "boq_amount",
+  "sc_amount",
+  "margin_amount",
+  "margin_percent",
+  "billed_qty",
+  "billed_amount",
+  "balance_qty",
+  "balance_amount"
+ ],
+ "fields": [
+  {
+   "fieldname": "boq_item",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "BOQ Item",
+   "options": "BOQ Item"
+  },
+  {
+   "fieldname": "boq_item_key",
+   "fieldtype": "Data",
+   "label": "BOQ Item Key",
+   "read_only": 1
+  },
+  {
+   "fieldname": "category",
+   "fieldtype": "Link",
+   "label": "Category",
+   "options": "BOQ Category",
+   "read_only": 1
+  },
+  {
+   "fieldname": "item",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Item",
+   "options": "Item"
+  },
+  {
+   "fieldname": "description",
+   "fieldtype": "Small Text",
+   "in_list_view": 1,
+   "label": "Description",
+   "reqd": 1
+  },
+  {
+   "fieldname": "boq_qty",
+   "fieldtype": "Float",
+   "label": "BOQ Qty",
+   "read_only": 1
+  },
+  {
+   "fieldname": "assigned_qty",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "Assigned Qty",
+   "reqd": 1
+  },
+  {
+   "fieldname": "uom",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "UOM",
+   "options": "UOM"
+  },
+  {
+   "fieldname": "boq_rate",
+   "fieldtype": "Currency",
+   "label": "BOQ Rate",
+   "options": "currency",
+   "read_only": 1
+  },
+  {
+   "fieldname": "sc_rate",
+   "fieldtype": "Currency",
+   "in_list_view": 1,
+   "label": "Subcontract Rate",
+   "options": "currency",
+   "reqd": 1
+  },
+  {
+   "fieldname": "boq_amount",
+   "fieldtype": "Currency",
+   "label": "BOQ Amount",
+   "options": "currency",
+   "read_only": 1
+  },
+  {
+   "fieldname": "sc_amount",
+   "fieldtype": "Currency",
+   "in_list_view": 1,
+   "label": "SC Amount",
+   "options": "currency",
+   "read_only": 1
+  },
+  {
+   "fieldname": "margin_amount",
+   "fieldtype": "Currency",
+   "label": "Margin Amount",
+   "options": "currency",
+   "read_only": 1
+  },
+  {
+   "fieldname": "margin_percent",
+   "fieldtype": "Percent",
+   "label": "Margin %",
+   "read_only": 1
+  },
+  {
+   "fieldname": "billed_qty",
+   "fieldtype": "Float",
+   "label": "Billed Qty",
+   "read_only": 1
+  },
+  {
+   "fieldname": "billed_amount",
+   "fieldtype": "Currency",
+   "label": "Billed Amount",
+   "options": "currency",
+   "read_only": 1
+  },
+  {
+   "fieldname": "balance_qty",
+   "fieldtype": "Float",
+   "label": "Balance Qty",
+   "read_only": 1
+  },
+  {
+   "fieldname": "balance_amount",
+   "fieldtype": "Currency",
+   "label": "Balance Amount",
+   "options": "currency",
+   "read_only": 1
+  }
+ ],
+ "istable": 1,
+ "links": [],
+ "modified": "2026-07-17 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Construction Management",
+ "name": "SC Work Order Item",
+ "owner": "Administrator",
+ "permissions": [],
+ "row_format": "Dynamic",
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": []
+}

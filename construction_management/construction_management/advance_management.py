@@ -45,6 +45,33 @@ def get_ra_bill_sales_order(ra_bill):
 	return None
 
 
+def get_ra_bill_sales_invoice_receivable_account(customer, company, currency):
+	"""
+	Use the construction RA Bill receivable account first so RA Bill debit_to
+	comes from Company Construction Accounting Settings.
+	"""
+	if not company:
+		return None
+
+	from construction_management.construction_management.utils.accounting import (
+		get_or_create_ra_bill_receivable_account,
+	)
+
+	construction_account = get_or_create_ra_bill_receivable_account(company, currency)
+	if construction_account:
+		return construction_account
+
+	from erpnext.accounts.party import get_party_account
+
+	party_account = get_party_account("Customer", customer, company) if customer else None
+	if party_account:
+		account_currency = frappe.get_cached_value("Account", party_account, "account_currency")
+		if account_currency == currency:
+			return party_account
+
+	return None
+
+
 def get_sales_order_advance_received(sales_order):
 	if not sales_order:
 		return 0
@@ -403,6 +430,9 @@ def validate_ra_bill_advance_recovery(ra_bill):
 		return
 
 	actual = flt(values.actual_advance_recovered)
+	if actual < -ADVANCE_TOLERANCE:
+		frappe.throw(_("Advance recovered cannot be negative."))
+
 	if actual > flt(values.remaining_advance_before_current_bill) + ADVANCE_TOLERANCE:
 		frappe.throw(
 			_(
@@ -413,6 +443,17 @@ def validate_ra_bill_advance_recovery(ra_bill):
 
 	if actual > flt(ra_bill.get("grand_total")) + ADVANCE_TOLERANCE:
 		frappe.throw(_("Advance recovered cannot exceed the RA Bill Grand Total."))
+
+
+def get_ra_bill_advance_recovery_target(ra_bill):
+	if not ra_bill:
+		return 0
+
+	values = update_ra_bill_advance_fields(ra_bill)
+	if values and flt(values.get("actual_advance_recovered")) > 0:
+		return flt(values.actual_advance_recovered)
+
+	return flt(ra_bill.get("total_advance")) or flt(ra_bill.get("proposed_advance_recovery"))
 
 
 def apply_standard_advances_to_sales_invoice(si, target_amount=None):
@@ -439,17 +480,38 @@ def apply_standard_advances_to_sales_invoice(si, target_amount=None):
 		kept_rows.append(row)
 
 	si.set("advances", [row.as_dict() for row in kept_rows])
+	if si.meta.has_field("total_advance"):
+		si.total_advance = allocated
 	return allocated
 
 
 def apply_ra_bill_advances_to_sales_invoice(si, ra_bill):
-	if not flt(ra_bill.get("total_advance")) and not ra_bill.get("allocate_advances_automatically"):
-		return
+	target = get_ra_bill_advance_recovery_target(ra_bill)
+	if target <= ADVANCE_TOLERANCE and not ra_bill.get("allocate_advances_automatically"):
+		return 0
 
-	target = flt(ra_bill.get("total_advance")) or flt(ra_bill.get("proposed_advance_recovery"))
 	allocated = apply_standard_advances_to_sales_invoice(si, target)
+	if target > ADVANCE_TOLERANCE and allocated + ADVANCE_TOLERANCE < target:
+		frappe.throw(
+			_(
+				"Could not allocate the requested advance recovery of {0}. "
+				"Only {1} is available through standard Sales Invoice advances for this Sales Order."
+			).format(
+				frappe.format_value(target, {"fieldtype": "Currency"}),
+				frappe.format_value(allocated, {"fieldtype": "Currency"}),
+			)
+		)
+
 	if ra_bill.meta.has_field("actual_advance_recovered"):
 		ra_bill.actual_advance_recovered = allocated
+	if ra_bill.meta.has_field("total_advance"):
+		ra_bill.total_advance = allocated
+	if ra_bill.meta.has_field("outstanding_amount"):
+		ra_bill.outstanding_amount = flt(ra_bill.get("grand_total")) - allocated
+	if ra_bill.meta.has_field("remaining_advance_after_current_bill"):
+		before = flt(ra_bill.get("remaining_advance_before_current_bill"))
+		ra_bill.remaining_advance_after_current_bill = max(before - allocated, 0)
+	return allocated
 
 
 def validate_sales_invoice_advance_consistency(si, method=None):

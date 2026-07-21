@@ -27,20 +27,24 @@ def get_customer_for_portal_user(user=None):
 	for user_id in user_ids:
 		customer = get_customer_from_contact_email(user_id)
 		if customer:
+			ensure_customer_portal_user(customer, user)
 			return customer
 
 	for user_id in user_ids:
 		customer = get_customer_from_contact(user_id)
 		if customer:
+			ensure_customer_portal_user(customer, user)
 			return customer
 
 	for user_id in user_ids:
 		customer = get_customer_from_portal_user(user_id)
 		if customer:
+			ensure_customer_portal_user(customer, user)
 			return customer
 
 	customer = get_default_customer_from_erpnext(user)
 	if customer:
+		ensure_customer_portal_user(customer, user)
 		return customer
 
 	frappe.throw(_("No Customer is linked with this portal user."), frappe.PermissionError)
@@ -128,6 +132,42 @@ def get_customer_from_portal_user(user):
 		},
 		"parent",
 	)
+
+
+def ensure_customer_portal_user(customer, user=None):
+	user = user or frappe.session.user
+	if not customer or user == "Guest":
+		return
+
+	if frappe.db.exists(
+		"Portal User",
+		{
+			"parenttype": "Customer",
+			"parent": customer,
+			"parentfield": "portal_users",
+			"user": user,
+		},
+	):
+		return
+
+	customer_doc = frappe.get_doc("Customer", customer)
+	customer_doc.append("portal_users", {"user": user})
+	customer_doc.save(ignore_permissions=True)
+
+
+def sync_customer_portal_user(login_manager=None):
+	if frappe.session.user == "Guest":
+		return
+
+	try:
+		get_customer_for_portal_user(frappe.session.user)
+	except Exception:
+		frappe.logger("construction_management.portal").debug(
+			{
+				"portal_user": frappe.session.user,
+				"message": "Unable to sync Customer Portal User for default ERPNext portal access.",
+			}
+		)
 
 
 def get_default_customer_from_erpnext(user):

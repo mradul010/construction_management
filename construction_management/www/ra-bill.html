@@ -42,8 +42,8 @@
 			<tbody>
 				{% for bill in ra_bills %}
 				<tr>
-					<td>{{ bill.name }}</td>
-					<td>{{ bill.project or "-" }}</td>
+					<td><a href="/ra-bill-detail?name={{ bill.name | urlencode }}">{{ bill.name }}</a></td>
+					<td><a href="/project-detail?name={{ bill.project | urlencode }}">{{ bill.project or "-" }}</a></td>
 					<td>{{ bill.billing_period_from or "-" }} to {{ bill.billing_period_to or "-" }}</td>
 					<td>{{ bill.gross_amount or 0 }}</td>
 					<td>{{ bill.net_payable or 0 }}</td>

@@ -47,10 +47,11 @@ portal_menu_items = [
 # ------------------
 
 # include js, css files in header of desk.html
-app_include_css = "/assets/construction_management/css/report_summary.css"
+app_include_css = "/assets/construction_management/css/report.css"
 app_include_js = "/assets/construction_management/js/report_summary.js"
 
 doctype_js = {
+    "Company": "public/js/company.js",
     "Project": "public/js/project_dpr.js",
 }
 
@@ -114,6 +115,7 @@ web_include_js = "/assets/construction_management/js/portal.js"
 # before_install = "construction_management.install.before_install"
 after_install = "construction_management.construction_management.setup.after_install"
 after_migrate = "construction_management.construction_management.setup.after_migrate"
+on_session_creation = "construction_management.portal_utils.sync_customer_portal_user"
 
 # Uninstallation
 # ------------
@@ -170,6 +172,8 @@ has_permission = {
 doc_events = {
 	"Sales Invoice": {
 		"validate": [
+			"construction_management.construction_management.utils.accounting.apply_construction_accounts_to_sales_invoice",
+			"construction_management.construction_management.accounting_dimensions.apply_ra_bill_cost_center_to_sales_invoice",
 			"construction_management.construction_management.doctype.retention_record.retention_record.validate_sales_invoice_references",
 			"construction_management.construction_management.advance_management.validate_sales_invoice_advance_consistency",
 		],
@@ -201,6 +205,7 @@ doc_events = {
 		],
 	},
 	"Sales Order": {
+		"validate": "construction_management.construction_management.utils.accounting.apply_construction_accounts_to_sales_order",
 		"on_submit": "construction_management.construction_management.advance_management.on_sales_order_advance_context_change",
 		"on_cancel": "construction_management.construction_management.advance_management.on_sales_order_advance_context_change",
 		"on_update_after_submit": "construction_management.construction_management.advance_management.on_sales_order_advance_context_change",
@@ -233,6 +238,13 @@ doc_events = {
 
 # before_tests = "construction_management.install.before_tests"
 
+# Override DocType Class
+# ------------------------------
+#
+override_doctype_class = {
+	"Payment Entry": "construction_management.construction_management.overrides.payment_entry.ConstructionPaymentEntry",
+}
+
 # Extend DocType Class
 # ------------------------------
 #
@@ -244,17 +256,19 @@ doc_events = {
 # Overriding Methods
 # ------------------------------
 #
-# override_whitelisted_methods = {
-# 	"frappe.desk.doctype.event.event.get_events": "construction_management.event.get_events"
-# }
+override_whitelisted_methods = {
+	"erpnext.accounts.doctype.payment_entry.payment_entry.get_payment_entry": "construction_management.construction_management.retention_payment.get_payment_entry",
+}
 #
 # each overriding function accepts a `data` argument;
 # generated from the base implementation of the doctype dashboard,
 # along with any modifications made in other Frappe apps
 override_doctype_dashboards = {
 	"Project": "construction_management.construction_management.integrations.project_dashboard.get_data",
+	"Purchase Invoice": "construction_management.construction_management.integrations.purchase_invoice_dashboard.get_data",
 	"Sales Invoice": "construction_management.construction_management.integrations.sales_invoice_dashboard.get_data",
 	"Sales Order": "construction_management.construction_management.integrations.sales_order_dashboard.get_data",
+	"Supplier": "construction_management.construction_management.integrations.supplier_dashboard.get_data",
 }
 
 # exempt linked doctypes from being automatically cancelled

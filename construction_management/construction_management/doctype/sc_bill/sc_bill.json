@@ -1,0 +1,369 @@
+{
+ "actions": [],
+ "autoname": "SC-BILL-YYYY-.####",
+ "creation": "2026-07-17 00:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "details_tab",
+  "work_order_section",
+  "sc_work_order",
+  "project",
+  "supplier",
+  "billing_type",
+  "status",
+  "work_order_column",
+  "boq",
+  "company",
+  "currency",
+  "bill_no",
+  "billing_period_section",
+  "billing_period_from",
+  "billing_period_column",
+  "billing_period_to",
+  "bill_items_section",
+  "items",
+  "amount_entry_section",
+  "bill_amount",
+  "amount_entry_column",
+  "billing_remarks",
+  "totals_section",
+  "contract_value",
+  "previous_billed",
+  "gross_amount",
+  "cumulative_billed",
+  "totals_column",
+  "retention_percent",
+  "retention_amount",
+  "ld_deduction",
+  "net_payable",
+  "balance_amount",
+  "purchase_invoice_section",
+  "purchase_invoice",
+  "more_info_tab",
+  "remarks",
+  "amended_from",
+  "connections_tab",
+  "connections_section",
+  "connections_html"
+ ],
+ "fields": [
+  {
+   "fieldname": "details_tab",
+   "fieldtype": "Tab Break",
+   "label": "Details"
+  },
+  {
+   "fieldname": "work_order_section",
+   "fieldtype": "Section Break",
+   "label": "Work Order"
+  },
+  {
+   "fieldname": "sc_work_order",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "SC Work Order",
+   "options": "SC Work Order",
+   "reqd": 1,
+   "search_index": 1
+  },
+  {
+   "fieldname": "project",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Project",
+   "options": "Project",
+   "read_only": 1
+  },
+  {
+   "fieldname": "supplier",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Subcontractor",
+   "options": "Supplier",
+   "read_only": 1
+  },
+  {
+   "fieldname": "billing_type",
+   "fieldtype": "Select",
+   "in_standard_filter": 1,
+   "label": "Billing Type",
+   "options": "Measured\nMilestone\nLump Sum",
+   "read_only": 1
+  },
+  {
+   "default": "Draft",
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "Status",
+   "options": "Draft\nSubmitted\nApproved\nInvoiced\nCancelled",
+   "read_only": 1
+  },
+  {
+   "fieldname": "work_order_column",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "boq",
+   "fieldtype": "Link",
+   "label": "BOQ",
+   "options": "BOQ",
+   "read_only": 1
+  },
+  {
+   "fieldname": "company",
+   "fieldtype": "Link",
+   "label": "Company",
+   "options": "Company",
+   "read_only": 1
+  },
+  {
+   "fieldname": "currency",
+   "fieldtype": "Link",
+   "label": "Currency",
+   "options": "Currency",
+   "read_only": 1
+  },
+  {
+   "fieldname": "bill_no",
+   "fieldtype": "Int",
+   "label": "Bill No",
+   "read_only": 1
+  },
+  {
+   "fieldname": "billing_period_section",
+   "fieldtype": "Section Break",
+   "label": "Billing Period"
+  },
+  {
+   "fieldname": "billing_period_from",
+   "fieldtype": "Date",
+   "label": "Billing Period From"
+  },
+  {
+   "fieldname": "billing_period_column",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "billing_period_to",
+   "fieldtype": "Date",
+   "label": "Billing Period To"
+  },
+  {
+   "depends_on": "eval:doc.billing_type=='Measured'",
+   "fieldname": "bill_items_section",
+   "fieldtype": "Section Break",
+   "label": "Measured Bill Items"
+  },
+  {
+   "fieldname": "items",
+   "fieldtype": "Table",
+   "label": "Bill Items",
+   "options": "SC Bill Item"
+  },
+  {
+   "depends_on": "eval:doc.billing_type!='Measured'",
+   "fieldname": "amount_entry_section",
+   "fieldtype": "Section Break",
+   "label": "Amount Entry"
+  },
+  {
+   "default": "0",
+   "fieldname": "bill_amount",
+   "fieldtype": "Currency",
+   "label": "Bill Amount",
+   "options": "currency"
+  },
+  {
+   "fieldname": "amount_entry_column",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "billing_remarks",
+   "fieldtype": "Small Text",
+   "label": "Billing Remarks"
+  },
+  {
+   "fieldname": "totals_section",
+   "fieldtype": "Section Break",
+   "label": "Financial Summary"
+  },
+  {
+   "fieldname": "contract_value",
+   "fieldtype": "Currency",
+   "label": "Contract Value",
+   "options": "currency",
+   "read_only": 1
+  },
+  {
+   "fieldname": "previous_billed",
+   "fieldtype": "Currency",
+   "label": "Previous Billed",
+   "options": "currency",
+   "read_only": 1
+  },
+  {
+   "bold": 1,
+   "fieldname": "gross_amount",
+   "fieldtype": "Currency",
+   "in_list_view": 1,
+   "label": "Gross Amount",
+   "options": "currency",
+   "read_only": 1
+  },
+  {
+   "fieldname": "cumulative_billed",
+   "fieldtype": "Currency",
+   "label": "Cumulative Billed",
+   "options": "currency",
+   "read_only": 1
+  },
+  {
+   "fieldname": "totals_column",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "0",
+   "fieldname": "retention_percent",
+   "fieldtype": "Percent",
+   "label": "Retention %"
+  },
+  {
+   "fieldname": "retention_amount",
+   "fieldtype": "Currency",
+   "label": "Retention Amount",
+   "options": "currency",
+   "read_only": 1
+  },
+  {
+   "default": "0",
+   "fieldname": "ld_deduction",
+   "fieldtype": "Currency",
+   "label": "LD Deduction",
+   "options": "currency"
+  },
+  {
+   "bold": 1,
+   "fieldname": "net_payable",
+   "fieldtype": "Currency",
+   "label": "Net Payable",
+   "options": "currency",
+   "read_only": 1
+  },
+  {
+   "fieldname": "balance_amount",
+   "fieldtype": "Currency",
+   "label": "Balance",
+   "options": "currency",
+   "read_only": 1
+  },
+  {
+   "fieldname": "purchase_invoice_section",
+   "fieldtype": "Section Break",
+   "label": "Purchase Invoice"
+  },
+  {
+   "fieldname": "purchase_invoice",
+   "fieldtype": "Link",
+   "label": "Purchase Invoice",
+   "options": "Purchase Invoice",
+   "read_only": 1
+  },
+  {
+   "fieldname": "more_info_tab",
+   "fieldtype": "Tab Break",
+   "label": "More Info"
+  },
+  {
+   "fieldname": "remarks",
+   "fieldtype": "Small Text",
+   "label": "Remarks"
+  },
+  {
+   "fieldname": "amended_from",
+   "fieldtype": "Link",
+   "label": "Amended From",
+   "no_copy": 1,
+   "options": "SC Bill",
+   "print_hide": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "connections_tab",
+   "fieldtype": "Tab Break",
+   "label": "Connections",
+   "show_dashboard": 1
+  },
+  {
+   "fieldname": "connections_section",
+   "fieldtype": "Section Break",
+   "label": "Connections"
+  },
+  {
+   "fieldname": "connections_html",
+   "fieldtype": "HTML",
+   "label": "Connections"
+  }
+ ],
+ "is_submittable": 1,
+ "links": [],
+ "modified": "2026-07-17 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Construction Management",
+ "name": "SC Bill",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "amend": 1,
+   "cancel": 1,
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "submit": 1,
+   "write": 1
+  },
+  {
+   "amend": 1,
+   "cancel": 0,
+   "create": 1,
+   "delete": 0,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Construction Manager",
+   "share": 1,
+   "submit": 1,
+   "write": 1
+  },
+  {
+   "amend": 0,
+   "cancel": 0,
+   "create": 1,
+   "delete": 0,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Construction User",
+   "share": 1,
+   "submit": 0,
+   "write": 1
+  }
+ ],
+ "search_fields": "sc_work_order,project,supplier,status",
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": [],
+ "title_field": "sc_work_order",
+ "track_changes": 1
+}
