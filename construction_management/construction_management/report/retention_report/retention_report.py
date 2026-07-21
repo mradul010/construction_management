@@ -144,18 +144,26 @@ def get_data(filters):
 			rr.`release_date`,
 			rr.`retention_percent`,
 			rr.`gross_amount`,
-			rr.`retention_amount`,
+			COALESCE(sipb.`amount`, rr.`retention_amount`) AS retention_amount,
 			CASE
 				WHEN rsi.`name` IS NOT NULL
 					AND COALESCE(rsi.`docstatus`, 0) != 2
 					AND COALESCE(rr.`invoice_status`, '') != 'Cancelled'
-				THEN rr.`retention_amount`
+				THEN COALESCE(sipb.`amount`, rr.`retention_amount`)
 				ELSE 0
 			END AS retention_invoiced_amount,
-			rr.`paid_amount`,
-			rr.`outstanding_amount`,
-			rr.`released_amount`,
-			rr.`balance_amount`,
+			CASE
+				WHEN sipb.`name` IS NOT NULL
+				THEN GREATEST(0, COALESCE(sipb.`amount`, 0) - COALESCE(sipb.`outstanding_amount`, 0))
+				ELSE rr.`paid_amount`
+			END AS paid_amount,
+			COALESCE(sipb.`outstanding_amount`, rr.`outstanding_amount`) AS outstanding_amount,
+			CASE
+				WHEN sipb.`name` IS NOT NULL
+				THEN GREATEST(0, COALESCE(sipb.`amount`, 0) - COALESCE(sipb.`outstanding_amount`, 0))
+				ELSE rr.`released_amount`
+			END AS released_amount,
+			COALESCE(sipb.`outstanding_amount`, rr.`balance_amount`) AS balance_amount,
 			rr.`status`,
 			rr.`last_payment_entry`,
 			COALESCE(rb.`currency`, rsi.`currency`, osi.`currency`, b.`currency`) AS currency
@@ -163,6 +171,11 @@ def get_data(filters):
 		LEFT JOIN `tabRA Bill` rb ON rb.`name` = rr.`ra_bill`
 		LEFT JOIN `tabSales Invoice` rsi ON rsi.`name` = rr.`retention_release_invoice`
 		LEFT JOIN `tabSales Invoice` osi ON osi.`name` = rr.`sales_invoice`
+		LEFT JOIN `tabSales Invoice Payment Breakdown` sipb
+			ON sipb.`parent` = rr.`sales_invoice`
+			AND sipb.`parenttype` = 'Sales Invoice'
+			AND sipb.`parentfield` = 'payment_breakdown'
+			AND sipb.`type` IN ('Retention Deduction', 'Retention Receivable')
 		LEFT JOIN `tabBOQ` b ON b.`name` = rr.`boq`
 		{where_clause}
 		ORDER BY COALESCE(rr.`release_date`, rr.`invoice_date`, rr.`creation`) DESC, rr.`creation` DESC

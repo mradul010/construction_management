@@ -880,29 +880,65 @@ def get_project_construction_rows(filters):
 
 	retention_by_project = {}
 	if table_exists("Retention Record"):
-		retention_rows = frappe.db.sql(
-			"""
-			SELECT project,
-				SUM(retention_amount) AS total_retention_held,
-				SUM(
-					CASE
-						WHEN COALESCE(retention_release_invoice, '') != ''
-							AND COALESCE(invoice_status, '') != 'Cancelled'
-						THEN retention_amount
-						ELSE 0
-					END
-				) AS total_retention_invoiced,
-				SUM(paid_amount) AS total_retention_paid,
-				SUM(outstanding_amount) AS total_retention_outstanding,
-				SUM(balance_amount) AS retention_balance
-			FROM `tabRetention Record`
-			WHERE project IN %(projects)s
-				AND COALESCE(status, '') != 'Cancelled'
-			GROUP BY project
-			""",
-			{"projects": tuple(project_names)},
-			as_dict=True,
-		)
+		if table_exists("Sales Invoice Payment Breakdown"):
+			retention_rows = frappe.db.sql(
+				"""
+				SELECT rr.project,
+					SUM(COALESCE(sipb.amount, rr.retention_amount)) AS total_retention_held,
+					SUM(
+						CASE
+							WHEN COALESCE(rr.retention_release_invoice, '') != ''
+								AND COALESCE(rr.invoice_status, '') != 'Cancelled'
+							THEN COALESCE(sipb.amount, rr.retention_amount)
+							ELSE 0
+						END
+					) AS total_retention_invoiced,
+					SUM(
+						CASE
+							WHEN sipb.name IS NOT NULL
+							THEN GREATEST(0, COALESCE(sipb.amount, 0) - COALESCE(sipb.outstanding_amount, 0))
+							ELSE rr.paid_amount
+						END
+					) AS total_retention_paid,
+					SUM(COALESCE(sipb.outstanding_amount, rr.outstanding_amount)) AS total_retention_outstanding,
+					SUM(COALESCE(sipb.outstanding_amount, rr.balance_amount)) AS retention_balance
+				FROM `tabRetention Record` rr
+				LEFT JOIN `tabSales Invoice Payment Breakdown` sipb
+					ON sipb.parent = rr.sales_invoice
+					AND sipb.parenttype = 'Sales Invoice'
+					AND sipb.parentfield = 'payment_breakdown'
+					AND sipb.type IN ('Retention Deduction', 'Retention Receivable')
+				WHERE rr.project IN %(projects)s
+					AND COALESCE(rr.status, '') != 'Cancelled'
+				GROUP BY rr.project
+				""",
+				{"projects": tuple(project_names)},
+				as_dict=True,
+			)
+		else:
+			retention_rows = frappe.db.sql(
+				"""
+				SELECT project,
+					SUM(retention_amount) AS total_retention_held,
+					SUM(
+						CASE
+							WHEN COALESCE(retention_release_invoice, '') != ''
+								AND COALESCE(invoice_status, '') != 'Cancelled'
+							THEN retention_amount
+							ELSE 0
+						END
+					) AS total_retention_invoiced,
+					SUM(paid_amount) AS total_retention_paid,
+					SUM(outstanding_amount) AS total_retention_outstanding,
+					SUM(balance_amount) AS retention_balance
+				FROM `tabRetention Record`
+				WHERE project IN %(projects)s
+					AND COALESCE(status, '') != 'Cancelled'
+				GROUP BY project
+				""",
+				{"projects": tuple(project_names)},
+				as_dict=True,
+			)
 		retention_by_project = {
 			row.project: {
 				"total_retention_held": flt(row.total_retention_held),
