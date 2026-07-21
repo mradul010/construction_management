@@ -9,12 +9,6 @@ const construction_account_filters = {
 	default_subcontractor_retention_payable_account: { account_type: "Payable" },
 	default_subcontractor_advance_account: { account_type: "Payable" },
 	default_subcontract_expense_account: { root_type: "Expense" },
-	default_material_cost_account: { root_type: "Expense" },
-	default_labour_cost_account: { root_type: "Expense" },
-	default_equipment_cost_account: { root_type: "Expense" },
-	default_subcontract_cost_account: { root_type: "Expense" },
-	default_site_overhead_account: { root_type: "Expense" },
-	default_project_wip_account: { root_type: "Asset" },
 };
 
 frappe.ui.form.on("Company", {

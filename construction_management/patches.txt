@@ -6,3 +6,4 @@
 # Patches added in this section will be executed after doctypes are migrated
 construction_management.patches.backfill_boq_amount_after_margin
 construction_management.patches.backfill_sales_order_links
+construction_management.patches.remove_project_costing_account_fields

@@ -131,89 +131,13 @@
   },
   {
     "doctype": "Custom Field",
-    "name": "Company-project_costing_accounts_section",
     "dt": "Company",
-    "fieldname": "project_costing_accounts_section",
-    "fieldtype": "Section Break",
-    "label": "Project Costing",
+    "fieldname": "project_defaults_column",
+    "fieldtype": "Column Break",
     "insert_after": "default_subcontract_expense_account",
     "module": "Construction Management",
-    "collapsible": 1
-  },
-  {
-    "doctype": "Custom Field",
-    "name": "Company-default_material_cost_account",
-    "dt": "Company",
-    "fieldname": "default_material_cost_account",
-    "fieldtype": "Link",
-    "options": "Account",
-    "label": "Default Material Cost Account",
-    "insert_after": "project_costing_accounts_section",
-    "module": "Construction Management"
-  },
-  {
-    "doctype": "Custom Field",
-    "name": "Company-default_labour_cost_account",
-    "dt": "Company",
-    "fieldname": "default_labour_cost_account",
-    "fieldtype": "Link",
-    "options": "Account",
-    "label": "Default Labour Cost Account",
-    "insert_after": "default_material_cost_account",
-    "module": "Construction Management"
-  },
-  {
-    "doctype": "Custom Field",
-    "name": "Company-default_equipment_cost_account",
-    "dt": "Company",
-    "fieldname": "default_equipment_cost_account",
-    "fieldtype": "Link",
-    "options": "Account",
-    "label": "Default Equipment Cost Account",
-    "insert_after": "default_labour_cost_account",
-    "module": "Construction Management"
-  },
-  {
-    "doctype": "Custom Field",
-    "name": "Company-default_subcontract_cost_account",
-    "dt": "Company",
-    "fieldname": "default_subcontract_cost_account",
-    "fieldtype": "Link",
-    "options": "Account",
-    "label": "Default Subcontract Cost Account",
-    "insert_after": "default_equipment_cost_account",
-    "module": "Construction Management"
-  },
-  {
-    "doctype": "Custom Field",
-    "name": "Company-default_site_overhead_account",
-    "dt": "Company",
-    "fieldname": "default_site_overhead_account",
-    "fieldtype": "Link",
-    "options": "Account",
-    "label": "Default Site Overhead Account",
-    "insert_after": "default_subcontract_cost_account",
-    "module": "Construction Management"
-  },
-  {
-    "doctype": "Custom Field",
-    "name": "Company-default_project_wip_account",
-    "dt": "Company",
-    "fieldname": "default_project_wip_account",
-    "fieldtype": "Link",
-    "options": "Account",
-    "label": "Default Project WIP Account",
-    "insert_after": "default_site_overhead_account",
-    "module": "Construction Management"
-  },
-  {
-    "doctype": "Custom Field",
-    "name": "Company-project_accounting_settings_column",
-    "dt": "Company",
-    "fieldname": "project_accounting_settings_column",
-    "fieldtype": "Column Break",
-    "insert_after": "default_project_wip_account",
-    "module": "Construction Management"
+    "name": "Company-project_defaults_column",
+    "owner": "Administrator"
   },
   {
     "doctype": "Custom Field",
@@ -223,7 +147,7 @@
     "fieldtype": "Link",
     "options": "Cost Center",
     "label": "Default Project Cost Center",
-    "insert_after": "project_accounting_settings_column",
+    "insert_after": "project_defaults_column",
     "module": "Construction Management"
   },
   {

@@ -43,30 +43,6 @@ CONSTRUCTION_ACCOUNT_FIELDS = {
 		"company_field": "default_subcontract_expense_account",
 		"root_type": "Expense",
 	},
-	"material_cost": {
-		"company_field": "default_material_cost_account",
-		"root_type": "Expense",
-	},
-	"labour_cost": {
-		"company_field": "default_labour_cost_account",
-		"root_type": "Expense",
-	},
-	"equipment_cost": {
-		"company_field": "default_equipment_cost_account",
-		"root_type": "Expense",
-	},
-	"subcontract_cost": {
-		"company_field": "default_subcontract_cost_account",
-		"root_type": "Expense",
-	},
-	"site_overhead": {
-		"company_field": "default_site_overhead_account",
-		"root_type": "Expense",
-	},
-	"project_wip": {
-		"company_field": "default_project_wip_account",
-		"root_type": "Asset",
-	},
 }
 
 
