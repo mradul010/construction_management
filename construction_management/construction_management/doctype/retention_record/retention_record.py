@@ -3,7 +3,7 @@ from frappe import _
 from frappe.model.document import Document
 from frappe.utils import add_days, flt, getdate, today
 
-from construction_management.construction_management.accounting import get_construction_account
+from construction_management.construction_management.utils.accounting import get_construction_account
 from construction_management.construction_management.accounting_dimensions import (
 	get_ra_bill_project_cost_center,
 )

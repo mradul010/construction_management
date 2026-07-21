@@ -9,7 +9,7 @@ from construction_management.construction_management.doctype.sc_work_order.sc_wo
 	get_submitted_bill_total,
 	update_sc_work_order_summary,
 )
-from construction_management.construction_management.accounting import get_construction_account
+from construction_management.construction_management.utils.accounting import get_construction_account
 
 
 class SCBill(Document):

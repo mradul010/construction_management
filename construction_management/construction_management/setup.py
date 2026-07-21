@@ -9,7 +9,6 @@ def after_install():
 	ensure_sales_invoice_ra_bill_field()
 	ensure_sales_invoice_retention_records_field()
 	ensure_payment_entry_retention_record_field()
-	ensure_retention_receivable_account()
 	backfill_sales_invoice_ra_bill_links()
 	ensure_ra_bill_items()
 	backfill_boq_revision_fields()
@@ -22,7 +21,6 @@ def after_migrate():
 	ensure_sales_invoice_ra_bill_field()
 	ensure_sales_invoice_retention_records_field()
 	ensure_payment_entry_retention_record_field()
-	ensure_retention_receivable_account()
 	backfill_sales_invoice_ra_bill_links()
 	ensure_ra_bill_items()
 	backfill_boq_revision_fields()
@@ -708,7 +706,7 @@ def get_or_create_ra_bill_receivable_account(company, currency):
 	Return a receivable account whose currency matches the RA Bill invoice currency.
 	ERPNext requires Sales Invoice debit_to currency to match document currency.
 	"""
-	from construction_management.construction_management.accounting import (
+	from construction_management.construction_management.utils.accounting import (
 		get_or_create_ra_bill_receivable_account as get_account,
 	)
 
@@ -724,9 +722,12 @@ def ensure_ra_bill_items():
 
 	company = frappe.defaults.get_user_default("Company") or frappe.defaults.get_global_default("company")
 	if company:
-		from construction_management.construction_management.accounting import get_construction_account
+		from construction_management.construction_management.utils.accounting import get_construction_account
 
-		income_account = get_construction_account(company, "ra_bill_income")
+		try:
+			income_account = get_construction_account(company, "ra_bill_income")
+		except Exception:
+			income_account = None
 	else:
 		income_account = None
 

@@ -68,7 +68,7 @@ def apply_ra_bill_cost_center_to_payment_entry(payment_entry, retention_account=
 		payment_entry.project = context.project
 
 	if not retention_account:
-		from construction_management.construction_management.accounting import (
+		from construction_management.construction_management.utils.accounting import (
 			get_construction_account,
 		)
 

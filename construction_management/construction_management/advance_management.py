@@ -53,7 +53,7 @@ def get_ra_bill_sales_invoice_receivable_account(customer, company, currency):
 	if not company:
 		return None
 
-	from construction_management.construction_management.accounting import (
+	from construction_management.construction_management.utils.accounting import (
 		get_or_create_ra_bill_receivable_account,
 	)
 

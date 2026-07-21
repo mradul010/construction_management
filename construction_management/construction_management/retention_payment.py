@@ -6,7 +6,7 @@ from construction_management.construction_management.accounting_dimensions impor
 	apply_ra_bill_cost_center_to_payment_entry,
 	get_ra_bill_project_cost_center,
 )
-from construction_management.construction_management.accounting import (
+from construction_management.construction_management.utils.accounting import (
 	apply_construction_accounts_to_payment_entry,
 	ensure_retention_receivable_account as ensure_retention_account,
 	get_construction_account,

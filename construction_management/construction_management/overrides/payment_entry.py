@@ -8,16 +8,12 @@ from erpnext.accounts.utils import get_account_currency
 from construction_management.construction_management.accounting_dimensions import (
 	apply_ra_bill_cost_center_to_payment_entry,
 )
-from construction_management.construction_management.accounting import (
+from construction_management.construction_management.utils.accounting import (
 	apply_construction_accounts_to_payment_entry,
+	apply_party_to_payment_entry,
+	get_gl_party_fields,
 	get_construction_account,
 )
-
-
-PARTY_TYPE_BY_ACCOUNT_TYPE = {
-	"Receivable": "Customer",
-	"Payable": "Supplier",
-}
 
 
 class ConstructionPaymentEntry(PaymentEntry):
@@ -35,7 +31,30 @@ class ConstructionPaymentEntry(PaymentEntry):
 		if self.is_retention_payment():
 			self.validate_retention_payment(for_submit=getattr(self, "_action", None) == "submit")
 
+	def build_gl_map(self):
+		apply_party_to_payment_entry(self)
+		gl_entries = super().build_gl_map()
+		self.apply_party_to_receivable_payable_gl_entries(gl_entries)
+		return gl_entries
+
+	def apply_party_to_receivable_payable_gl_entries(self, gl_entries):
+		for gle in gl_entries:
+			if not gle.get("account"):
+				continue
+
+			party_fields = get_gl_party_fields(
+				gle.account,
+				transaction=self,
+				party_type=self.party_type,
+				party=self.party,
+			)
+			if not party_fields:
+				continue
+
+			gle.update(party_fields)
+
 	def add_deductions_gl_entries(self, gl_entries):
+		apply_party_to_payment_entry(self)
 		for d in self.get("deductions"):
 			if not d.amount:
 				continue
@@ -64,37 +83,12 @@ class ConstructionPaymentEntry(PaymentEntry):
 			)
 
 	def get_deduction_party_fields(self, deduction):
-		account_type = frappe.get_cached_value("Account", deduction.account, "account_type")
-		required_party_type = PARTY_TYPE_BY_ACCOUNT_TYPE.get(account_type)
-		if not required_party_type:
-			return {}
-
-		if self.party_type != required_party_type:
-			frappe.throw(
-				_(
-					"Row {0}: {1} account {2} requires Party Type {3}, but Payment Entry has Party Type {4}."
-				).format(
-					deduction.idx,
-					account_type,
-					frappe.bold(deduction.account),
-					frappe.bold(required_party_type),
-					frappe.bold(self.party_type or _("Not Set")),
-				)
-			)
-
-		if not self.party:
-			frappe.throw(
-				_("Row {0}: Party is required to post deduction against {1} account {2}.").format(
-					deduction.idx,
-					account_type,
-					frappe.bold(deduction.account),
-				)
-			)
-
-		return {
-			"party_type": required_party_type,
-			"party": self.party,
-		}
+		return get_gl_party_fields(
+			deduction.account,
+			transaction=self,
+			party_type=self.party_type,
+			party=self.party,
+		)
 
 	def is_retention_payment(self):
 		if self.meta.has_field("custom_is_retention_payment") and self.get("custom_is_retention_payment"):

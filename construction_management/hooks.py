@@ -172,7 +172,7 @@ has_permission = {
 doc_events = {
 	"Sales Invoice": {
 		"validate": [
-			"construction_management.construction_management.accounting.apply_construction_accounts_to_sales_invoice",
+			"construction_management.construction_management.utils.accounting.apply_construction_accounts_to_sales_invoice",
 			"construction_management.construction_management.accounting_dimensions.apply_ra_bill_cost_center_to_sales_invoice",
 			"construction_management.construction_management.doctype.retention_record.retention_record.validate_sales_invoice_references",
 			"construction_management.construction_management.advance_management.validate_sales_invoice_advance_consistency",
@@ -205,7 +205,7 @@ doc_events = {
 		],
 	},
 	"Sales Order": {
-		"validate": "construction_management.construction_management.accounting.apply_construction_accounts_to_sales_order",
+		"validate": "construction_management.construction_management.utils.accounting.apply_construction_accounts_to_sales_order",
 		"on_submit": "construction_management.construction_management.advance_management.on_sales_order_advance_context_change",
 		"on_cancel": "construction_management.construction_management.advance_management.on_sales_order_advance_context_change",
 		"on_update_after_submit": "construction_management.construction_management.advance_management.on_sales_order_advance_context_change",
