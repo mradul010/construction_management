@@ -2,10 +2,6 @@ import frappe
 from frappe import _
 from frappe.utils import flt
 
-from construction_management.construction_management.accounting_dimensions import (
-	apply_ra_bill_cost_center_to_payment_entry,
-	get_ra_bill_project_cost_center,
-)
 from construction_management.construction_management.utils.accounting import (
 	apply_construction_accounts_to_payment_entry,
 	ensure_retention_receivable_account as ensure_retention_account,
@@ -18,7 +14,6 @@ RETENTION_ACCOUNT_NAME = "Retention Receivable"
 RETENTION_COMPANY = "Qatra Building Contracting"
 RETENTION_PARENT_ACCOUNT = "Current Assets - QBC"
 RETENTION_PARENT_ACCOUNT_FALLBACK = "Current Assets"
-RETENTION_DESCRIPTION_PREFIX = "Retention against RA Bill"
 AMOUNT_TOLERANCE = 0.0001
 
 
@@ -49,12 +44,12 @@ def get_payment_entry(
 		reference_date=reference_date,
 		created_from_payment_request=created_from_payment_request,
 	)
-	apply_retention_deduction(payment_entry)
+	apply_trade_receivable_allocation(payment_entry)
 	apply_construction_accounts_to_payment_entry(payment_entry)
 	return payment_entry
 
 
-def apply_retention_deduction(payment_entry):
+def apply_trade_receivable_allocation(payment_entry):
 	if not payment_entry or payment_entry.payment_type != "Receive":
 		return payment_entry
 
@@ -62,47 +57,40 @@ def apply_retention_deduction(payment_entry):
 	if not retention_context:
 		return payment_entry
 
-	account = get_construction_account(
-		retention_context.company,
-		"retention_receivable",
-		project=retention_context.project,
-		transaction=payment_entry,
-	)
-	if _has_retention_deduction(payment_entry, account):
-		apply_ra_bill_cost_center_to_payment_entry(payment_entry, retention_account=account)
-		return payment_entry
-
-	retention_amount = flt(retention_context.retention_amount)
-	if retention_amount <= AMOUNT_TOLERANCE:
-		return payment_entry
-
-	retention_amount = min(retention_amount, flt(retention_context.allocated_amount))
-	if retention_amount <= AMOUNT_TOLERANCE:
-		return payment_entry
-
-	cost_center = get_ra_bill_project_cost_center(
-		retention_context.ra_bill,
-		project=retention_context.project,
-		company=retention_context.company,
-	)
-	if payment_entry.meta.has_field("project") and retention_context.project and not payment_entry.get("project"):
-		payment_entry.project = retention_context.project
-
-	payment_entry.append(
-		"deductions",
-		{
-			"account": account,
-			"cost_center": cost_center,
-			"amount": retention_amount,
-			"description": _get_retention_deduction_description(retention_context.ra_bill),
-		},
+	remove_retention_deductions(payment_entry, {retention_context.retention_receivable_account})
+	trade_outstanding = get_trade_receivable_outstanding(
+		retention_context.sales_invoice,
+		retention_context.trade_receivable_account,
+		retention_context.customer,
 	)
 
-	_set_received_amount_after_retention(payment_entry, retention_amount)
+	for reference in payment_entry.get("references") or []:
+		if (
+			reference.reference_doctype == "Sales Invoice"
+			and reference.reference_name == retention_context.sales_invoice
+		):
+			reference.outstanding_amount = trade_outstanding
+			reference.allocated_amount = min(flt(reference.allocated_amount), trade_outstanding)
+
+	_set_received_amount(payment_entry, trade_outstanding)
 	if hasattr(payment_entry, "set_amounts"):
 		payment_entry.set_amounts()
 
 	return payment_entry
+
+
+def remove_retention_deductions(payment_entry, retention_accounts):
+	if not retention_accounts:
+		return
+
+	payment_entry.set(
+		"deductions",
+		[
+			row
+			for row in payment_entry.get("deductions") or []
+			if row.account not in retention_accounts
+		],
+	)
 
 
 def get_or_create_retention_receivable_account(company=None):
@@ -140,7 +128,7 @@ def _get_payment_entry_retention_context(payment_entry):
 		invoice_values = frappe.db.get_value(
 			"Sales Invoice",
 			reference.reference_name,
-			["name", "company", "project", "ra_bill", "retention_record"],
+			["name", "company", "customer", "project", "ra_bill", "retention_record", "debit_to"],
 			as_dict=True,
 		)
 		if not invoice_values or not _is_initial_ra_bill_invoice(invoice_values):
@@ -160,6 +148,15 @@ def _get_payment_entry_retention_context(payment_entry):
 				"company": invoice_values.company,
 				"project": invoice_values.project or frappe.db.get_value("RA Bill", invoice_values.ra_bill, "project"),
 				"ra_bill": ra_bill_values.name,
+				"sales_invoice": invoice_values.name,
+				"customer": invoice_values.customer,
+				"trade_receivable_account": invoice_values.debit_to,
+				"retention_receivable_account": get_construction_account(
+					invoice_values.company,
+					"retention_receivable",
+					project=invoice_values.project,
+					transaction=payment_entry,
+				),
 				"retention_amount": ra_bill_values.retention_amount,
 				"allocated_amount": reference.allocated_amount,
 			}
@@ -181,13 +178,6 @@ def _is_initial_ra_bill_invoice(invoice_values):
 	return True
 
 
-def _has_retention_deduction(payment_entry, account):
-	for row in payment_entry.get("deductions") or []:
-		if row.account == account and flt(row.amount) > AMOUNT_TOLERANCE:
-			return True
-	return False
-
-
 def _get_retention_cost_center(company):
 	cost_center = frappe.db.get_value("Company", company, "cost_center")
 	if cost_center:
@@ -204,20 +194,68 @@ def _get_retention_cost_center(company):
 	frappe.throw(_("Please set a default Cost Center for company {0}.").format(company))
 
 
-def _get_retention_deduction_description(ra_bill):
-	if ra_bill:
-		return f"{RETENTION_DESCRIPTION_PREFIX} {ra_bill}"
-	return "Retention Deduction"
+def _set_received_amount(payment_entry, amount):
+	amount = flt(amount)
+	payment_entry.paid_amount = amount
+	payment_entry.received_amount = amount
 
 
-def _set_received_amount_after_retention(payment_entry, retention_amount):
-	if payment_entry.payment_type != "Receive":
-		return
+def get_trade_receivable_outstanding(sales_invoice, account, customer):
+	if not sales_invoice or not account or not customer:
+		return 0
 
-	retention_amount = flt(retention_amount)
-	allocated_amount = sum(flt(row.allocated_amount) for row in payment_entry.get("references") or [])
-	net_received_amount = max(0, allocated_amount - retention_amount)
-	if flt(payment_entry.paid_amount) > net_received_amount + AMOUNT_TOLERANCE:
-		payment_entry.paid_amount = net_received_amount
-	if flt(payment_entry.received_amount) > net_received_amount + AMOUNT_TOLERANCE:
-		payment_entry.received_amount = net_received_amount
+	breakdown_outstanding = get_trade_receivable_breakdown_outstanding(sales_invoice, account)
+	if breakdown_outstanding is not None:
+		return breakdown_outstanding
+
+	outstanding = frappe.db.sql(
+		"""
+		SELECT SUM(amount_in_account_currency)
+		FROM `tabPayment Ledger Entry`
+		WHERE delinked = 0
+			AND account = %s
+			AND party_type = 'Customer'
+			AND party = %s
+			AND against_voucher_type = 'Sales Invoice'
+			AND against_voucher_no = %s
+		""",
+		(account, customer, sales_invoice),
+	)
+	if outstanding and outstanding[0][0] is not None:
+		return max(0, flt(outstanding[0][0]))
+
+	outstanding = frappe.db.sql(
+		"""
+		SELECT SUM(debit_in_account_currency) - SUM(credit_in_account_currency)
+		FROM `tabGL Entry`
+		WHERE is_cancelled = 0
+			AND account = %s
+			AND party_type = 'Customer'
+			AND party = %s
+			AND against_voucher_type = 'Sales Invoice'
+			AND against_voucher = %s
+		""",
+		(account, customer, sales_invoice),
+	)
+	return max(0, flt(outstanding[0][0] if outstanding else 0))
+
+
+def get_trade_receivable_breakdown_outstanding(sales_invoice, account):
+	if not frappe.get_meta("Sales Invoice").has_field("payment_breakdown"):
+		return None
+
+	row = frappe.db.get_value(
+		"Sales Invoice Payment Breakdown",
+		{
+			"parent": sales_invoice,
+			"parenttype": "Sales Invoice",
+			"parentfield": "payment_breakdown",
+			"type": "Trade Receivable",
+			"account": account,
+		},
+		"outstanding_amount",
+	)
+	if row is None:
+		return None
+
+	return max(0, flt(row))

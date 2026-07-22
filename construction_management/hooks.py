@@ -180,29 +180,38 @@ doc_events = {
 		"on_submit": [
 			"construction_management.construction_management.doctype.retention_record.retention_record.on_sales_invoice_submit",
 			"construction_management.construction_management.advance_management.on_sales_invoice_advance_change",
+			"construction_management.construction_management.overrides.sales_invoice.sync_sales_invoice_payment_breakdown",
 		],
 		"on_cancel": [
 			"construction_management.construction_management.doctype.retention_record.retention_record.on_sales_invoice_cancel",
 			"construction_management.construction_management.advance_management.on_sales_invoice_advance_change",
+			"construction_management.construction_management.overrides.sales_invoice.sync_sales_invoice_payment_breakdown",
 		],
 		"on_update_after_submit": [
 			"construction_management.construction_management.doctype.retention_record.retention_record.on_sales_invoice_update_after_submit",
 			"construction_management.construction_management.advance_management.on_sales_invoice_advance_change",
+			"construction_management.construction_management.overrides.sales_invoice.sync_sales_invoice_payment_breakdown",
 		],
 	},
 	"Payment Entry": {
 		"on_submit": [
 			"construction_management.construction_management.doctype.retention_record.retention_record.on_payment_entry_submit",
 			"construction_management.construction_management.advance_management.on_payment_entry_advance_change",
+			"construction_management.construction_management.overrides.sales_invoice.sync_sales_invoice_payment_breakdown_from_payment_entry",
 		],
 		"on_cancel": [
 			"construction_management.construction_management.doctype.retention_record.retention_record.on_payment_entry_cancel",
 			"construction_management.construction_management.advance_management.on_payment_entry_advance_change",
+			"construction_management.construction_management.overrides.sales_invoice.sync_sales_invoice_payment_breakdown_from_payment_entry",
 		],
 		"on_update_after_submit": [
 			"construction_management.construction_management.doctype.retention_record.retention_record.on_payment_entry_update_after_submit",
 			"construction_management.construction_management.advance_management.on_payment_entry_advance_change",
+			"construction_management.construction_management.overrides.sales_invoice.sync_sales_invoice_payment_breakdown_from_payment_entry",
 		],
+	},
+	"Purchase Invoice": {
+		"validate": "construction_management.construction_management.utils.accounting.apply_construction_accounts_to_purchase_invoice",
 	},
 	"Sales Order": {
 		"validate": "construction_management.construction_management.utils.accounting.apply_construction_accounts_to_sales_order",
@@ -242,6 +251,7 @@ doc_events = {
 # ------------------------------
 #
 override_doctype_class = {
+	"Sales Invoice": "construction_management.construction_management.overrides.sales_invoice.ConstructionSalesInvoice",
 	"Payment Entry": "construction_management.construction_management.overrides.payment_entry.ConstructionPaymentEntry",
 }
 

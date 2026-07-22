@@ -1,5 +1,6 @@
 import frappe
 import os
+from frappe.utils import flt
 
 
 def after_install():
@@ -8,6 +9,7 @@ def after_install():
 	ensure_project_current_boq_field()
 	ensure_sales_invoice_ra_bill_field()
 	ensure_sales_invoice_retention_records_field()
+	ensure_sales_invoice_payment_breakdown_field()
 	ensure_payment_entry_retention_record_field()
 	backfill_sales_invoice_ra_bill_links()
 	ensure_ra_bill_items()
@@ -20,6 +22,7 @@ def after_migrate():
 	ensure_project_current_boq_field()
 	ensure_sales_invoice_ra_bill_field()
 	ensure_sales_invoice_retention_records_field()
+	ensure_sales_invoice_payment_breakdown_field()
 	ensure_payment_entry_retention_record_field()
 	backfill_sales_invoice_ra_bill_links()
 	ensure_ra_bill_items()
@@ -264,6 +267,96 @@ def ensure_sales_invoice_retention_records_field():
 	frappe.clear_cache(doctype="Sales Invoice")
 	frappe.db.commit()
 	print("Sales Invoice Retention Records custom field created successfully")
+
+
+def ensure_sales_invoice_payment_breakdown_field():
+	"""
+	Ensure Sales Invoice has a dedicated payment breakdown table for construction receivables.
+	"""
+	section_fieldname = "retention_deduction_section"
+	fieldname = "payment_breakdown"
+
+	ensure_custom_field(
+		"Sales Invoice",
+		section_fieldname,
+		{
+			"label": "Retention Deduction",
+			"fieldtype": "Section Break",
+			"insert_after": "payment_schedule",
+			"collapsible": 1,
+			"depends_on": "eval:doc.payment_breakdown && doc.payment_breakdown.length",
+			"module": "Construction Management",
+		},
+	)
+	ensure_custom_field(
+		"Sales Invoice",
+		fieldname,
+		{
+			"label": "Retention Deduction",
+			"fieldtype": "Table",
+			"options": "Sales Invoice Payment Breakdown",
+			"insert_after": section_fieldname,
+			"read_only": 1,
+			"no_copy": 1,
+			"module": "Construction Management",
+		},
+	)
+	rename_existing_retention_breakdown_rows()
+	remove_non_retention_breakdown_rows()
+
+	frappe.clear_cache(doctype="Sales Invoice")
+	frappe.db.commit()
+	print("Sales Invoice Retention Deduction custom fields are ready")
+
+
+def ensure_custom_field(dt, fieldname, values):
+	custom_field_name = f"{dt}-{fieldname}"
+	if frappe.db.exists("Custom Field", custom_field_name):
+		frappe.db.set_value(
+			"Custom Field",
+			custom_field_name,
+			values,
+			update_modified=False,
+		)
+		return
+
+	frappe.get_doc(
+		{
+			"doctype": "Custom Field",
+			"dt": dt,
+			"fieldname": fieldname,
+			**values,
+		}
+	).insert(ignore_permissions=True)
+
+
+def rename_existing_retention_breakdown_rows():
+	if not frappe.db.table_exists("Sales Invoice Payment Breakdown"):
+		return
+
+	frappe.db.sql(
+		"""
+		UPDATE `tabSales Invoice Payment Breakdown`
+		SET `type` = 'Retention Deduction'
+		WHERE `parenttype` = 'Sales Invoice'
+			AND `parentfield` = 'payment_breakdown'
+			AND `type` = 'Retention Receivable'
+		"""
+	)
+
+
+def remove_non_retention_breakdown_rows():
+	if not frappe.db.table_exists("Sales Invoice Payment Breakdown"):
+		return
+
+	frappe.db.sql(
+		"""
+		DELETE FROM `tabSales Invoice Payment Breakdown`
+		WHERE `parenttype` = 'Sales Invoice'
+			AND `parentfield` = 'payment_breakdown'
+			AND `type` NOT IN ('Retention Deduction', 'Retention Receivable')
+		"""
+	)
 
 
 def ensure_payment_entry_retention_record_field():
