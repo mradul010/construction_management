@@ -210,6 +210,9 @@ doc_events = {
 			"construction_management.construction_management.overrides.sales_invoice.sync_sales_invoice_payment_breakdown_from_payment_entry",
 		],
 	},
+	"Purchase Invoice": {
+		"validate": "construction_management.construction_management.utils.accounting.apply_construction_accounts_to_purchase_invoice",
+	},
 	"Sales Order": {
 		"validate": "construction_management.construction_management.utils.accounting.apply_construction_accounts_to_sales_order",
 		"on_submit": "construction_management.construction_management.advance_management.on_sales_order_advance_context_change",

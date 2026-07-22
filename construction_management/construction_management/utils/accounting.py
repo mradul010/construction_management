@@ -201,6 +201,8 @@ def apply_construction_accounts_to_purchase_invoice(invoice, method=None):
 		invoice.credit_to = payable_account
 		invoice.party_account_currency = frappe.get_cached_value(
 			"Account", payable_account, "account_currency"
+		) or invoice.get("currency") or frappe.get_cached_value(
+			"Company", invoice.company, "default_currency"
 		)
 
 	for row in invoice.get("items") or []:

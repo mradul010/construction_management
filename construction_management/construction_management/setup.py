@@ -1,5 +1,6 @@
 import frappe
 import os
+from frappe.utils import flt
 
 
 def after_install():
