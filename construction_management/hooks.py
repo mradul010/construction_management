@@ -53,6 +53,7 @@ app_include_js = "/assets/construction_management/js/report_summary.js"
 doctype_js = {
     "Company": "public/js/company.js",
     "Project": "public/js/project_dpr.js",
+    "Purchase Order": "public/js/purchase_order.js",
 }
 
 # include js, css files in header of web template
@@ -196,22 +197,49 @@ doc_events = {
 	"Payment Entry": {
 		"on_submit": [
 			"construction_management.construction_management.doctype.retention_record.retention_record.on_payment_entry_submit",
+			"construction_management.construction_management.doctype.retention_payable.retention_payable.sync_from_payment_entry",
 			"construction_management.construction_management.advance_management.on_payment_entry_advance_change",
 			"construction_management.construction_management.overrides.sales_invoice.sync_sales_invoice_payment_breakdown_from_payment_entry",
+			"construction_management.construction_management.overrides.purchase_invoice.sync_purchase_invoice_payment_breakdown_from_payment_entry",
 		],
 		"on_cancel": [
 			"construction_management.construction_management.doctype.retention_record.retention_record.on_payment_entry_cancel",
+			"construction_management.construction_management.doctype.retention_payable.retention_payable.sync_from_payment_entry",
 			"construction_management.construction_management.advance_management.on_payment_entry_advance_change",
 			"construction_management.construction_management.overrides.sales_invoice.sync_sales_invoice_payment_breakdown_from_payment_entry",
+			"construction_management.construction_management.overrides.purchase_invoice.sync_purchase_invoice_payment_breakdown_from_payment_entry",
 		],
 		"on_update_after_submit": [
 			"construction_management.construction_management.doctype.retention_record.retention_record.on_payment_entry_update_after_submit",
+			"construction_management.construction_management.doctype.retention_payable.retention_payable.sync_from_payment_entry",
 			"construction_management.construction_management.advance_management.on_payment_entry_advance_change",
 			"construction_management.construction_management.overrides.sales_invoice.sync_sales_invoice_payment_breakdown_from_payment_entry",
+			"construction_management.construction_management.overrides.purchase_invoice.sync_purchase_invoice_payment_breakdown_from_payment_entry",
 		],
 	},
 	"Purchase Invoice": {
-		"validate": "construction_management.construction_management.utils.accounting.apply_construction_accounts_to_purchase_invoice",
+		"validate": [
+			"construction_management.construction_management.utils.accounting.apply_construction_accounts_to_purchase_invoice",
+			"construction_management.construction_management.doctype.retention_payable.retention_payable.validate_purchase_invoice_references",
+		],
+		"on_submit": [
+			"construction_management.construction_management.doctype.retention_payable.retention_payable.on_purchase_invoice_submit",
+			"construction_management.construction_management.overrides.purchase_invoice.sync_purchase_invoice_payment_breakdown",
+		],
+		"on_cancel": [
+			"construction_management.construction_management.doctype.retention_payable.retention_payable.on_purchase_invoice_cancel",
+			"construction_management.construction_management.overrides.purchase_invoice.sync_purchase_invoice_payment_breakdown",
+		],
+		"on_update_after_submit": [
+			"construction_management.construction_management.doctype.retention_payable.retention_payable.on_purchase_invoice_update_after_submit",
+			"construction_management.construction_management.overrides.purchase_invoice.sync_purchase_invoice_payment_breakdown",
+		],
+	},
+	"Purchase Order": {
+		"validate": "construction_management.construction_management.purchase_order.validate_purchase_order",
+		"on_submit": "construction_management.construction_management.purchase_order.update_sc_work_order_from_purchase_order",
+		"on_cancel": "construction_management.construction_management.purchase_order.update_sc_work_order_from_purchase_order",
+		"on_update_after_submit": "construction_management.construction_management.purchase_order.update_sc_work_order_from_purchase_order",
 	},
 	"Sales Order": {
 		"validate": "construction_management.construction_management.utils.accounting.apply_construction_accounts_to_sales_order",
@@ -252,6 +280,7 @@ doc_events = {
 #
 override_doctype_class = {
 	"Sales Invoice": "construction_management.construction_management.overrides.sales_invoice.ConstructionSalesInvoice",
+	"Purchase Invoice": "construction_management.construction_management.overrides.purchase_invoice.ConstructionPurchaseInvoice",
 	"Payment Entry": "construction_management.construction_management.overrides.payment_entry.ConstructionPaymentEntry",
 }
 
@@ -275,6 +304,7 @@ override_whitelisted_methods = {
 # along with any modifications made in other Frappe apps
 override_doctype_dashboards = {
 	"Project": "construction_management.construction_management.integrations.project_dashboard.get_data",
+	"Purchase Order": "construction_management.construction_management.integrations.purchase_order_dashboard.get_data",
 	"Purchase Invoice": "construction_management.construction_management.integrations.purchase_invoice_dashboard.get_data",
 	"Sales Invoice": "construction_management.construction_management.integrations.sales_invoice_dashboard.get_data",
 	"Sales Order": "construction_management.construction_management.integrations.sales_order_dashboard.get_data",

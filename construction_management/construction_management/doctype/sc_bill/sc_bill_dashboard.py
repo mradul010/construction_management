@@ -9,16 +9,17 @@ def get_data():
 			"Project": "project",
 			"Supplier": "supplier",
 			"BOQ": "boq",
+			"Purchase Order": "purchase_order",
 			"Purchase Invoice": "purchase_invoice",
 		},
 		"transactions": [
 			{
 				"label": _("Subcontract"),
-				"items": ["SC Work Order", "Project", "Supplier", "BOQ"],
+				"items": ["SC Work Order", "Purchase Order", "Project", "Supplier", "BOQ"],
 			},
 			{
 				"label": _("Accounting"),
-				"items": ["Purchase Invoice"],
+				"items": ["Purchase Invoice", "Payment Entry", "Retention Payable"],
 			},
 		],
 	}

@@ -10,6 +10,9 @@ def after_install():
 	ensure_sales_invoice_ra_bill_field()
 	ensure_sales_invoice_retention_records_field()
 	ensure_sales_invoice_payment_breakdown_field()
+	ensure_purchase_invoice_sc_bill_fields()
+	ensure_purchase_invoice_payment_breakdown_field()
+	ensure_purchase_order_subcontract_fields()
 	ensure_payment_entry_retention_record_field()
 	backfill_sales_invoice_ra_bill_links()
 	ensure_ra_bill_items()
@@ -23,6 +26,9 @@ def after_migrate():
 	ensure_sales_invoice_ra_bill_field()
 	ensure_sales_invoice_retention_records_field()
 	ensure_sales_invoice_payment_breakdown_field()
+	ensure_purchase_invoice_sc_bill_fields()
+	ensure_purchase_invoice_payment_breakdown_field()
+	ensure_purchase_order_subcontract_fields()
 	ensure_payment_entry_retention_record_field()
 	backfill_sales_invoice_ra_bill_links()
 	ensure_ra_bill_items()
@@ -309,6 +315,135 @@ def ensure_sales_invoice_payment_breakdown_field():
 	print("Sales Invoice Retention Deduction custom fields are ready")
 
 
+def ensure_purchase_invoice_sc_bill_fields():
+	"""
+	Ensure Purchase Invoice carries the subcontract billing and retention payable references.
+	"""
+	for fieldname, label, options, insert_after in [
+		("sc_bill", "SC Bill", "SC Bill", "project"),
+		("sc_work_order", "SC Work Order", "SC Work Order", "sc_bill"),
+		("purchase_order", "Purchase Order", "Purchase Order", "sc_work_order"),
+		("retention_payable", "Retention Payable", "Retention Payable", "purchase_order"),
+	]:
+		ensure_custom_field(
+			"Purchase Invoice",
+			fieldname,
+			{
+				"label": label,
+				"fieldtype": "Link",
+				"options": options,
+				"insert_after": insert_after,
+				"read_only": 1,
+				"no_copy": 1,
+				"module": "Construction Management",
+			},
+		)
+
+	for fieldname, label, options, insert_after in [
+		("boq_item", "BOQ Item", "BOQ Item", "project"),
+		("sc_work_order_item", "SC Work Order Item", None, "boq_item"),
+		("sc_bill_item", "SC Bill Item", None, "sc_work_order_item"),
+	]:
+		values = {
+			"label": label,
+			"fieldtype": "Link" if options else "Data",
+			"insert_after": insert_after,
+			"read_only": 1,
+			"no_copy": 1,
+			"module": "Construction Management",
+		}
+		if options:
+			values["options"] = options
+		ensure_custom_field("Purchase Invoice Item", fieldname, values)
+
+	frappe.clear_cache(doctype="Purchase Invoice")
+	frappe.clear_cache(doctype="Purchase Invoice Item")
+	frappe.db.commit()
+	print("Purchase Invoice subcontract retention custom fields are ready")
+
+
+def ensure_purchase_invoice_payment_breakdown_field():
+	"""
+	Ensure Purchase Invoice has a payment breakdown table for subcontract retention payable.
+	"""
+	section_fieldname = "retention_payable_section"
+	fieldname = "payment_breakdown"
+
+	ensure_custom_field(
+		"Purchase Invoice",
+		section_fieldname,
+		{
+			"label": "Retention Payable",
+			"fieldtype": "Section Break",
+			"insert_after": "payment_schedule",
+			"collapsible": 1,
+			"depends_on": "eval:doc.payment_breakdown && doc.payment_breakdown.length",
+			"module": "Construction Management",
+		},
+	)
+	ensure_custom_field(
+		"Purchase Invoice",
+		fieldname,
+		{
+			"label": "Payment Breakdown",
+			"fieldtype": "Table",
+			"options": "Purchase Invoice Payment Breakdown",
+			"insert_after": section_fieldname,
+			"read_only": 1,
+			"no_copy": 1,
+			"module": "Construction Management",
+		},
+	)
+
+	frappe.clear_cache(doctype="Purchase Invoice")
+	frappe.db.commit()
+	print("Purchase Invoice Payment Breakdown custom fields are ready")
+
+
+def ensure_purchase_order_subcontract_fields():
+	"""
+	Ensure Purchase Order carries construction subcontract references.
+	"""
+	for fieldname, label, options, insert_after in [
+		("boq", "BOQ", "BOQ", "project"),
+		("sc_work_order", "SC Work Order", "SC Work Order", "boq"),
+	]:
+		ensure_custom_field(
+			"Purchase Order",
+			fieldname,
+			{
+				"label": label,
+				"fieldtype": "Link",
+				"options": options,
+				"insert_after": insert_after,
+				"read_only": 1,
+				"no_copy": 1,
+				"module": "Construction Management",
+			},
+		)
+
+	for fieldname, label, options, insert_after in [
+		("boq_item", "BOQ Item", "BOQ Item", "project"),
+		("sc_work_order_item", "SC Work Order Item", None, "boq_item"),
+	]:
+		values = {
+			"label": label,
+			"fieldtype": "Link" if options else "Data",
+			"insert_after": insert_after,
+			"read_only": 1,
+			"no_copy": 1,
+			"module": "Construction Management",
+		}
+		if options:
+			values["options"] = options
+		ensure_custom_field("Purchase Order Item", fieldname, values)
+
+	frappe.clear_cache(doctype="Purchase Order")
+	frappe.clear_cache(doctype="Purchase Order Item")
+	frappe.db.commit()
+	print("Purchase Order subcontract custom fields are ready")
+
+
 def ensure_custom_field(dt, fieldname, values):
 	custom_field_name = f"{dt}-{fieldname}"
 	if frappe.db.exists("Custom Field", custom_field_name):
@@ -407,6 +542,62 @@ def ensure_payment_entry_retention_record_field():
 			"fieldtype": "Link",
 			"options": "Account",
 			"insert_after": "custom_retention_release_amount",
+		},
+		{
+			"fieldname": "retention_payable",
+			"label": "Retention Payable",
+			"fieldtype": "Link",
+			"options": "Retention Payable",
+			"insert_after": "custom_retention_receivable_account",
+		},
+		{
+			"fieldname": "sc_work_order",
+			"label": "SC Work Order",
+			"fieldtype": "Link",
+			"options": "SC Work Order",
+			"insert_after": "retention_payable",
+		},
+		{
+			"fieldname": "purchase_order",
+			"label": "Purchase Order",
+			"fieldtype": "Link",
+			"options": "Purchase Order",
+			"insert_after": "sc_work_order",
+		},
+		{
+			"fieldname": "sc_bill",
+			"label": "SC Bill",
+			"fieldtype": "Link",
+			"options": "SC Bill",
+			"insert_after": "purchase_order",
+		},
+		{
+			"fieldname": "custom_retention_payable",
+			"label": "Retention Payable",
+			"fieldtype": "Link",
+			"options": "Retention Payable",
+			"insert_after": "sc_bill",
+		},
+		{
+			"fieldname": "custom_sc_bill",
+			"label": "SC Bill",
+			"fieldtype": "Link",
+			"options": "SC Bill",
+			"insert_after": "custom_retention_payable",
+		},
+		{
+			"fieldname": "custom_original_purchase_invoice",
+			"label": "Original Purchase Invoice",
+			"fieldtype": "Link",
+			"options": "Purchase Invoice",
+			"insert_after": "custom_sc_bill",
+		},
+		{
+			"fieldname": "custom_retention_payable_account",
+			"label": "Retention Payable Account",
+			"fieldtype": "Link",
+			"options": "Account",
+			"insert_after": "custom_original_purchase_invoice",
 		},
 	]
 

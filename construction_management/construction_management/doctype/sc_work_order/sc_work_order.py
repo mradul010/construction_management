@@ -3,6 +3,9 @@ from frappe import _
 from frappe.model.mapper import get_mapped_doc
 from frappe.model.document import Document
 from frappe.utils import flt
+from construction_management.construction_management.accounting_dimensions import (
+	get_ra_bill_project_cost_center,
+)
 
 
 VALID_SCOPE_TYPES = {"BOQ Linked", "Standalone"}
@@ -33,7 +36,7 @@ class SCWorkOrder(Document):
 		boq = frappe.db.get_value(
 			"BOQ",
 			self.boq,
-			["project", "company", "currency"],
+			["project", "company", "currency", "conversion_rate"],
 			as_dict=True,
 		)
 		if not boq:
@@ -43,6 +46,7 @@ class SCWorkOrder(Document):
 			("project", _("Project")),
 			("company", _("Company")),
 			("currency", _("Currency")),
+			("conversion_rate", _("Conversion Rate")),
 		):
 			value = boq.get(fieldname)
 			if self.get(fieldname) and value and self.get(fieldname) != value:
@@ -87,9 +91,13 @@ class SCWorkOrder(Document):
 					"qty",
 					"uom",
 					"unit_rate",
+					"amount",
+					"amount_after_margin",
 					"boq_category",
+					"boq_parent_category",
 					"boq_item_key",
 					"component_key",
+					"notes",
 				],
 				as_dict=True,
 			)
@@ -107,6 +115,14 @@ class SCWorkOrder(Document):
 			row.boq_rate = flt(boq_item.unit_rate)
 			row.category = boq_item.boq_category
 			row.boq_item_key = boq_item.boq_item_key or boq_item.component_key or row.boq_item
+			_set_if_field(row, "boq_parent_category", boq_item.boq_parent_category)
+			_set_if_field(row, "notes", boq_item.notes)
+			_set_if_field(row, "project", self.project)
+			_set_if_field(
+				row,
+				"cost_center",
+				get_ra_bill_project_cost_center(project=self.project, company=self.company),
+			)
 			if not row.assigned_qty:
 				row.assigned_qty = row.boq_qty
 			if not row.sc_rate:
@@ -179,10 +195,15 @@ class SCWorkOrder(Document):
 		self.balance_amount = max(flt(self.contract_value) - previous_total, 0)
 
 		if self.docstatus == 1 and self.status != "Cancelled":
+			ordering_summary = get_ordering_summary(self.name)
 			if self.balance_amount <= TOLERANCE and self.contract_value:
-				self.status = "Completed"
+				self.status = "Fully Billed"
 			elif self.total_billed > TOLERANCE:
-				self.status = "Billing In Progress"
+				self.status = "Partially Billed"
+			elif ordering_summary.get("remaining_qty", 0) <= TOLERANCE and ordering_summary.get("total_qty", 0):
+				self.status = "Fully Ordered"
+			elif ordering_summary.get("ordered_qty", 0) > TOLERANCE:
+				self.status = "Partially Ordered"
 			else:
 				self.status = "Submitted"
 
@@ -268,6 +289,17 @@ def update_sc_work_order_summary(sc_work_order):
 	)
 
 
+def get_ordering_summary(sc_work_order):
+	try:
+		from construction_management.construction_management.purchase_order import (
+			get_sc_work_order_ordering_summary,
+		)
+
+		return get_sc_work_order_ordering_summary(sc_work_order)
+	except Exception:
+		return {"total_qty": 0, "ordered_qty": 0, "remaining_qty": 0}
+
+
 @frappe.whitelist()
 def get_boq_item_details(boq, boq_item):
 	if not boq or not boq_item:
@@ -283,9 +315,13 @@ def get_boq_item_details(boq, boq_item):
 			"qty",
 			"uom",
 			"unit_rate",
+			"amount",
+			"amount_after_margin",
 			"boq_category",
+			"boq_parent_category",
 			"boq_item_key",
 			"component_key",
+			"notes",
 		],
 		as_dict=True,
 	)
@@ -303,6 +339,13 @@ def get_boq_item_details(boq, boq_item):
 		"sc_rate": flt(item.unit_rate),
 		"category": item.boq_category,
 		"boq_item_key": item.boq_item_key or item.component_key or item.name,
+		"boq_parent_category": item.boq_parent_category,
+		"notes": item.notes,
+		"project": frappe.db.get_value("BOQ", boq, "project"),
+		"cost_center": get_ra_bill_project_cost_center(
+			project=frappe.db.get_value("BOQ", boq, "project"),
+			company=frappe.db.get_value("BOQ", boq, "company"),
+		),
 	}
 
 
@@ -327,16 +370,22 @@ def make_sc_bill(source_name, target_doc=None):
 		summary = get_item_billing_summary(source_parent.name, source.name)
 		previous_qty = flt(summary.get("previous_qty"))
 		previous_amount = flt(summary.get("previous_amount"))
+		assigned_qty = flt(source.assigned_qty)
 		target.sc_work_order_item = source.name
 		target.boq_item = source.boq_item
+		_set_if_field(target, "item_code", source.item)
 		target.description = source.description
-		target.assigned_qty = source.assigned_qty
+		target.assigned_qty = assigned_qty
 		target.uom = source.uom
 		target.sc_rate = source.sc_rate
+		_set_if_field(target, "cost_center", source.get("cost_center"))
 		target.previous_qty = previous_qty
 		target.previous_amount = previous_amount
+		_set_if_field(target, "previous_percent", _qty_percent(previous_qty, assigned_qty))
 		target.cumulative_qty = previous_qty
+		_set_if_field(target, "cumulative_percent", _qty_percent(previous_qty, assigned_qty))
 		target.balance_qty = max(flt(source.assigned_qty) - previous_qty, 0)
+		_set_if_field(target, "balance_percent", max(100 - _qty_percent(previous_qty, assigned_qty), 0))
 		target.cumulative_amount = previous_amount
 		target.balance_amount = max(flt(source.sc_amount) - previous_amount, 0)
 
@@ -382,15 +431,38 @@ def search_boq_items(doctype, txt, searchfield, start, page_len, filters):
 	if not boq:
 		return []
 
+	selected_boq_items = (filters or {}).get("selected_boq_items") or []
+	if isinstance(selected_boq_items, str):
+		selected_boq_items = [
+			item.strip() for item in selected_boq_items.split(",") if item.strip()
+		]
+
+	exclusion_condition = ""
+	values = {"boq": boq, "txt": f"%{txt}%", "start": start, "page_len": page_len}
+	if selected_boq_items:
+		exclusion_condition = "AND name NOT IN %(selected_boq_items)s"
+		values["selected_boq_items"] = tuple(selected_boq_items)
+
 	return frappe.db.sql(
 		"""
 		SELECT name, item_name
 		FROM `tabBOQ Item`
 		WHERE parent = %(boq)s
 		  AND parenttype = 'BOQ'
+		  {exclusion_condition}
 		  AND ({searchfield} LIKE %(txt)s OR item_name LIKE %(txt)s OR item LIKE %(txt)s)
 		ORDER BY idx
 		LIMIT %(start)s, %(page_len)s
-		""".format(searchfield=searchfield),
-		{"boq": boq, "txt": f"%{txt}%", "start": start, "page_len": page_len},
+		""".format(searchfield=searchfield, exclusion_condition=exclusion_condition),
+		values,
 	)
+
+
+def _set_if_field(doc, fieldname, value):
+	if doc.meta.has_field(fieldname) and value not in (None, ""):
+		doc.set(fieldname, value)
+
+
+def _qty_percent(qty, total_qty):
+	total_qty = flt(total_qty)
+	return flt((flt(qty) / total_qty) * 100) if total_qty else 0

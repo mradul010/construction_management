@@ -96,7 +96,7 @@
    "fieldtype": "Select",
    "in_list_view": 1,
    "label": "Status",
-   "options": "Draft\nSubmitted\nBilling In Progress\nCompleted\nCancelled",
+   "options": "Draft\nSubmitted\nPartially Ordered\nFully Ordered\nPartially Billed\nFully Billed\nCompleted\nClosed\nCancelled",
    "read_only": 1
   },
   {

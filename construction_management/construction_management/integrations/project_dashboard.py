@@ -8,9 +8,9 @@ def get_data(data):
 	_add_items(
 		transactions,
 		_("Construction"),
-		["Daily Progress Report", "BOQ", "RA Bill", "SC Work Order", "SC Bill"],
+		["Daily Progress Report", "BOQ", "RA Bill", "SC Work Order", "SC Bill", "Retention Payable"],
 	)
-	_add_items(transactions, _("Subcontract Management"), ["SC Work Order", "SC Bill"])
+	_add_items(transactions, _("Subcontract Management"), ["SC Work Order", "SC Bill", "Retention Payable"])
 	_add_items(transactions, _("Advance"), ["Payment Entry"])
 	return data
 

@@ -8,6 +8,7 @@
   "details_tab",
   "work_order_section",
   "sc_work_order",
+  "purchase_order",
   "project",
   "supplier",
   "billing_type",
@@ -66,6 +67,13 @@
    "options": "SC Work Order",
    "reqd": 1,
    "search_index": 1
+  },
+  {
+   "fieldname": "purchase_order",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Purchase Order",
+   "options": "Purchase Order"
   },
   {
    "fieldname": "project",

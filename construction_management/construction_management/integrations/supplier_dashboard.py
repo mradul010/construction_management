@@ -10,7 +10,7 @@ def get_data(data):
 	_add_items(
 		transactions,
 		_("Subcontract Management"),
-		["SC Work Order", "SC Bill", "Purchase Invoice"],
+		["SC Work Order", "SC Bill", "Retention Payable", "Purchase Invoice"],
 	)
 	return data
 

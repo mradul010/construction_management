@@ -15,8 +15,12 @@ def get_data():
 				"items": ["Project", "Supplier", "BOQ"],
 			},
 			{
-				"label": _("Subcontract Billing"),
-				"items": ["SC Bill"],
+				"label": _("Subcontract Ordering"),
+				"items": ["Purchase Order", "SC Bill"],
+			},
+			{
+				"label": _("Accounting"),
+				"items": ["Purchase Invoice", "Payment Entry", "Retention Payable"],
 			},
 		],
 	}

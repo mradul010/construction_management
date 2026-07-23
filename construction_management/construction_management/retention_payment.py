@@ -45,6 +45,7 @@ def get_payment_entry(
 		created_from_payment_request=created_from_payment_request,
 	)
 	apply_trade_receivable_allocation(payment_entry)
+	apply_trade_payable_allocation(payment_entry)
 	apply_construction_accounts_to_payment_entry(payment_entry)
 	return payment_entry
 
@@ -259,3 +260,150 @@ def get_trade_receivable_breakdown_outstanding(sales_invoice, account):
 		return None
 
 	return max(0, flt(row))
+
+
+def apply_trade_payable_allocation(payment_entry):
+	if not payment_entry or payment_entry.payment_type != "Pay":
+		return payment_entry
+
+	retention_context = _get_payment_entry_retention_payable_context(payment_entry)
+	if not retention_context:
+		return payment_entry
+
+	trade_outstanding = get_trade_payable_outstanding(
+		retention_context.purchase_invoice,
+		retention_context.trade_payable_account,
+		retention_context.supplier,
+	)
+
+	for reference in payment_entry.get("references") or []:
+		if (
+			reference.reference_doctype == "Purchase Invoice"
+			and reference.reference_name == retention_context.purchase_invoice
+		):
+			reference.outstanding_amount = trade_outstanding
+			reference.allocated_amount = min(flt(reference.allocated_amount), trade_outstanding)
+
+	_set_paid_amount(payment_entry, trade_outstanding)
+	if hasattr(payment_entry, "set_amounts"):
+		payment_entry.set_amounts()
+
+	return payment_entry
+
+
+def _get_payment_entry_retention_payable_context(payment_entry):
+	for reference in payment_entry.get("references") or []:
+		if reference.reference_doctype != "Purchase Invoice" or not reference.reference_name:
+			continue
+
+		invoice_meta = frappe.get_meta("Purchase Invoice")
+		fields = ["name", "company", "supplier", "project", "credit_to"]
+		for fieldname in ("sc_bill", "retention_payable"):
+			if invoice_meta.has_field(fieldname):
+				fields.append(fieldname)
+
+		invoice_values = frappe.db.get_value(
+			"Purchase Invoice",
+			reference.reference_name,
+			fields,
+			as_dict=True,
+		)
+		if not invoice_values or not invoice_values.get("sc_bill"):
+			continue
+
+		sc_bill_values = frappe.db.get_value(
+			"SC Bill",
+			invoice_values.sc_bill,
+			["name", "retention_amount"],
+			as_dict=True,
+		)
+		if not sc_bill_values or flt(sc_bill_values.retention_amount) <= AMOUNT_TOLERANCE:
+			continue
+
+		return frappe._dict(
+			{
+				"company": invoice_values.company,
+				"project": invoice_values.project,
+				"sc_bill": sc_bill_values.name,
+				"purchase_invoice": invoice_values.name,
+				"supplier": invoice_values.supplier,
+				"trade_payable_account": invoice_values.credit_to,
+				"retention_payable_account": get_construction_account(
+					invoice_values.company,
+					"subcontractor_retention_payable",
+					project=invoice_values.project,
+					transaction=payment_entry,
+				),
+				"retention_amount": sc_bill_values.retention_amount,
+				"allocated_amount": reference.allocated_amount,
+			}
+		)
+
+	return None
+
+
+def get_trade_payable_outstanding(purchase_invoice, account, supplier):
+	if not purchase_invoice or not account or not supplier:
+		return 0
+
+	breakdown_outstanding = get_trade_payable_breakdown_outstanding(purchase_invoice, account)
+	if breakdown_outstanding is not None:
+		return breakdown_outstanding
+
+	outstanding = frappe.db.sql(
+		"""
+		SELECT ABS(SUM(amount_in_account_currency))
+		FROM `tabPayment Ledger Entry`
+		WHERE delinked = 0
+			AND account = %s
+			AND party_type = 'Supplier'
+			AND party = %s
+			AND against_voucher_type = 'Purchase Invoice'
+			AND against_voucher_no = %s
+		""",
+		(account, supplier, purchase_invoice),
+	)
+	if outstanding and outstanding[0][0] is not None:
+		return max(0, flt(outstanding[0][0]))
+
+	outstanding = frappe.db.sql(
+		"""
+		SELECT SUM(credit_in_account_currency) - SUM(debit_in_account_currency)
+		FROM `tabGL Entry`
+		WHERE is_cancelled = 0
+			AND account = %s
+			AND party_type = 'Supplier'
+			AND party = %s
+			AND against_voucher_type = 'Purchase Invoice'
+			AND against_voucher = %s
+		""",
+		(account, supplier, purchase_invoice),
+	)
+	return max(0, flt(outstanding[0][0] if outstanding else 0))
+
+
+def get_trade_payable_breakdown_outstanding(purchase_invoice, account):
+	if not frappe.get_meta("Purchase Invoice").has_field("payment_breakdown"):
+		return None
+
+	row = frappe.db.get_value(
+		"Purchase Invoice Payment Breakdown",
+		{
+			"parent": purchase_invoice,
+			"parenttype": "Purchase Invoice",
+			"parentfield": "payment_breakdown",
+			"type": "Trade Payable",
+			"account": account,
+		},
+		"outstanding_amount",
+	)
+	if row is None:
+		return None
+
+	return max(0, flt(row))
+
+
+def _set_paid_amount(payment_entry, amount):
+	amount = flt(amount)
+	payment_entry.paid_amount = amount
+	payment_entry.received_amount = amount
