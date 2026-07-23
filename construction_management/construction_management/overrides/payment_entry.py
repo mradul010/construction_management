@@ -18,6 +18,7 @@ from construction_management.construction_management.utils.accounting import (
 
 class ConstructionPaymentEntry(PaymentEntry):
 	def validate(self):
+		self.sync_subcontract_connection_fields()
 		apply_construction_accounts_to_payment_entry(self)
 		apply_ra_bill_cost_center_to_payment_entry(self)
 
@@ -324,11 +325,26 @@ class ConstructionPaymentEntry(PaymentEntry):
 		self.set_if_meta_has_field("custom_is_retention_payment", 1)
 		self.set_if_meta_has_field("retention_payable", record.name)
 		self.set_if_meta_has_field("custom_retention_payable", record.name)
+		self.set_if_meta_has_field("purchase_invoice", record.purchase_invoice)
+		self.set_if_meta_has_field("sc_bill", record.sc_bill)
+		self.set_if_meta_has_field("sc_work_order", record.sc_work_order)
 		self.set_if_meta_has_field("custom_original_purchase_invoice", record.purchase_invoice)
 		self.set_if_meta_has_field("custom_sc_bill", record.sc_bill)
 		self.set_if_meta_has_field("custom_retention_release_amount", release_amount)
 		self.set_if_meta_has_field("custom_retention_payable_account", retention_account)
+		if record.sc_bill and self.meta.has_field("purchase_order"):
+			self.purchase_order = frappe.db.get_value("SC Bill", record.sc_bill, "purchase_order")
 
 	def set_if_meta_has_field(self, fieldname, value):
 		if self.meta.has_field(fieldname):
 			self.set(fieldname, value)
+
+	def sync_subcontract_connection_fields(self):
+		from construction_management.construction_management.setup import (
+			get_payment_entry_subcontract_link_values,
+		)
+
+		values = get_payment_entry_subcontract_link_values(self)
+		for fieldname, value in values.items():
+			if value and self.meta.has_field(fieldname):
+				self.set(fieldname, value)

@@ -8,6 +8,7 @@ def get_data(data):
 		{
 			"SC Bill": "purchase_invoice",
 			"Retention Payable": "purchase_invoice",
+			"Payment Entry": "purchase_invoice",
 		}
 	)
 	data.setdefault("internal_links", {}).update(

@@ -14,6 +14,7 @@ def after_install():
 	ensure_purchase_invoice_payment_breakdown_field()
 	ensure_purchase_order_subcontract_fields()
 	ensure_payment_entry_retention_record_field()
+	backfill_payment_entry_subcontract_links()
 	backfill_sales_invoice_ra_bill_links()
 	ensure_ra_bill_items()
 	backfill_boq_revision_fields()
@@ -30,6 +31,7 @@ def after_migrate():
 	ensure_purchase_invoice_payment_breakdown_field()
 	ensure_purchase_order_subcontract_fields()
 	ensure_payment_entry_retention_record_field()
+	backfill_payment_entry_subcontract_links()
 	backfill_sales_invoice_ra_bill_links()
 	ensure_ra_bill_items()
 	backfill_boq_revision_fields()
@@ -565,11 +567,18 @@ def ensure_payment_entry_retention_record_field():
 			"insert_after": "sc_work_order",
 		},
 		{
+			"fieldname": "purchase_invoice",
+			"label": "Purchase Invoice",
+			"fieldtype": "Link",
+			"options": "Purchase Invoice",
+			"insert_after": "purchase_order",
+		},
+		{
 			"fieldname": "sc_bill",
 			"label": "SC Bill",
 			"fieldtype": "Link",
 			"options": "SC Bill",
-			"insert_after": "purchase_order",
+			"insert_after": "purchase_invoice",
 		},
 		{
 			"fieldname": "custom_retention_payable",
@@ -626,6 +635,127 @@ def ensure_payment_entry_retention_record_field():
 	if created_fields:
 		frappe.db.commit()
 		print(f"Payment Entry retention custom fields created: {', '.join(created_fields)}")
+
+
+def backfill_payment_entry_subcontract_links():
+	"""Populate direct subcontract link fields on Payment Entry for dashboards."""
+	if not frappe.db.table_exists("Payment Entry") or not frappe.db.table_exists("Payment Entry Reference"):
+		return
+
+	payment_entry_meta = frappe.get_meta("Payment Entry")
+	available_fields = {
+		fieldname
+		for fieldname in ("purchase_invoice", "sc_bill", "sc_work_order", "purchase_order")
+		if payment_entry_meta.has_field(fieldname)
+	}
+	if not available_fields:
+		return
+
+	rows = frappe.db.sql(
+		"""
+		SELECT DISTINCT pe.name
+		FROM `tabPayment Entry` pe
+		LEFT JOIN `tabPayment Entry Reference` ref
+			ON ref.parent = pe.name
+			AND ref.parenttype = 'Payment Entry'
+			AND ref.reference_doctype = 'Purchase Invoice'
+		WHERE pe.docstatus < 2
+			AND (
+				ref.reference_name IS NOT NULL
+				OR pe.custom_original_purchase_invoice IS NOT NULL
+				OR pe.retention_payable IS NOT NULL
+				OR pe.custom_retention_payable IS NOT NULL
+				OR pe.sc_bill IS NOT NULL
+				OR pe.custom_sc_bill IS NOT NULL
+			)
+		""",
+		as_dict=True,
+	)
+
+	updated = 0
+	for row in rows:
+		values = get_payment_entry_subcontract_link_values(row.name)
+		values = {fieldname: value for fieldname, value in values.items() if fieldname in available_fields and value}
+		if not values:
+			continue
+
+		current = frappe.db.get_value("Payment Entry", row.name, list(values), as_dict=True) or {}
+		changes = {
+			fieldname: value
+			for fieldname, value in values.items()
+			if current.get(fieldname) != value
+		}
+		if not changes:
+			continue
+
+		frappe.db.set_value("Payment Entry", row.name, changes, update_modified=False)
+		updated += 1
+
+	if updated:
+		frappe.db.commit()
+		frappe.clear_cache(doctype="Payment Entry")
+		print(f"Payment Entry subcontract links backfilled: {updated}")
+
+
+def get_payment_entry_subcontract_link_values(payment_entry):
+	if isinstance(payment_entry, str):
+		payment_entry = frappe.get_doc("Payment Entry", payment_entry)
+	values = frappe._dict()
+
+	for reference in payment_entry.get("references") or []:
+		if reference.reference_doctype == "Purchase Invoice" and reference.reference_name:
+			values.purchase_invoice = reference.reference_name
+			break
+
+	if not values.purchase_invoice and payment_entry.get("custom_original_purchase_invoice"):
+		values.purchase_invoice = payment_entry.custom_original_purchase_invoice
+
+	if not values.sc_bill:
+		for fieldname in ("sc_bill", "custom_sc_bill"):
+			if payment_entry.meta.has_field(fieldname) and payment_entry.get(fieldname):
+				values.sc_bill = payment_entry.get(fieldname)
+				break
+
+	if not values.sc_bill:
+		for fieldname in ("retention_payable", "custom_retention_payable"):
+			if payment_entry.meta.has_field(fieldname) and payment_entry.get(fieldname):
+				retention_values = frappe.db.get_value(
+					"Retention Payable",
+					payment_entry.get(fieldname),
+					["sc_bill", "purchase_invoice", "sc_work_order"],
+					as_dict=True,
+				)
+				if retention_values:
+					values.sc_bill = retention_values.sc_bill
+					values.purchase_invoice = values.purchase_invoice or retention_values.purchase_invoice
+					values.sc_work_order = retention_values.sc_work_order
+				break
+
+	if values.purchase_invoice and not values.sc_bill:
+		invoice_values = frappe.db.get_value(
+			"Purchase Invoice",
+			values.purchase_invoice,
+			["sc_bill", "sc_work_order", "purchase_order"],
+			as_dict=True,
+		)
+		if invoice_values:
+			values.sc_bill = invoice_values.sc_bill
+			values.sc_work_order = values.sc_work_order or invoice_values.sc_work_order
+			values.purchase_order = invoice_values.purchase_order
+
+	if values.sc_bill:
+		bill_values = frappe.db.get_value(
+			"SC Bill",
+			values.sc_bill,
+			["sc_work_order", "purchase_order", "purchase_invoice"],
+			as_dict=True,
+		)
+		if bill_values:
+			values.sc_work_order = values.sc_work_order or bill_values.sc_work_order
+			values.purchase_order = values.purchase_order or bill_values.purchase_order
+			values.purchase_invoice = values.purchase_invoice or bill_values.purchase_invoice
+
+	return values
 
 
 def ensure_retention_receivable_account():
