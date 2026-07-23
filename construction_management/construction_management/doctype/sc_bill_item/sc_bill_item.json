@@ -83,6 +83,7 @@
    "default": "0",
    "fieldname": "previous_qty",
    "fieldtype": "Float",
+   "in_list_view": 1,
    "label": "Previous Qty",
    "read_only": 1
   },
@@ -90,6 +91,7 @@
    "default": "0",
    "fieldname": "previous_percent",
    "fieldtype": "Percent",
+   "in_list_view": 1,
    "label": "Previous %",
    "read_only": 1
   },
@@ -116,6 +118,7 @@
   {
    "fieldname": "cumulative_percent",
    "fieldtype": "Percent",
+   "in_list_view": 1,
    "label": "Cumulative %",
    "read_only": 1
   },
@@ -128,6 +131,7 @@
   {
    "fieldname": "balance_percent",
    "fieldtype": "Percent",
+   "in_list_view": 1,
    "label": "Balance %",
    "read_only": 1
   },

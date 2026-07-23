@@ -17,13 +17,31 @@ function calculateScBillRow(frm, cdt, cdn, sourceField) {
 	if (!row) return;
 
 	const assignedQty = scBillNumber(row.assigned_qty);
-	const currentPercent = scBillNumber(row.current_percent);
+	const previousQty = scBillNumber(row.previous_qty);
+	const previousPercent = assignedQty ? (previousQty / assignedQty) * 100 : scBillNumber(row.previous_percent);
+	const remainingQty = Math.max(assignedQty - previousQty, 0);
+	const remainingPercent = Math.max(100 - previousPercent, 0);
+	let currentPercent = scBillNumber(row.current_percent);
 	let currentQty = scBillNumber(row.current_qty);
 	if (sourceField === "current_percent") {
+		if (currentPercent > remainingPercent) {
+			currentPercent = remainingPercent;
+			frappe.model.set_value(cdt, cdn, "current_percent", currentPercent);
+			frappe.show_alert({
+				message: __("Current % cannot exceed remaining {0}%.", [frappe.format(currentPercent, { fieldtype: "Percent" })]),
+				indicator: "orange",
+			});
+		}
 		currentQty = assignedQty * (currentPercent / 100);
 		frappe.model.set_value(cdt, cdn, "current_qty", currentQty);
+	} else if (currentQty > remainingQty) {
+		currentQty = remainingQty;
+		frappe.model.set_value(cdt, cdn, "current_qty", currentQty);
+		frappe.show_alert({
+			message: __("Current Qty cannot exceed remaining {0}.", [frappe.format(currentQty, { fieldtype: "Float" })]),
+			indicator: "orange",
+		});
 	}
-	const previousQty = scBillNumber(row.previous_qty);
 	const rate = scBillNumber(row.sc_rate);
 	const currentAmount = currentQty * rate;
 	const previousAmount = scBillNumber(row.previous_amount);

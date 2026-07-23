@@ -171,6 +171,14 @@ class SCBill(Document):
 				frappe.throw(_("Current Qty for {0} cannot be negative.").format(row.description))
 			if flt(row.get("current_percent")) < 0:
 				frappe.throw(_("Current % for {0} cannot be negative.").format(row.description))
+			remaining_qty = max(row.assigned_qty - row.previous_qty, 0)
+			if row.current_qty > remaining_qty + TOLERANCE:
+				frappe.throw(
+					_("Current Qty for {0} cannot exceed remaining quantity {1}.").format(
+						row.description,
+						frappe.format_value(remaining_qty, {"fieldtype": "Float"}),
+					)
+				)
 			row.cumulative_qty = row.previous_qty + row.current_qty
 			row.balance_qty = max(row.assigned_qty - row.cumulative_qty, 0)
 			row.current_percent = _qty_percent(row.current_qty, row.assigned_qty)
@@ -232,6 +240,14 @@ class SCBill(Document):
 				frappe.throw(_("Current Qty for {0} cannot be negative.").format(row.description))
 			if flt(row.get("current_percent")) < 0:
 				frappe.throw(_("Current % for {0} cannot be negative.").format(row.description))
+			remaining_qty = max(row.assigned_qty - row.previous_qty, 0)
+			if row.current_qty > remaining_qty + TOLERANCE:
+				frappe.throw(
+					_("Current Qty for {0} cannot exceed remaining Purchase Order quantity {1}.").format(
+						row.description,
+						frappe.format_value(remaining_qty, {"fieldtype": "Float"}),
+					)
+				)
 
 			row.cumulative_qty = row.previous_qty + row.current_qty
 			row.balance_qty = max(row.assigned_qty - row.cumulative_qty, 0)
