@@ -5,6 +5,7 @@ from frappe.utils import flt
 
 def after_install():
 	create_boq_client_script()
+	ensure_design_management_setup()
 	ensure_company_construction_accounting_fields()
 	ensure_project_current_boq_field()
 	ensure_sales_invoice_ra_bill_field()
@@ -22,6 +23,7 @@ def after_install():
 
 def after_migrate():
 	create_boq_client_script()
+	ensure_design_management_setup()
 	ensure_company_construction_accounting_fields()
 	ensure_project_current_boq_field()
 	ensure_sales_invoice_ra_bill_field()
@@ -63,6 +65,237 @@ def create_boq_client_script():
 		doc.insert()
 	frappe.db.commit()
 	print("BOQ client script created/updated successfully")
+
+
+def ensure_design_management_setup():
+	ensure_design_management_roles()
+	ensure_design_reference_fields()
+	ensure_design_parent_reference_fields()
+	backfill_design_context_fields()
+
+
+def ensure_design_management_roles():
+	for role in [
+		"Design Engineer",
+		"Checker",
+		"Lead Engineer",
+		"Consultant",
+		"Project Manager",
+		"Construction Manager",
+		"Document Controller",
+		"Site Engineer",
+	]:
+		if frappe.db.exists("Role", role):
+			continue
+		frappe.get_doc(
+			{
+				"doctype": "Role",
+				"role_name": role,
+				"desk_access": 1,
+			}
+		).insert(ignore_permissions=True)
+
+	frappe.db.commit()
+
+
+def ensure_design_reference_fields():
+	child_doctypes = [
+		("BOQ Item", "notes"),
+		("SC Work Order Item", "notes"),
+		("RA Bill Item", "current_amount"),
+		("SC Bill Item", "cost_center"),
+		("Sales Order Item", "description"),
+		("Purchase Order Item", "description"),
+		("Purchase Invoice Item", "description"),
+		("Material Request Item", "description"),
+		("Stock Entry Detail", "description"),
+		("Purchase Receipt Item", "description"),
+	]
+
+	for doctype, insert_after in child_doctypes:
+		if not frappe.db.table_exists(doctype):
+			continue
+		ensure_design_custom_field(
+			doctype,
+			"design_reference_section",
+			"Design Reference",
+			"Section Break",
+			insert_after=insert_after,
+			collapsible=1,
+		)
+		ensure_design_custom_field(
+			doctype,
+			"drawing",
+			"Drawing",
+			"Link",
+			options="Drawing Register",
+			insert_after="design_reference_section",
+			in_list_view=0,
+		)
+		ensure_design_custom_field(
+			doctype,
+			"drawing_revision",
+			"Drawing Revision",
+			"Link",
+			options="Drawing Revision",
+			insert_after="drawing",
+			in_list_view=0,
+		)
+		ensure_design_custom_field(
+			doctype,
+			"ifc_revision",
+			"IFC Revision",
+			"Link",
+			options="Drawing Revision",
+			insert_after="drawing_revision",
+			in_list_view=0,
+			read_only=1,
+		)
+		frappe.clear_cache(doctype=doctype)
+
+	frappe.db.commit()
+
+
+def ensure_design_parent_reference_fields():
+	parent_doctypes = [
+		("BOQ", "project"),
+		("Sales Order", "project"),
+		("Sales Invoice", "project"),
+		("RA Bill", "project"),
+		("SC Work Order", "project"),
+		("Purchase Order", "project"),
+		("Purchase Receipt", "project"),
+		("SC Bill", "project"),
+		("Purchase Invoice", "project"),
+	]
+
+	for doctype, insert_after in parent_doctypes:
+		if not frappe.db.table_exists(doctype):
+			continue
+		ensure_design_custom_field(
+			doctype,
+			"design_reference_section",
+			"Design Reference",
+			"Section Break",
+			insert_after=insert_after,
+			collapsible=1,
+		)
+		ensure_design_custom_field(
+			doctype,
+			"drawing",
+			"Drawing",
+			"Link",
+			options="Drawing Register",
+			insert_after="design_reference_section",
+		)
+		ensure_design_custom_field(
+			doctype,
+			"design_package",
+			"Design Package",
+			"Link",
+			options="Design Package",
+			insert_after="drawing",
+			read_only=1,
+		)
+		ensure_design_custom_field(
+			doctype,
+			"discipline",
+			"Design Discipline",
+			"Link",
+			options="Design Discipline",
+			insert_after="design_package",
+			read_only=1,
+		)
+		ensure_design_custom_field(
+			doctype,
+			"revision_number",
+			"Drawing Revision Number",
+			"Data",
+			insert_after="discipline",
+			read_only=1,
+		)
+		ensure_design_custom_field(
+			doctype,
+			"drawing_revision",
+			"Drawing Revision",
+			"Link",
+			options="Drawing Revision",
+			insert_after="revision_number",
+		)
+		ensure_design_custom_field(
+			doctype,
+			"ifc_revision",
+			"IFC Revision",
+			"Link",
+			options="Drawing Revision",
+			insert_after="drawing_revision",
+			read_only=1,
+		)
+		frappe.clear_cache(doctype=doctype)
+
+	frappe.db.commit()
+
+
+def ensure_design_custom_field(doctype, fieldname, label, fieldtype, **kwargs):
+	if frappe.get_meta(doctype).has_field(fieldname):
+		return
+
+	custom_field_name = f"{doctype}-{fieldname}"
+	if frappe.db.exists("Custom Field", custom_field_name):
+		return
+
+	doc = {
+		"doctype": "Custom Field",
+		"dt": doctype,
+		"fieldname": fieldname,
+		"label": label,
+		"fieldtype": fieldtype,
+		"module": "Design Management",
+	}
+	doc.update(kwargs)
+	frappe.get_doc(doc).insert(ignore_permissions=True)
+
+
+def backfill_design_context_fields():
+	context_doctypes = [
+		"Drawing Revision",
+		"Drawing Review",
+		"Drawing Approval",
+		"Drawing Distribution",
+		"Request For Information",
+		"Design Issue",
+		"Design Change Request",
+		"Design NCR",
+		"Drawing Transmittal",
+	]
+	for doctype in context_doctypes:
+		if not frappe.db.table_exists(doctype):
+			continue
+		meta = frappe.get_meta(doctype)
+		if not meta.has_field("drawing"):
+			continue
+		assignments = []
+		for fieldname, source_field in (
+			("project", "project"),
+			("company", "company"),
+			("design_package", "design_package"),
+			("discipline", "discipline"),
+		):
+			if meta.has_field(fieldname):
+				assignments.append(f"`tab{doctype}`.`{fieldname}` = COALESCE(`tab{doctype}`.`{fieldname}`, `tabDrawing Register`.`{source_field}`)")
+		if not assignments:
+			continue
+		frappe.db.sql(
+			f"""
+			UPDATE `tab{doctype}`
+			INNER JOIN `tabDrawing Register`
+				ON `tabDrawing Register`.`name` = `tab{doctype}`.`drawing`
+			SET {", ".join(assignments)}
+			WHERE `tab{doctype}`.`drawing` IS NOT NULL
+			"""
+		)
+
+	frappe.db.commit()
 
 
 def ensure_company_construction_accounting_fields():

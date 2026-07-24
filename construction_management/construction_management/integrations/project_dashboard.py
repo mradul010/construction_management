@@ -10,6 +10,24 @@ def get_data(data):
 		_("Construction"),
 		["Daily Progress Report", "BOQ", "RA Bill", "SC Work Order", "SC Bill", "Retention Payable"],
 	)
+	_add_items(
+		transactions,
+		_("Design Management"),
+		[
+			"Design Package",
+			"Design Discipline",
+			"Drawing Register",
+			"Drawing Review",
+			"Drawing Approval",
+			"Request For Information",
+			"Design Issue",
+			"Design Change Request",
+			"Design NCR",
+			"Drawing Distribution",
+			"Drawing Transmittal",
+			"BOQ",
+		],
+	)
 	_add_items(transactions, _("Subcontract Management"), ["SC Work Order", "SC Bill", "Retention Payable"])
 	_add_items(transactions, _("Advance"), ["Payment Entry"])
 	return data

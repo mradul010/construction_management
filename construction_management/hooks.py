@@ -54,6 +54,27 @@ doctype_js = {
     "Company": "public/js/company.js",
     "Project": "public/js/project_dpr.js",
     "Purchase Order": "public/js/purchase_order.js",
+    "BOQ": "public/js/design_reference_filters.js",
+    "Sales Order": "public/js/design_reference_filters.js",
+    "Sales Invoice": "public/js/design_reference_filters.js",
+    "Material Request": "public/js/design_reference_filters.js",
+    "Stock Entry": "public/js/design_reference_filters.js",
+    "Purchase Receipt": "public/js/design_reference_filters.js",
+    "Purchase Invoice": "public/js/design_reference_filters.js",
+    "RA Bill": "public/js/design_reference_filters.js",
+    "SC Work Order": "public/js/design_reference_filters.js",
+    "SC Bill": "public/js/design_reference_filters.js",
+    "Design Package": "public/js/design_management_buttons.js",
+    "Design Discipline": "public/js/design_management_buttons.js",
+    "Drawing Register": "public/js/design_management_buttons.js",
+    "Drawing Revision": "public/js/design_management_buttons.js",
+    "Drawing Review": "public/js/design_management_buttons.js",
+    "Drawing Approval": "public/js/design_management_buttons.js",
+    "Drawing Distribution": "public/js/design_management_buttons.js",
+    "Request For Information": "public/js/design_management_buttons.js",
+    "Design Issue": "public/js/design_management_buttons.js",
+    "Design Change Request": "public/js/design_management_buttons.js",
+    "Design NCR": "public/js/design_management_buttons.js",
 }
 
 # include js, css files in header of web template
@@ -177,6 +198,7 @@ doc_events = {
 			"construction_management.construction_management.accounting_dimensions.apply_ra_bill_cost_center_to_sales_invoice",
 			"construction_management.construction_management.doctype.retention_record.retention_record.validate_sales_invoice_references",
 			"construction_management.construction_management.advance_management.validate_sales_invoice_advance_consistency",
+			"construction_management.design_management.design_management.validate_design_references",
 		],
 		"on_submit": [
 			"construction_management.construction_management.doctype.retention_record.retention_record.on_sales_invoice_submit",
@@ -221,6 +243,7 @@ doc_events = {
 		"validate": [
 			"construction_management.construction_management.utils.accounting.apply_construction_accounts_to_purchase_invoice",
 			"construction_management.construction_management.doctype.retention_payable.retention_payable.validate_purchase_invoice_references",
+			"construction_management.design_management.design_management.validate_design_references",
 		],
 		"on_submit": [
 			"construction_management.construction_management.doctype.retention_payable.retention_payable.on_purchase_invoice_submit",
@@ -236,16 +259,40 @@ doc_events = {
 		],
 	},
 	"Purchase Order": {
-		"validate": "construction_management.construction_management.purchase_order.validate_purchase_order",
+		"validate": [
+			"construction_management.construction_management.purchase_order.validate_purchase_order",
+			"construction_management.design_management.design_management.validate_design_references",
+		],
 		"on_submit": "construction_management.construction_management.purchase_order.update_sc_work_order_from_purchase_order",
 		"on_cancel": "construction_management.construction_management.purchase_order.update_sc_work_order_from_purchase_order",
 		"on_update_after_submit": "construction_management.construction_management.purchase_order.update_sc_work_order_from_purchase_order",
 	},
 	"Sales Order": {
-		"validate": "construction_management.construction_management.utils.accounting.apply_construction_accounts_to_sales_order",
+		"validate": [
+			"construction_management.construction_management.utils.accounting.apply_construction_accounts_to_sales_order",
+			"construction_management.design_management.design_management.validate_design_references",
+		],
 		"on_submit": "construction_management.construction_management.advance_management.on_sales_order_advance_context_change",
 		"on_cancel": "construction_management.construction_management.advance_management.on_sales_order_advance_context_change",
 		"on_update_after_submit": "construction_management.construction_management.advance_management.on_sales_order_advance_context_change",
+	},
+	"Material Request": {
+		"validate": "construction_management.design_management.design_management.validate_design_references",
+	},
+	"Stock Entry": {
+		"validate": "construction_management.design_management.design_management.validate_design_references",
+	},
+	"Purchase Receipt": {
+		"validate": "construction_management.design_management.design_management.validate_design_references",
+	},
+	"RA Bill": {
+		"validate": "construction_management.design_management.design_management.validate_design_references",
+	},
+	"SC Work Order": {
+		"validate": "construction_management.design_management.design_management.validate_design_references",
+	},
+	"SC Bill": {
+		"validate": "construction_management.design_management.design_management.validate_design_references",
 	},
 }
 

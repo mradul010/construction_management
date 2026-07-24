@@ -5,6 +5,7 @@ def get_data():
 	return {
 		"fieldname": "sc_bill",
 		"internal_links": {
+			"Drawing Register": "drawing",
 			"SC Work Order": "sc_work_order",
 			"Project": "project",
 			"Supplier": "supplier",
@@ -14,8 +15,12 @@ def get_data():
 		},
 		"transactions": [
 			{
+				"label": _("Design"),
+				"items": ["Project", "Drawing Register", "BOQ"],
+			},
+			{
 				"label": _("Subcontract"),
-				"items": ["SC Work Order", "Purchase Order", "Project", "Supplier", "BOQ"],
+				"items": ["SC Work Order", "Purchase Order", "Supplier"],
 			},
 			{
 				"label": _("Accounting"),

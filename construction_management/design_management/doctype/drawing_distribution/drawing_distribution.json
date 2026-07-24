@@ -1,0 +1,210 @@
+{
+ "actions": [],
+ "allow_rename": 0,
+ "creation": "2026-07-24 00:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "drawing",
+  "revision",
+  "revision_number",
+  "project",
+  "design_package",
+  "discipline",
+  "sent_to",
+  "company",
+  "department",
+  "role",
+  "date",
+  "received_date",
+  "remarks",
+  "status",
+  "connections_tab"
+ ],
+ "fields": [
+  {
+   "fieldname": "drawing",
+   "fieldtype": "Link",
+   "label": "Drawing",
+   "options": "Drawing Register",
+   "reqd": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "revision",
+   "fieldtype": "Link",
+   "label": "Legacy Revision",
+   "options": "Drawing Revision",
+   "hidden": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "revision_number",
+   "fieldtype": "Data",
+   "label": "Revision Number",
+   "read_only": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "project",
+   "fieldtype": "Link",
+   "label": "Project",
+   "options": "Project",
+   "reqd": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "design_package",
+   "fieldtype": "Link",
+   "label": "Design Package",
+   "options": "Design Package",
+   "search_index": 1
+  },
+  {
+   "fieldname": "discipline",
+   "fieldtype": "Link",
+   "label": "Discipline",
+   "options": "Design Discipline",
+   "search_index": 1
+  },
+  {
+   "fieldname": "sent_to",
+   "fieldtype": "Link",
+   "label": "Sent To",
+   "options": "User",
+   "reqd": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "company",
+   "fieldtype": "Link",
+   "label": "Company",
+   "options": "Company"
+  },
+  {
+   "fieldname": "department",
+   "fieldtype": "Data",
+   "label": "Department"
+  },
+  {
+   "fieldname": "role",
+   "fieldtype": "Link",
+   "label": "Role",
+   "options": "Role"
+  },
+  {
+   "fieldname": "date",
+   "fieldtype": "Date",
+   "label": "Date",
+   "reqd": 1
+  },
+  {
+   "fieldname": "received_date",
+   "fieldtype": "Date",
+   "label": "Received Date"
+  },
+  {
+   "fieldname": "remarks",
+   "fieldtype": "Small Text",
+   "label": "Remarks"
+  },
+  {
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "label": "Status",
+   "options": "Pending\nSent\nAcknowledged\nClosed",
+   "default": "Pending",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "connections_tab",
+   "fieldtype": "Tab Break",
+   "label": "Connections",
+   "show_dashboard": 1
+  }
+ ],
+ "istable": 0,
+ "links": [],
+ "modified": "2026-07-24 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Design Management",
+ "name": "Drawing Distribution",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "role": "System Manager",
+   "read": 1,
+   "report": 1,
+   "export": 1,
+   "write": 1,
+   "create": 1,
+   "delete": 1
+  },
+  {
+   "role": "Design Engineer",
+   "read": 1,
+   "report": 1,
+   "export": 1,
+   "write": 1,
+   "create": 1,
+   "delete": 1
+  },
+  {
+   "role": "Checker",
+   "read": 1,
+   "report": 1,
+   "export": 1
+  },
+  {
+   "role": "Lead Engineer",
+   "read": 1,
+   "report": 1,
+   "export": 1
+  },
+  {
+   "role": "Consultant",
+   "read": 1,
+   "report": 1,
+   "export": 1
+  },
+  {
+   "role": "Project Manager",
+   "read": 1,
+   "report": 1,
+   "export": 1,
+   "write": 1,
+   "create": 1,
+   "delete": 1
+  },
+  {
+   "role": "Construction Manager",
+   "read": 1,
+   "report": 1,
+   "export": 1,
+   "write": 1,
+   "create": 1,
+   "delete": 1
+  },
+  {
+   "role": "Document Controller",
+   "read": 1,
+   "report": 1,
+   "export": 1,
+   "write": 1,
+   "create": 1,
+   "delete": 1
+  },
+  {
+   "role": "Site Engineer",
+   "read": 1,
+   "report": 1,
+   "export": 1
+  }
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "track_changes": 1,
+ "autoname": "DDIST-.YYYY.-.#####",
+ "search_fields": "drawing,project,status"
+}

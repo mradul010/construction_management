@@ -1,0 +1,212 @@
+{
+ "actions": [],
+ "allow_rename": 0,
+ "creation": "2026-07-24 00:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "rfi_number",
+  "project",
+  "company",
+  "design_package",
+  "discipline",
+  "drawing",
+  "revision",
+  "revision_number",
+  "raised_by",
+  "consultant",
+  "question",
+  "reply",
+  "due_date",
+  "status",
+  "connections_tab"
+ ],
+ "fields": [
+  {
+   "fieldname": "rfi_number",
+   "fieldtype": "Data",
+   "label": "RFI Number",
+   "reqd": 1,
+   "in_list_view": 1,
+   "search_index": 1
+  },
+  {
+   "fieldname": "project",
+   "fieldtype": "Link",
+   "label": "Project",
+   "options": "Project",
+   "reqd": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "company",
+   "fieldtype": "Link",
+   "label": "Company",
+   "options": "Company"
+  },
+  {
+   "fieldname": "design_package",
+   "fieldtype": "Link",
+   "label": "Design Package",
+   "options": "Design Package",
+   "search_index": 1
+  },
+  {
+   "fieldname": "discipline",
+   "fieldtype": "Link",
+   "label": "Discipline",
+   "options": "Design Discipline",
+   "search_index": 1
+  },
+  {
+   "fieldname": "drawing",
+   "fieldtype": "Link",
+   "label": "Drawing",
+   "options": "Drawing Register"
+  },
+  {
+   "fieldname": "revision",
+   "fieldtype": "Link",
+   "label": "Legacy Revision",
+   "options": "Drawing Revision",
+   "hidden": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "revision_number",
+   "fieldtype": "Data",
+   "label": "Revision Number",
+   "read_only": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "raised_by",
+   "fieldtype": "Link",
+   "label": "Raised By",
+   "options": "User",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "consultant",
+   "fieldtype": "Link",
+   "label": "Consultant",
+   "options": "Supplier"
+  },
+  {
+   "fieldname": "question",
+   "fieldtype": "Text Editor",
+   "label": "Question",
+   "reqd": 1
+  },
+  {
+   "fieldname": "reply",
+   "fieldtype": "Text Editor",
+   "label": "Reply"
+  },
+  {
+   "fieldname": "due_date",
+   "fieldtype": "Date",
+   "label": "Due Date"
+  },
+  {
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "label": "Status",
+   "options": "Open\nAnswered\nClosed",
+   "default": "Open",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "connections_tab",
+   "fieldtype": "Tab Break",
+   "label": "Connections",
+   "show_dashboard": 1
+  }
+ ],
+ "istable": 0,
+ "links": [],
+ "modified": "2026-07-24 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Design Management",
+ "name": "Request For Information",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "role": "System Manager",
+   "read": 1,
+   "report": 1,
+   "export": 1,
+   "write": 1,
+   "create": 1,
+   "delete": 1
+  },
+  {
+   "role": "Design Engineer",
+   "read": 1,
+   "report": 1,
+   "export": 1,
+   "write": 1,
+   "create": 1,
+   "delete": 1
+  },
+  {
+   "role": "Checker",
+   "read": 1,
+   "report": 1,
+   "export": 1
+  },
+  {
+   "role": "Lead Engineer",
+   "read": 1,
+   "report": 1,
+   "export": 1
+  },
+  {
+   "role": "Consultant",
+   "read": 1,
+   "report": 1,
+   "export": 1
+  },
+  {
+   "role": "Project Manager",
+   "read": 1,
+   "report": 1,
+   "export": 1,
+   "write": 1,
+   "create": 1,
+   "delete": 1
+  },
+  {
+   "role": "Construction Manager",
+   "read": 1,
+   "report": 1,
+   "export": 1,
+   "write": 1,
+   "create": 1,
+   "delete": 1
+  },
+  {
+   "role": "Document Controller",
+   "read": 1,
+   "report": 1,
+   "export": 1,
+   "write": 1,
+   "create": 1,
+   "delete": 1
+  },
+  {
+   "role": "Site Engineer",
+   "read": 1,
+   "report": 1,
+   "export": 1
+  }
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "track_changes": 1,
+ "autoname": "field:rfi_number",
+ "title_field": "rfi_number",
+ "show_title_field_in_link": 1,
+ "search_fields": "rfi_number,project,drawing,status"
+}
