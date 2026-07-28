@@ -1,5 +1,5 @@
 app_name = "construction_management"
-app_title = "Construction Management"
+app_title = "Construction"
 app_icon = "octicon octicon-tools"
 app_color = "blue"
 app_publisher = "Vigisolvo Private Limited"
@@ -13,7 +13,7 @@ add_to_apps_screen = [
     {
         "name": "construction_management",
         "logo": "/assets/construction_management/techsolvo_logo.jpeg",
-        "title": "Construction Management",
+        "title": "Construction",
         "route": "/app/construction-management",
         
     }

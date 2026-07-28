@@ -100,9 +100,9 @@
    "label": "Summary"
   },
   {
-    "fieldname": "notes",
-    "fieldtype": "Text Editor",
-    "label": "Notes"
+   "fieldname": "notes",
+   "fieldtype": "Text Editor",
+   "label": "Notes"
   },
   {
    "fieldname": "remarks",

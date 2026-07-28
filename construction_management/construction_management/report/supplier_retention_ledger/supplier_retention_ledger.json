@@ -16,5 +16,15 @@
  "ref_doctype": "Retention Payable",
  "report_name": "Supplier Retention Ledger",
  "report_type": "Script Report",
- "roles": [{"role": "System Manager"}, {"role": "Construction Manager"}, {"role": "Projects Manager"}]
+ "roles": [
+  {
+   "role": "System Manager"
+  },
+  {
+   "role": "Construction Manager"
+  },
+  {
+   "role": "Projects Manager"
+  }
+ ]
 }

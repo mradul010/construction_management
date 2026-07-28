@@ -1,6 +1,7 @@
 [pre_model_sync]
 # Patches added in this section will be executed before doctypes are migrated
 # Read docs to understand patches: https://frappeframework.com/docs/v14/user/en/database-migrations
+construction_management.patches.prepare_construction_desktop_icons_for_sync
 
 [post_model_sync]
 # Patches added in this section will be executed after doctypes are migrated
@@ -9,3 +10,5 @@ construction_management.patches.backfill_sales_order_links
 construction_management.patches.remove_project_costing_account_fields
 construction_management.patches.add_sales_invoice_payment_breakdown
 construction_management.patches.refactor_design_register_revision_fields
+construction_management.patches.update_construction_desktop_label
+construction_management.patches.ensure_construction_app_desktop_icon
