@@ -12,7 +12,7 @@ def get_data(data):
 	)
 	_add_items(
 		transactions,
-		_("Design Management"),
+		_("Design"),
 		[
 			"Design Package",
 			"Design Discipline",

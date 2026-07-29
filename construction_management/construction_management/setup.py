@@ -250,7 +250,7 @@ def ensure_design_custom_field(doctype, fieldname, label, fieldtype, **kwargs):
 		"fieldname": fieldname,
 		"label": label,
 		"fieldtype": fieldtype,
-		"module": "Design Management",
+		"module": "Construction Management",
 	}
 	doc.update(kwargs)
 	frappe.get_doc(doc).insert(ignore_permissions=True)

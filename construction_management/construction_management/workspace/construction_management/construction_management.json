@@ -1,7 +1,7 @@
 {
  "app": "construction_management",
  "charts": [],
- "content": "[{\"id\":\"cm_header\",\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h4\\\"><b>Construction</b></span>\",\"col\":12}},{\"id\":\"UFIRveYcC_\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"New BOQ\",\"col\":3}},{\"id\":\"xSq_1k8YKt\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"New RA Bill\",\"col\":3}},{\"id\":\"hMk9j4kqNw\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"New DPR\",\"col\":3}},{\"id\":\"LJbxVOmvyk\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Project\",\"col\":3}},{\"id\":\"PBkLVAWSQX\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Purchase Order\",\"col\":3}},{\"id\":\"NRS70vW3g_\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Sales Invoice\",\"col\":3}},{\"id\":\"NACpOuZ7Un\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Customer\",\"col\":3}},{\"id\":\"new_sc_work_order\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"New SC Work Order\",\"col\":3}},{\"id\":\"6xIamZ58m4\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Supplier\",\"col\":12}},{\"id\":\"FXiwO4Ytfe\",\"type\":\"card\",\"data\":{\"card_name\":\"Project Managment\",\"col\":4}},{\"id\":\"2k2nvkXGgF\",\"type\":\"card\",\"data\":{\"card_name\":\"Estimation & BOQ\",\"col\":4}},{\"id\":\"ydqxBfjE8q\",\"type\":\"card\",\"data\":{\"card_name\":\"Billing & Revenue\",\"col\":4}},{\"id\":\"1sPIwAVMoh\",\"type\":\"card\",\"data\":{\"card_name\":\"Sub Contract\",\"col\":4}},{\"id\":\"tynLVoNpZJ\",\"type\":\"card\",\"data\":{\"card_name\":\"Procurement & Costing\",\"col\":4}},{\"id\":\"0RvPsVNEQT\",\"type\":\"card\",\"data\":{\"card_name\":\"Sales Record\",\"col\":4}},{\"id\":\"HGOIoiEW6R\",\"type\":\"card\",\"data\":{\"card_name\":\"Reports\",\"col\":4}},{\"id\":\"DaAU3ouSdi\",\"type\":\"card\",\"data\":{\"card_name\":\"Drawing Module\",\"col\":4}}]",
+ "content": "[{\"id\":\"cm_header\",\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h4\\\"><b>Construction</b></span>\",\"col\":12}},{\"id\":\"new_boq\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"New BOQ\",\"col\":3}},{\"id\":\"new_ra_bill\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"New RA Bill\",\"col\":3}},{\"id\":\"new_dpr\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"New DPR\",\"col\":3}},{\"id\":\"new_sc_work_order\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"New SC Work Order\",\"col\":3}},{\"id\":\"project\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Project\",\"col\":3}},{\"id\":\"design_package\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Design Package\",\"col\":3}},{\"id\":\"drawing_register\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Drawing Register\",\"col\":3}},{\"id\":\"request_for_information\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Request For Information\",\"col\":3}},{\"id\":\"design_change_request\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Design Change Request\",\"col\":3}},{\"id\":\"drawing_transmittal\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Drawing Transmittal\",\"col\":3}},{\"id\":\"purchase_order\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Purchase Order\",\"col\":3}},{\"id\":\"sales_invoice\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Sales Invoice\",\"col\":3}},{\"id\":\"project_management\",\"type\":\"card\",\"data\":{\"card_name\":\"Project Management\",\"col\":4}},{\"id\":\"planning\",\"type\":\"card\",\"data\":{\"card_name\":\"Planning\",\"col\":4}},{\"id\":\"design_management\",\"type\":\"card\",\"data\":{\"card_name\":\"Design Management\",\"col\":4}},{\"id\":\"execution\",\"type\":\"card\",\"data\":{\"card_name\":\"Execution\",\"col\":4}},{\"id\":\"retention\",\"type\":\"card\",\"data\":{\"card_name\":\"Retention\",\"col\":4}},{\"id\":\"commercial\",\"type\":\"card\",\"data\":{\"card_name\":\"Commercial\",\"col\":4}},{\"id\":\"reports\",\"type\":\"card\",\"data\":{\"card_name\":\"Reports\",\"col\":4}}]",
  "creation": "2026-07-09 11:57:10.554586",
  "custom_blocks": [],
  "docstatus": 0,
@@ -14,7 +14,6 @@
  "label": "Construction",
  "links": [
   {
-   "dependencies": "",
    "hidden": 0,
    "is_query_report": 0,
    "label": "BOQ Category",
@@ -22,10 +21,10 @@
    "link_to": "BOQ Category",
    "link_type": "DocType",
    "onboard": 1,
-   "type": "Link"
+   "type": "Link",
+   "dependencies": ""
   },
   {
-   "dependencies": "Project",
    "hidden": 0,
    "is_query_report": 0,
    "label": "BOQ",
@@ -33,10 +32,10 @@
    "link_to": "BOQ",
    "link_type": "DocType",
    "onboard": 1,
-   "type": "Link"
+   "type": "Link",
+   "dependencies": "Project"
   },
   {
-   "dependencies": "Project, BOQ",
    "hidden": 0,
    "is_query_report": 0,
    "label": "RA Bill",
@@ -44,7 +43,8 @@
    "link_to": "RA Bill",
    "link_type": "DocType",
    "onboard": 1,
-   "type": "Link"
+   "type": "Link",
+   "dependencies": "Project, BOQ"
   },
   {
    "hidden": 0,
@@ -59,351 +59,7 @@
   {
    "hidden": 0,
    "is_query_report": 0,
-   "label": "Estimation & BOQ",
-   "link_count": 1,
-   "link_type": "DocType",
-   "onboard": 0,
-   "type": "Card Break"
-  },
-  {
-   "hidden": 0,
-   "is_query_report": 0,
-   "label": "BOQ",
-   "link_count": 0,
-   "link_to": "BOQ",
-   "link_type": "DocType",
-   "onboard": 0,
-   "type": "Link"
-  },
-  {
-   "hidden": 0,
-   "is_query_report": 0,
-   "label": " BOQ Category",
-   "link_count": 0,
-   "link_to": "BOQ Category",
-   "link_type": "DocType",
-   "onboard": 0,
-   "type": "Link"
-  },
-  {
-   "hidden": 0,
-   "is_query_report": 0,
-   "label": " Item",
-   "link_count": 0,
-   "link_to": "Item",
-   "link_type": "DocType",
-   "onboard": 0,
-   "type": "Link"
-  },
-  {
-   "hidden": 0,
-   "is_query_report": 0,
-   "label": "Construction Settings",
-   "link_count": 0,
-   "link_to": "Construction Settings",
-   "link_type": "DocType",
-   "onboard": 0,
-   "type": "Link"
-  },
-  {
-   "hidden": 0,
-   "is_query_report": 0,
-   "label": "Reports",
-   "link_count": 8,
-   "link_type": "DocType",
-   "onboard": 0,
-   "type": "Card Break"
-  },
-  {
-   "hidden": 0,
-   "is_query_report": 1,
-   "label": "Project Construction Report",
-   "link_count": 0,
-   "link_to": "Project Construction Report",
-   "link_type": "Report",
-   "onboard": 0,
-   "type": "Link"
-  },
-  {
-   "hidden": 0,
-   "is_query_report": 1,
-   "label": "DPR Register",
-   "link_count": 0,
-   "link_to": "DPR Register",
-   "link_type": "Report",
-   "onboard": 0,
-   "type": "Link"
-  },
-  {
-   "hidden": 0,
-   "is_query_report": 1,
-   "label": "BOQ Report",
-   "link_count": 0,
-   "link_to": "BOQ Report",
-   "link_type": "Report",
-   "onboard": 0,
-   "type": "Link"
-  },
-  {
-   "hidden": 0,
-   "is_query_report": 1,
-   "label": "RA Bill Report",
-   "link_count": 0,
-   "link_to": "RA Bill Report",
-   "link_type": "Report",
-   "onboard": 0,
-   "type": "Link"
-  },
-  {
-   "hidden": 0,
-   "is_query_report": 1,
-   "label": "Work Progress Report",
-   "link_count": 0,
-   "link_to": "Work Progress Report",
-   "link_type": "Report",
-   "onboard": 0,
-   "type": "Link"
-  },
-  {
-   "hidden": 0,
-   "is_query_report": 1,
-   "label": "Retention Report",
-   "link_count": 0,
-   "link_to": "Retention Report",
-   "link_type": "Report",
-   "onboard": 0,
-   "type": "Link"
-  },
-  {
-   "hidden": 0,
-   "is_query_report": 1,
-   "label": "BOQ Revision Report",
-   "link_count": 0,
-   "link_to": "BOQ Revision Report",
-   "link_type": "Report",
-   "onboard": 0,
-   "type": "Link"
-  },
-  {
-   "hidden": 0,
-   "is_query_report": 1,
-   "label": "RA Bill Sales Invoice Report",
-   "link_count": 0,
-   "link_to": "RA Bill Sales Invoice Report",
-   "link_type": "Report",
-   "onboard": 0,
-   "type": "Link"
-  },
-  {
-   "hidden": 0,
-   "is_query_report": 0,
-   "label": "Sales Record",
-   "link_count": 4,
-   "link_type": "DocType",
-   "onboard": 0,
-   "type": "Card Break"
-  },
-  {
-   "hidden": 0,
-   "is_query_report": 0,
-   "label": "Sales Order",
-   "link_count": 0,
-   "link_to": "Sales Order",
-   "link_type": "DocType",
-   "onboard": 0,
-   "type": "Link"
-  },
-  {
-   "hidden": 0,
-   "is_query_report": 0,
-   "label": "Sales Invoice",
-   "link_count": 0,
-   "link_to": "Sales Invoice",
-   "link_type": "DocType",
-   "onboard": 0,
-   "type": "Link"
-  },
-  {
-   "hidden": 0,
-   "is_query_report": 0,
-   "label": "Stock Entry",
-   "link_count": 0,
-   "link_to": "Stock Entry",
-   "link_type": "DocType",
-   "onboard": 0,
-   "type": "Link"
-  },
-  {
-   "hidden": 0,
-   "is_query_report": 0,
-   "label": "Delivery Note",
-   "link_count": 0,
-   "link_to": "Delivery Note",
-   "link_type": "DocType",
-   "onboard": 0,
-   "type": "Link"
-  },
-  {
-   "hidden": 0,
-   "is_query_report": 0,
-   "label": "Procurement & Costing",
-   "link_count": 5,
-   "link_type": "DocType",
-   "onboard": 0,
-   "type": "Card Break"
-  },
-  {
-   "hidden": 0,
-   "is_query_report": 0,
-   "label": "Purchase Order",
-   "link_count": 0,
-   "link_to": "Purchase Order",
-   "link_type": "DocType",
-   "onboard": 0,
-   "type": "Link"
-  },
-  {
-   "hidden": 0,
-   "is_query_report": 0,
-   "label": "Purchase Receipt",
-   "link_count": 0,
-   "link_to": "Purchase Receipt",
-   "link_type": "DocType",
-   "onboard": 0,
-   "type": "Link"
-  },
-  {
-   "hidden": 0,
-   "is_query_report": 0,
-   "label": "Purchase Invoice",
-   "link_count": 0,
-   "link_to": "Purchase Invoice",
-   "link_type": "DocType",
-   "onboard": 0,
-   "type": "Link"
-  },
-  {
-   "hidden": 0,
-   "is_query_report": 0,
-   "label": "Supplier",
-   "link_count": 0,
-   "link_to": "Supplier",
-   "link_type": "DocType",
-   "onboard": 0,
-   "type": "Link"
-  },
-  {
-   "hidden": 0,
-   "is_query_report": 0,
-   "label": "Material Request",
-   "link_count": 0,
-   "link_to": "Material Request",
-   "link_type": "DocType",
-   "onboard": 0,
-   "type": "Link"
-  },
-  {
-   "hidden": 0,
-   "is_query_report": 0,
-   "label": "Billing & Revenue",
-   "link_count": 4,
-   "link_type": "DocType",
-   "onboard": 0,
-   "type": "Card Break"
-  },
-  {
-   "hidden": 0,
-   "is_query_report": 0,
-   "label": "RA Bill",
-   "link_count": 0,
-   "link_to": "RA Bill",
-   "link_type": "DocType",
-   "onboard": 0,
-   "type": "Link"
-  },
-  {
-   "hidden": 0,
-   "is_query_report": 0,
-   "label": "Sales Invoice",
-   "link_count": 0,
-   "link_to": "Sales Invoice",
-   "link_type": "DocType",
-   "onboard": 0,
-   "type": "Link"
-  },
-  {
-   "hidden": 0,
-   "is_query_report": 0,
-   "label": "Payment Entry",
-   "link_count": 0,
-   "link_to": "Payment Entry",
-   "link_type": "DocType",
-   "onboard": 0,
-   "type": "Link"
-  },
-  {
-   "hidden": 0,
-   "is_query_report": 0,
-   "label": "Retention Recivale Record",
-   "link_count": 0,
-   "link_to": "Retention Record",
-   "link_type": "DocType",
-   "onboard": 0,
-   "type": "Link"
-  },
-  {
-   "hidden": 0,
-   "is_query_report": 0,
-   "label": "Sub Contract",
-   "link_count": 4,
-   "link_type": "DocType",
-   "onboard": 0,
-   "type": "Card Break"
-  },
-  {
-   "hidden": 0,
-   "is_query_report": 0,
-   "label": "SC Work Order",
-   "link_count": 0,
-   "link_to": "SC Work Order",
-   "link_type": "DocType",
-   "onboard": 0,
-   "type": "Link"
-  },
-  {
-   "hidden": 0,
-   "is_query_report": 0,
-   "label": "SC Bill",
-   "link_count": 0,
-   "link_to": "SC Bill",
-   "link_type": "DocType",
-   "onboard": 0,
-   "type": "Link"
-  },
-  {
-   "hidden": 0,
-   "is_query_report": 0,
-   "label": "Retention Payable",
-   "link_count": 0,
-   "link_to": "Retention Payable",
-   "link_type": "DocType",
-   "onboard": 0,
-   "type": "Link"
-  },
-  {
-   "hidden": 0,
-   "is_query_report": 1,
-   "label": "Retention Payable Summary",
-   "link_count": 0,
-   "link_to": "Retention Payable Summary",
-   "link_type": "Report",
-   "onboard": 0,
-   "type": "Link"
-  },
-  {
-   "hidden": 0,
-   "is_query_report": 0,
-   "label": "Project Managment",
+   "label": "Project Management",
    "link_count": 4,
    "link_type": "DocType",
    "onboard": 0,
@@ -452,8 +108,67 @@
   {
    "hidden": 0,
    "is_query_report": 0,
-   "label": "Drawing Module",
-   "link_count": 9,
+   "label": "Planning",
+   "link_count": 5,
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Card Break"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "BOQ",
+   "link_count": 0,
+   "link_to": "BOQ",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "BOQ Revision",
+   "link_count": 0,
+   "link_to": "BOQ Revision",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "BOQ Category",
+   "link_count": 0,
+   "link_to": "BOQ Category",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Item",
+   "link_count": 0,
+   "link_to": "Item",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Construction Settings",
+   "link_count": 0,
+   "link_to": "Construction Settings",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Design Management",
+   "link_count": 11,
    "link_type": "DocType",
    "onboard": 0,
    "type": "Card Break"
@@ -511,9 +226,9 @@
   {
    "hidden": 0,
    "is_query_report": 0,
-   "label": "Drawing Distribution",
+   "label": "Request For Information",
    "link_count": 0,
-   "link_to": "Drawing Distribution",
+   "link_to": "Request For Information",
    "link_type": "DocType",
    "onboard": 0,
    "type": "Link"
@@ -521,9 +236,19 @@
   {
    "hidden": 0,
    "is_query_report": 0,
-   "label": "Request For Information",
+   "label": "Design Issue",
    "link_count": 0,
-   "link_to": "Request For Information",
+   "link_to": "Design Issue",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Design Change Request",
+   "link_count": 0,
+   "link_to": "Design Change Request",
    "link_type": "DocType",
    "onboard": 0,
    "type": "Link"
@@ -541,10 +266,516 @@
   {
    "hidden": 0,
    "is_query_report": 0,
-   "label": "Design Issue",
+   "label": "Drawing Distribution",
    "link_count": 0,
-   "link_to": "Design Issue",
+   "link_to": "Drawing Distribution",
    "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Drawing Transmittal",
+   "link_count": 0,
+   "link_to": "Drawing Transmittal",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Execution",
+   "link_count": 4,
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Card Break"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "SC Work Order",
+   "link_count": 0,
+   "link_to": "SC Work Order",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "SC Bill",
+   "link_count": 0,
+   "link_to": "SC Bill",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "RA Bill",
+   "link_count": 0,
+   "link_to": "RA Bill",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Daily Progress Report",
+   "link_count": 0,
+   "link_to": "Daily Progress Report",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Retention",
+   "link_count": 4,
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Card Break"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Retention Record",
+   "link_count": 0,
+   "link_to": "Retention Record",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Retention Payable",
+   "link_count": 0,
+   "link_to": "Retention Payable",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 1,
+   "label": "Retention Payable Summary",
+   "link_count": 0,
+   "link_to": "Retention Payable Summary",
+   "link_type": "Report",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 1,
+   "label": "Project Retention Payable Summary",
+   "link_count": 0,
+   "link_to": "Project Retention Payable Summary",
+   "link_type": "Report",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Commercial",
+   "link_count": 10,
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Card Break"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Sales Order",
+   "link_count": 0,
+   "link_to": "Sales Order",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Sales Invoice",
+   "link_count": 0,
+   "link_to": "Sales Invoice",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Purchase Order",
+   "link_count": 0,
+   "link_to": "Purchase Order",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Purchase Receipt",
+   "link_count": 0,
+   "link_to": "Purchase Receipt",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Purchase Invoice",
+   "link_count": 0,
+   "link_to": "Purchase Invoice",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Payment Entry",
+   "link_count": 0,
+   "link_to": "Payment Entry",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Customer",
+   "link_count": 0,
+   "link_to": "Customer",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Supplier",
+   "link_count": 0,
+   "link_to": "Supplier",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Material Request",
+   "link_count": 0,
+   "link_to": "Material Request",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Delivery Note",
+   "link_count": 0,
+   "link_to": "Delivery Note",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Reports",
+   "link_count": 28,
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Card Break"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 1,
+   "label": "Project Construction Report",
+   "link_count": 0,
+   "link_to": "Project Construction Report",
+   "link_type": "Report",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 1,
+   "label": "DPR Register",
+   "link_count": 0,
+   "link_to": "DPR Register",
+   "link_type": "Report",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 1,
+   "label": "BOQ Report",
+   "link_count": 0,
+   "link_to": "BOQ Report",
+   "link_type": "Report",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 1,
+   "label": "BOQ Item Report",
+   "link_count": 0,
+   "link_to": "BOQ Item Report",
+   "link_type": "Report",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 1,
+   "label": "BOQ Revision Report",
+   "link_count": 0,
+   "link_to": "BOQ Revision Report",
+   "link_type": "Report",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 1,
+   "label": "RA Bill Report",
+   "link_count": 0,
+   "link_to": "RA Bill Report",
+   "link_type": "Report",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 1,
+   "label": "RA Bill Item Report",
+   "link_count": 0,
+   "link_to": "RA Bill Item Report",
+   "link_type": "Report",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 1,
+   "label": "RA Bill Sales Invoice Report",
+   "link_count": 0,
+   "link_to": "RA Bill Sales Invoice Report",
+   "link_type": "Report",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 1,
+   "label": "Work Progress Report",
+   "link_count": 0,
+   "link_to": "Work Progress Report",
+   "link_type": "Report",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 1,
+   "label": "Retention Report",
+   "link_count": 0,
+   "link_to": "Retention Report",
+   "link_type": "Report",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 1,
+   "label": "Retention Payable Summary",
+   "link_count": 0,
+   "link_to": "Retention Payable Summary",
+   "link_type": "Report",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 1,
+   "label": "Project Retention Payable Summary",
+   "link_count": 0,
+   "link_to": "Project Retention Payable Summary",
+   "link_type": "Report",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 1,
+   "label": "Retention Payable Outstanding",
+   "link_count": 0,
+   "link_to": "Retention Payable Outstanding",
+   "link_type": "Report",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 1,
+   "label": "Supplier Retention Ledger",
+   "link_count": 0,
+   "link_to": "Supplier Retention Ledger",
+   "link_type": "Report",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 1,
+   "label": "Project Advance Summary",
+   "link_count": 0,
+   "link_to": "Project Advance Summary",
+   "link_type": "Report",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 1,
+   "label": "Drawing Register",
+   "link_count": 0,
+   "link_to": "Drawing Register",
+   "link_type": "Report",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 1,
+   "label": "Revision History",
+   "link_count": 0,
+   "link_to": "Revision History",
+   "link_type": "Report",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 1,
+   "label": "Review Status",
+   "link_count": 0,
+   "link_to": "Review Status",
+   "link_type": "Report",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 1,
+   "label": "IFC Drawings",
+   "link_count": 0,
+   "link_to": "IFC Drawings",
+   "link_type": "Report",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 1,
+   "label": "Open RFIs",
+   "link_count": 0,
+   "link_to": "Open RFIs",
+   "link_type": "Report",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 1,
+   "label": "Open DCR",
+   "link_count": 0,
+   "link_to": "Open DCR",
+   "link_type": "Report",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 1,
+   "label": "Open Issues",
+   "link_count": 0,
+   "link_to": "Open Issues",
+   "link_type": "Report",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 1,
+   "label": "Open NCR",
+   "link_count": 0,
+   "link_to": "Open NCR",
+   "link_type": "Report",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 1,
+   "label": "Drawing Distribution",
+   "link_count": 0,
+   "link_to": "Drawing Distribution",
+   "link_type": "Report",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 1,
+   "label": "Drawing Aging",
+   "link_count": 0,
+   "link_to": "Drawing Aging",
+   "link_type": "Report",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 1,
+   "label": "Drawings by Discipline",
+   "link_count": 0,
+   "link_to": "Drawings by Discipline",
+   "link_type": "Report",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 1,
+   "label": "Drawings by Package",
+   "link_count": 0,
+   "link_to": "Drawings by Package",
+   "link_type": "Report",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 1,
+   "label": "Design Dashboard",
+   "link_count": 0,
+   "link_to": "Design Dashboard",
+   "link_type": "Report",
    "onboard": 0,
    "type": "Link"
   }
@@ -628,6 +859,94 @@
    "label": "New SC Work Order",
    "type": "URL",
    "url": "/app/sc-work-order/new-sc-work-order"
+  },
+  {
+   "color": "Grey",
+   "doc_view": "List",
+   "label": "Design Package",
+   "link_to": "Design Package",
+   "stats_filter": "[]",
+   "type": "DocType"
+  },
+  {
+   "color": "Grey",
+   "doc_view": "List",
+   "label": "Design Discipline",
+   "link_to": "Design Discipline",
+   "stats_filter": "[]",
+   "type": "DocType"
+  },
+  {
+   "color": "Grey",
+   "doc_view": "List",
+   "label": "Drawing Register",
+   "link_to": "Drawing Register",
+   "stats_filter": "[]",
+   "type": "DocType"
+  },
+  {
+   "color": "Grey",
+   "doc_view": "List",
+   "label": "Drawing Review",
+   "link_to": "Drawing Review",
+   "stats_filter": "[]",
+   "type": "DocType"
+  },
+  {
+   "color": "Grey",
+   "doc_view": "List",
+   "label": "Drawing Approval",
+   "link_to": "Drawing Approval",
+   "stats_filter": "[]",
+   "type": "DocType"
+  },
+  {
+   "color": "Grey",
+   "doc_view": "List",
+   "label": "Request For Information",
+   "link_to": "Request For Information",
+   "stats_filter": "[]",
+   "type": "DocType"
+  },
+  {
+   "color": "Grey",
+   "doc_view": "List",
+   "label": "Design Issue",
+   "link_to": "Design Issue",
+   "stats_filter": "[]",
+   "type": "DocType"
+  },
+  {
+   "color": "Grey",
+   "doc_view": "List",
+   "label": "Design Change Request",
+   "link_to": "Design Change Request",
+   "stats_filter": "[]",
+   "type": "DocType"
+  },
+  {
+   "color": "Grey",
+   "doc_view": "List",
+   "label": "Design NCR",
+   "link_to": "Design NCR",
+   "stats_filter": "[]",
+   "type": "DocType"
+  },
+  {
+   "color": "Grey",
+   "doc_view": "List",
+   "label": "Drawing Distribution",
+   "link_to": "Drawing Distribution",
+   "stats_filter": "[]",
+   "type": "DocType"
+  },
+  {
+   "color": "Grey",
+   "doc_view": "List",
+   "label": "Drawing Transmittal",
+   "link_to": "Drawing Transmittal",
+   "stats_filter": "[]",
+   "type": "DocType"
   }
  ],
  "title": "Construction",
