@@ -5,6 +5,7 @@ from frappe.utils import flt
 
 def after_install():
 	create_boq_client_script()
+	ensure_construction_desktop_icons()
 	ensure_design_management_setup()
 	ensure_company_construction_accounting_fields()
 	ensure_project_current_boq_field()
@@ -23,6 +24,7 @@ def after_install():
 
 def after_migrate():
 	create_boq_client_script()
+	ensure_construction_desktop_icons()
 	ensure_design_management_setup()
 	ensure_company_construction_accounting_fields()
 	ensure_project_current_boq_field()
@@ -65,6 +67,62 @@ def create_boq_client_script():
 		doc.insert()
 	frappe.db.commit()
 	print("BOQ client script created/updated successfully")
+
+
+def ensure_construction_desktop_icons():
+	app_icon_name = (
+		frappe.db.exists("Desktop Icon", {"icon_type": "App", "app": "construction_management"})
+		or frappe.db.exists("Desktop Icon", "Construction")
+	)
+	app_icon = frappe.get_doc("Desktop Icon", app_icon_name) if app_icon_name else frappe.new_doc("Desktop Icon")
+	app_icon.update(
+		{
+			"label": "Construction",
+			"app": "construction_management",
+			"icon_type": "App",
+			"link_type": "External",
+			"link": "/app/construction-management",
+			"logo_url": "/assets/construction_management/techsolvo_logo.jpeg",
+			"hidden": 0,
+			"standard": 1,
+			"idx": 11,
+			"parent_icon": "",
+		}
+	)
+	if app_icon.is_new():
+		app_icon.name = "Construction"
+		app_icon.insert(ignore_permissions=True)
+	else:
+		app_icon.save(ignore_permissions=True)
+
+	if frappe.db.exists("Desktop Icon", "Construction Management"):
+		frappe.db.set_value(
+			"Desktop Icon",
+			"Construction Management",
+			{
+				"label": "Construction Management",
+				"app": "construction_management",
+				"icon_type": "Link",
+				"link_type": "Workspace Sidebar",
+				"link_to": "Construction Management",
+				"logo_url": "/assets/construction_management/techsolvo_logo.jpeg",
+				"hidden": 1,
+				"standard": 1,
+				"parent_icon": "",
+			},
+			update_modified=False,
+		)
+
+	frappe.db.set_value("Desktop Icon", {"parent_icon": "Construction"}, "hidden", 1, update_modified=False)
+	for icon_name in ("Design Management", "Design"):
+		if frappe.db.exists("Desktop Icon", icon_name):
+			frappe.db.set_value(
+				"Desktop Icon",
+				icon_name,
+				{"hidden": 1, "parent_icon": "Construction"},
+				update_modified=False,
+			)
+	frappe.db.commit()
 
 
 def ensure_design_management_setup():
@@ -269,7 +327,7 @@ def backfill_design_context_fields():
 		"Drawing Transmittal",
 	]
 	for doctype in context_doctypes:
-		if not frappe.db.table_exists(doctype):
+		if not frappe.db.exists("DocType", doctype) or not frappe.db.table_exists(doctype):
 			continue
 		meta = frappe.get_meta(doctype)
 		if not meta.has_field("drawing"):
