@@ -1,0 +1,376 @@
+{
+ "actions": [],
+ "allow_rename": 0,
+ "creation": "2026-07-24 00:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "details_tab",
+  "project",
+  "company",
+  "design_package",
+  "discipline",
+  "drawing_number",
+  "drawing_title",
+  "drawing_type",
+  "location_section",
+  "building",
+  "zone",
+  "level",
+  "team_section",
+  "consultant",
+  "prepared_by",
+  "checked_by",
+  "approved_by",
+  "format_section",
+  "scale",
+  "sheet_size",
+  "status_section",
+  "current_revision",
+  "revision_number",
+  "revision_date",
+  "revision_description",
+  "current_status",
+  "ifc_status",
+  "ifc_date",
+  "ifc_by",
+  "revision_count",
+  "latest_revision",
+  "current_version",
+  "description",
+  "connections_tab",
+  "attachments_tab",
+  "attachments",
+  "comments_tab",
+  "comments"
+ ],
+ "fields": [
+  {
+   "fieldname": "details_tab",
+   "fieldtype": "Tab Break",
+   "label": "Details"
+  },
+  {
+   "fieldname": "project",
+   "fieldtype": "Link",
+   "label": "Project",
+   "options": "Project",
+   "reqd": 1,
+   "in_list_view": 1,
+   "search_index": 1
+  },
+  {
+   "fieldname": "company",
+   "fieldtype": "Link",
+   "label": "Company",
+   "options": "Company",
+   "fetch_from": "project.company",
+   "fetch_if_empty": 1
+  },
+  {
+   "fieldname": "design_package",
+   "fieldtype": "Link",
+   "label": "Design Package",
+   "options": "Design Package",
+   "reqd": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "discipline",
+   "fieldtype": "Link",
+   "label": "Discipline",
+   "options": "Design Discipline",
+   "reqd": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "drawing_number",
+   "fieldtype": "Data",
+   "label": "Drawing Number",
+   "reqd": 1,
+   "in_list_view": 1,
+   "unique": 0,
+   "search_index": 1
+  },
+  {
+   "fieldname": "drawing_title",
+   "fieldtype": "Data",
+   "label": "Drawing Title",
+   "reqd": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "drawing_type",
+   "fieldtype": "Select",
+   "label": "Drawing Type",
+   "options": "Architectural\nStructural\nMEP\nShop Drawing\nAs Built\nCoordination\nDetail\nSchedule\nOther"
+  },
+  {
+   "fieldname": "location_section",
+   "fieldtype": "Section Break",
+   "label": "Location"
+  },
+  {
+   "fieldname": "building",
+   "fieldtype": "Data",
+   "label": "Building"
+  },
+  {
+   "fieldname": "zone",
+   "fieldtype": "Data",
+   "label": "Zone"
+  },
+  {
+   "fieldname": "level",
+   "fieldtype": "Data",
+   "label": "Level"
+  },
+  {
+   "fieldname": "team_section",
+   "fieldtype": "Section Break",
+   "label": "Team"
+  },
+  {
+   "fieldname": "consultant",
+   "fieldtype": "Link",
+   "label": "Consultant",
+   "options": "Supplier",
+   "search_index": 1
+  },
+  {
+   "fieldname": "prepared_by",
+   "fieldtype": "Link",
+   "label": "Prepared By",
+   "options": "User"
+  },
+  {
+   "fieldname": "checked_by",
+   "fieldtype": "Link",
+   "label": "Checked By",
+   "options": "User"
+  },
+  {
+   "fieldname": "approved_by",
+   "fieldtype": "Link",
+   "label": "Approved By",
+   "options": "User"
+  },
+  {
+   "fieldname": "format_section",
+   "fieldtype": "Section Break",
+   "label": "Format"
+  },
+  {
+   "fieldname": "scale",
+   "fieldtype": "Data",
+   "label": "Scale"
+  },
+  {
+   "fieldname": "sheet_size",
+   "fieldtype": "Select",
+   "label": "Sheet Size",
+   "options": "A0\nA1\nA2\nA3\nA4\nLetter\nOther"
+  },
+  {
+   "fieldname": "status_section",
+   "fieldtype": "Section Break",
+   "label": "Current Status"
+  },
+  {
+   "fieldname": "current_revision",
+   "fieldtype": "Data",
+   "label": "Legacy Current Revision",
+   "read_only": 1,
+   "hidden": 1
+  },
+  {
+   "fieldname": "revision_number",
+   "fieldtype": "Data",
+   "label": "Revision Number",
+   "default": "REV0",
+   "in_list_view": 1,
+   "search_index": 1
+  },
+  {
+   "fieldname": "revision_date",
+   "fieldtype": "Date",
+   "label": "Revision Date"
+  },
+  {
+   "fieldname": "revision_description",
+   "fieldtype": "Small Text",
+   "label": "Revision Description"
+  },
+  {
+   "fieldname": "current_status",
+   "fieldtype": "Select",
+   "label": "Current Status",
+   "options": "Draft\nInternal Review\nConsultant Review\nClient Review\nApproved\nIFC\nSuperseded",
+   "default": "Draft",
+   "in_list_view": 1,
+   "search_index": 1
+  },
+  {
+   "fieldname": "ifc_status",
+   "fieldtype": "Check",
+   "label": "IFC Status",
+   "read_only": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "ifc_date",
+   "fieldtype": "Date",
+   "label": "IFC Date",
+   "read_only": 1
+  },
+  {
+   "fieldname": "ifc_by",
+   "fieldtype": "Link",
+   "label": "IFC By",
+   "options": "User",
+   "read_only": 1
+  },
+  {
+   "fieldname": "revision_count",
+   "fieldtype": "Int",
+   "label": "Legacy Revision Count",
+   "read_only": 1,
+   "hidden": 1
+  },
+  {
+   "fieldname": "latest_revision",
+   "fieldtype": "Link",
+   "label": "Legacy Latest Revision",
+   "options": "Drawing Revision",
+   "read_only": 1,
+   "hidden": 1
+  },
+  {
+   "fieldname": "current_version",
+   "fieldtype": "Link",
+   "label": "Legacy Current Version",
+   "options": "Drawing Revision",
+   "read_only": 1,
+   "hidden": 1
+  },
+  {
+   "fieldname": "description",
+   "fieldtype": "Text Editor",
+   "label": "Description"
+  },
+  {
+   "fieldname": "attachments_tab",
+   "fieldtype": "Tab Break",
+   "label": "Attachments"
+  },
+  {
+   "fieldname": "attachments",
+   "fieldtype": "Table",
+   "label": "Attachments",
+   "options": "Drawing Attachment"
+  },
+  {
+   "fieldname": "comments_tab",
+   "fieldtype": "Tab Break",
+   "label": "Comments"
+  },
+  {
+   "fieldname": "comments",
+   "fieldtype": "Table",
+   "label": "Comments",
+   "options": "Drawing Comment"
+  },
+  {
+   "fieldname": "connections_tab",
+   "fieldtype": "Tab Break",
+   "label": "Connections",
+   "show_dashboard": 1
+  }
+ ],
+ "istable": 0,
+ "links": [],
+ "modified": "2026-07-24 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Construction Management",
+ "name": "Drawing Register",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "role": "System Manager",
+   "read": 1,
+   "report": 1,
+   "export": 1,
+   "write": 1,
+   "create": 1,
+   "delete": 1
+  },
+  {
+   "role": "Design Engineer",
+   "read": 1,
+   "report": 1,
+   "export": 1,
+   "write": 1,
+   "create": 1,
+   "delete": 1
+  },
+  {
+   "role": "Checker",
+   "read": 1,
+   "report": 1,
+   "export": 1
+  },
+  {
+   "role": "Lead Engineer",
+   "read": 1,
+   "report": 1,
+   "export": 1
+  },
+  {
+   "role": "Consultant",
+   "read": 1,
+   "report": 1,
+   "export": 1
+  },
+  {
+   "role": "Project Manager",
+   "read": 1,
+   "report": 1,
+   "export": 1,
+   "write": 1,
+   "create": 1,
+   "delete": 1
+  },
+  {
+   "role": "Construction Manager",
+   "read": 1,
+   "report": 1,
+   "export": 1,
+   "write": 1,
+   "create": 1,
+   "delete": 1
+  },
+  {
+   "role": "Document Controller",
+   "read": 1,
+   "report": 1,
+   "export": 1,
+   "write": 1,
+   "create": 1,
+   "delete": 1
+  },
+  {
+   "role": "Site Engineer",
+   "read": 1,
+   "report": 1,
+   "export": 1
+  }
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "track_changes": 1,
+ "autoname": "DRAW-.YYYY.-.#####",
+ "title_field": "drawing_title",
+ "show_title_field_in_link": 1,
+ "search_fields": "drawing_number,drawing_title,project,current_status,consultant"
+}

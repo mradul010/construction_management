@@ -165,8 +165,6 @@ def apply_construction_accounts_to_sales_invoice(invoice, method=None):
 	cost_center = _get_construction_cost_center(project, invoice.company)
 
 	_set_if_empty(invoice, "debit_to", receivable_account)
-	if invoice.get("debit_to") != receivable_account:
-		invoice.debit_to = receivable_account
 	if invoice.get("debit_to"):
 		invoice.party_account_currency = (
 			frappe.db.get_value("Account", invoice.debit_to, "account_currency")
@@ -198,12 +196,13 @@ def apply_construction_accounts_to_purchase_invoice(invoice, method=None):
 	cost_center = _get_construction_cost_center(project, invoice.company)
 
 	if invoice.meta.has_field("credit_to"):
-		invoice.credit_to = payable_account
-		invoice.party_account_currency = frappe.get_cached_value(
-			"Account", payable_account, "account_currency"
-		) or invoice.get("currency") or frappe.get_cached_value(
-			"Company", invoice.company, "default_currency"
-		)
+		_set_if_empty(invoice, "credit_to", payable_account)
+		if invoice.get("credit_to"):
+			invoice.party_account_currency = frappe.get_cached_value(
+				"Account", invoice.credit_to, "account_currency"
+			) or invoice.get("currency") or frappe.get_cached_value(
+				"Company", invoice.company, "default_currency"
+			)
 
 	for row in invoice.get("items") or []:
 		_set_if_empty(row, "expense_account", expense_account)
@@ -261,6 +260,17 @@ def apply_construction_accounts_to_payment_entry(payment_entry, method=None):
 		paid_to = get_construction_account(
 			payment_entry.company,
 			"subcontractor_payable",
+			project=context.project,
+			transaction=payment_entry,
+		)
+	elif (
+		payment_entry.payment_type == "Pay"
+		and context.account_context == "retention_payable"
+		and not payment_entry.get("paid_to")
+	):
+		paid_to = get_construction_account(
+			payment_entry.company,
+			"subcontractor_retention_payable",
 			project=context.project,
 			transaction=payment_entry,
 		)
@@ -457,6 +467,27 @@ def _get_payment_entry_construction_context(payment_entry):
 				"project": record.project if record else None,
 				"party_type": "Customer",
 				"party": record.customer if record else None,
+			}
+		)
+
+	retention_payable_name = None
+	for fieldname in ("custom_retention_payable", "retention_payable"):
+		if payment_entry.meta.has_field(fieldname) and payment_entry.get(fieldname):
+			retention_payable_name = payment_entry.get(fieldname)
+			break
+	if retention_payable_name:
+		record = frappe.db.get_value(
+			"Retention Payable",
+			retention_payable_name,
+			["project", "supplier"],
+			as_dict=True,
+		)
+		return frappe._dict(
+			{
+				"account_context": "retention_payable",
+				"project": record.project if record else None,
+				"party_type": "Supplier",
+				"party": record.supplier if record else None,
 			}
 		)
 

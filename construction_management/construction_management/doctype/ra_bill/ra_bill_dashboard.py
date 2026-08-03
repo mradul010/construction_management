@@ -6,11 +6,13 @@ def get_data():
 		"fieldname": "ra_bill",
 		"internal_links": {
 			"Project": "project",
+			"Drawing Register": "drawing",
 			"BOQ": "boq",
 			"Sales Order": "sales_order",
 		},
 		"transactions": [
-			{"label": _("Contract"), "items": ["Project", "BOQ", "Sales Order"]},
+			{"label": _("Design"), "items": ["Project", "Drawing Register"]},
+			{"label": _("Contract"), "items": ["BOQ", "Sales Order"]},
 			{"label": _("Billing"), "items": ["Sales Invoice"]},
 		],
 	}

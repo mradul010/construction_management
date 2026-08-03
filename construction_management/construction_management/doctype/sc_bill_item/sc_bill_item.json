@@ -6,20 +6,28 @@
  "engine": "InnoDB",
  "field_order": [
   "sc_work_order_item",
+  "purchase_order",
+  "purchase_order_item",
   "boq_item",
+  "item_code",
   "description",
   "assigned_qty",
   "previous_qty",
+  "previous_percent",
   "current_qty",
+  "current_percent",
   "cumulative_qty",
+  "cumulative_percent",
   "balance_qty",
+  "balance_percent",
   "uom",
   "sc_rate",
   "current_amount",
   "previous_amount",
   "cumulative_amount",
   "balance_amount",
-  "bill_amount"
+  "bill_amount",
+  "cost_center"
  ],
  "fields": [
   {
@@ -29,11 +37,33 @@
    "label": "SC Work Order Item"
   },
   {
+   "fieldname": "purchase_order",
+   "fieldtype": "Link",
+   "hidden": 1,
+   "label": "Purchase Order",
+   "options": "Purchase Order",
+   "read_only": 1
+  },
+  {
+   "fieldname": "purchase_order_item",
+   "fieldtype": "Data",
+   "hidden": 1,
+   "label": "Purchase Order Item",
+   "read_only": 1
+  },
+  {
    "fieldname": "boq_item",
    "fieldtype": "Link",
    "in_list_view": 1,
    "label": "BOQ Item",
    "options": "BOQ Item",
+   "read_only": 1
+  },
+  {
+   "fieldname": "item_code",
+   "fieldtype": "Link",
+   "label": "Item Code",
+   "options": "Item",
    "read_only": 1
   },
   {
@@ -53,7 +83,16 @@
    "default": "0",
    "fieldname": "previous_qty",
    "fieldtype": "Float",
+   "in_list_view": 1,
    "label": "Previous Qty",
+   "read_only": 1
+  },
+  {
+   "default": "0",
+   "fieldname": "previous_percent",
+   "fieldtype": "Percent",
+   "in_list_view": 1,
+   "label": "Previous %",
    "read_only": 1
   },
   {
@@ -64,15 +103,36 @@
    "label": "Current Qty"
   },
   {
+   "default": "0",
+   "fieldname": "current_percent",
+   "fieldtype": "Percent",
+   "in_list_view": 1,
+   "label": "Current %"
+  },
+  {
    "fieldname": "cumulative_qty",
    "fieldtype": "Float",
    "label": "Cumulative Qty",
    "read_only": 1
   },
   {
+   "fieldname": "cumulative_percent",
+   "fieldtype": "Percent",
+   "in_list_view": 1,
+   "label": "Cumulative %",
+   "read_only": 1
+  },
+  {
    "fieldname": "balance_qty",
    "fieldtype": "Float",
    "label": "Balance Qty",
+   "read_only": 1
+  },
+  {
+   "fieldname": "balance_percent",
+   "fieldtype": "Percent",
+   "in_list_view": 1,
+   "label": "Balance %",
    "read_only": 1
   },
   {
@@ -127,6 +187,13 @@
    "in_list_view": 1,
    "label": "Bill Amount",
    "options": "currency"
+  },
+  {
+   "fieldname": "cost_center",
+   "fieldtype": "Link",
+   "label": "Cost Center",
+   "options": "Cost Center",
+   "read_only": 1
   }
  ],
  "istable": 1,

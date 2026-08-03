@@ -55,7 +55,7 @@
    "search_index": 1
   },
   {
-   "description": "Auto-filled from BOQ Category tree \u2014 used for grouping",
+   "description": "Auto-filled from BOQ Category tree — used for grouping",
    "fieldname": "boq_parent_category",
    "fieldtype": "Data",
    "label": "Parent Category",
@@ -111,7 +111,7 @@
   {
    "allow_on_submit": 1,
    "default": "0",
-   "description": "Contractor margin % \u2014 hidden from client print format",
+   "description": "Contractor margin % — hidden from client print format",
    "fieldname": "margin_percent",
    "fieldtype": "Percent",
    "in_list_view": 1,
@@ -119,7 +119,7 @@
   },
   {
    "allow_on_submit": 1,
-   "description": "unit_cost \u00d7 (1 + margin/100) \u2014 client-facing rate",
+   "description": "unit_cost × (1 + margin/100) — client-facing rate",
    "fieldname": "unit_rate",
    "fieldtype": "Currency",
    "in_list_view": 1,
@@ -129,7 +129,7 @@
   },
   {
    "allow_on_submit": 1,
-   "description": "qty \u00d7 unit_cost. Cost Breakdown total must match this amount.",
+   "description": "qty × unit_cost. Cost Breakdown total must match this amount.",
    "fieldname": "amount",
    "fieldtype": "Currency",
    "in_list_view": 1,

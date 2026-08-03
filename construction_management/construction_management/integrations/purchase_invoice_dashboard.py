@@ -7,17 +7,24 @@ def get_data(data):
 	data.setdefault("non_standard_fieldnames", {}).update(
 		{
 			"SC Bill": "purchase_invoice",
+			"Retention Payable": "purchase_invoice",
+			"Payment Entry": "purchase_invoice",
 		}
 	)
 	data.setdefault("internal_links", {}).update(
 		{
+			"Drawing Register": "drawing",
+			"BOQ": "boq",
+			"SC Work Order": "sc_work_order",
+			"SC Bill": "sc_bill",
 			"Project": "project",
 			"Supplier": "supplier",
 		}
 	)
 
 	transactions = data.setdefault("transactions", [])
-	_add_items(transactions, _("Subcontract Management"), ["SC Bill", "Project"])
+	_add_items(transactions, _("Design"), ["Project", "Drawing Register", "BOQ"])
+	_add_items(transactions, _("Subcontract Management"), ["SC Work Order", "SC Bill", "Retention Payable", "Project"])
 	return data
 
 

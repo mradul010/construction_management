@@ -8,6 +8,9 @@
   "boq_item",
   "boq_item_key",
   "category",
+  "boq_parent_category",
+  "project",
+  "cost_center",
   "item",
   "description",
   "boq_qty",
@@ -22,7 +25,8 @@
   "billed_qty",
   "billed_amount",
   "balance_qty",
-  "balance_amount"
+  "balance_amount",
+  "notes"
  ],
  "fields": [
   {
@@ -43,6 +47,26 @@
    "fieldtype": "Link",
    "label": "Category",
    "options": "BOQ Category",
+   "read_only": 1
+  },
+  {
+   "fieldname": "boq_parent_category",
+   "fieldtype": "Data",
+   "label": "Parent Category",
+   "read_only": 1
+  },
+  {
+   "fieldname": "project",
+   "fieldtype": "Link",
+   "label": "Project",
+   "options": "Project",
+   "read_only": 1
+  },
+  {
+   "fieldname": "cost_center",
+   "fieldtype": "Link",
+   "label": "Cost Center",
+   "options": "Cost Center",
    "read_only": 1
   },
   {
@@ -146,6 +170,12 @@
    "fieldtype": "Currency",
    "label": "Balance Amount",
    "options": "currency",
+   "read_only": 1
+  },
+  {
+   "fieldname": "notes",
+   "fieldtype": "Small Text",
+   "label": "Notes",
    "read_only": 1
   }
  ],

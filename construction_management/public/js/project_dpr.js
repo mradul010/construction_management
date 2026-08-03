@@ -24,5 +24,18 @@ frappe.ui.form.on("Project", {
 			},
 			__("Create")
 		);
+
+		if (!frappe.model.can_create || frappe.model.can_create("Design Package")) {
+			frm.add_custom_button(
+				__("Design Package"),
+				() => {
+					frappe.model.open_mapped_doc({
+						method: "construction_management.design_management.design_management.make_design_package",
+						frm,
+					});
+				},
+				__("Create")
+			);
+		}
 	},
 });

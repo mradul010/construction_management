@@ -12,20 +12,51 @@ function toggleScBillSections(frm) {
 	frm.toggle_display("amount_entry_section", !isMeasured);
 }
 
-function calculateScBillRow(frm, cdt, cdn) {
+function calculateScBillRow(frm, cdt, cdn, sourceField) {
 	const row = locals[cdt][cdn];
 	if (!row) return;
 
-	const currentQty = scBillNumber(row.current_qty);
-	const previousQty = scBillNumber(row.previous_qty);
 	const assignedQty = scBillNumber(row.assigned_qty);
+	const previousQty = scBillNumber(row.previous_qty);
+	const previousPercent = assignedQty ? (previousQty / assignedQty) * 100 : scBillNumber(row.previous_percent);
+	const remainingQty = Math.max(assignedQty - previousQty, 0);
+	const remainingPercent = Math.max(100 - previousPercent, 0);
+	let currentPercent = scBillNumber(row.current_percent);
+	let currentQty = scBillNumber(row.current_qty);
+	if (sourceField === "current_percent") {
+		if (currentPercent > remainingPercent) {
+			currentPercent = remainingPercent;
+			frappe.model.set_value(cdt, cdn, "current_percent", currentPercent);
+			frappe.show_alert({
+				message: __("Current % cannot exceed remaining {0}%.", [frappe.format(currentPercent, { fieldtype: "Percent" })]),
+				indicator: "orange",
+			});
+		}
+		currentQty = assignedQty * (currentPercent / 100);
+		frappe.model.set_value(cdt, cdn, "current_qty", currentQty);
+	} else if (currentQty > remainingQty) {
+		currentQty = remainingQty;
+		frappe.model.set_value(cdt, cdn, "current_qty", currentQty);
+		frappe.show_alert({
+			message: __("Current Qty cannot exceed remaining {0}.", [frappe.format(currentQty, { fieldtype: "Float" })]),
+			indicator: "orange",
+		});
+	}
 	const rate = scBillNumber(row.sc_rate);
 	const currentAmount = currentQty * rate;
 	const previousAmount = scBillNumber(row.previous_amount);
+	const calculatedCurrentPercent = assignedQty ? (currentQty / assignedQty) * 100 : 0;
+	const cumulativeQty = previousQty + currentQty;
+	const cumulativePercent = assignedQty ? (cumulativeQty / assignedQty) * 100 : 0;
 
+	if (sourceField !== "current_percent") {
+		frappe.model.set_value(cdt, cdn, "current_percent", calculatedCurrentPercent);
+	}
 	frappe.model.set_value(cdt, cdn, "current_amount", currentAmount);
-	frappe.model.set_value(cdt, cdn, "cumulative_qty", previousQty + currentQty);
-	frappe.model.set_value(cdt, cdn, "balance_qty", Math.max(assignedQty - previousQty - currentQty, 0));
+	frappe.model.set_value(cdt, cdn, "cumulative_qty", cumulativeQty);
+	frappe.model.set_value(cdt, cdn, "cumulative_percent", cumulativePercent);
+	frappe.model.set_value(cdt, cdn, "balance_qty", Math.max(assignedQty - cumulativeQty, 0));
+	frappe.model.set_value(cdt, cdn, "balance_percent", Math.max(100 - cumulativePercent, 0));
 	frappe.model.set_value(cdt, cdn, "cumulative_amount", previousAmount + currentAmount);
 	frappe.model.set_value(cdt, cdn, "balance_amount", Math.max(assignedQty * rate - previousAmount - currentAmount, 0));
 	frappe.model.set_value(cdt, cdn, "bill_amount", currentAmount);
@@ -92,6 +123,47 @@ function loadWorkOrderContext(frm) {
 	});
 }
 
+function loadPurchaseOrderContext(frm) {
+	if (!frm.doc.purchase_order) return;
+
+	frappe.call({
+		method: `${SC_BILL_METHOD}.get_purchase_order_context`,
+		args: {
+			purchase_order: frm.doc.purchase_order,
+		},
+		callback(r) {
+			const context = r.message || {};
+			frm.set_value({
+				sc_work_order: context.sc_work_order,
+				project: context.project,
+				supplier: context.supplier,
+				billing_type: context.billing_type,
+				boq: context.boq,
+				company: context.company,
+				currency: context.currency,
+				contract_value: context.contract_value,
+			});
+
+			if (context.billing_type === "Measured" && frm.doc.docstatus === 0) {
+				frm.clear_table("items");
+				(context.items || []).forEach((source) => {
+					const row = frm.add_child("items");
+					Object.keys(source).forEach((fieldname) => {
+						row[fieldname] = source[fieldname];
+					});
+					row.current_qty = 0;
+					row.current_percent = 0;
+					row.current_amount = 0;
+				});
+				frm.refresh_field("items");
+			}
+
+			toggleScBillSections(frm);
+			calculateScBillTotals(frm);
+		},
+	});
+}
+
 frappe.ui.form.on("SC Bill", {
 	setup(frm) {
 		frm.set_query("sc_work_order", function () {
@@ -100,6 +172,20 @@ frappe.ui.form.on("SC Bill", {
 					docstatus: 1,
 				},
 			};
+		});
+
+		frm.set_query("purchase_order", function () {
+			const filters = {
+				docstatus: 1,
+				sc_work_order: ["is", "set"],
+			};
+			if (frm.doc.sc_work_order) {
+				filters.sc_work_order = frm.doc.sc_work_order;
+			}
+			if (frm.doc.supplier) {
+				filters.supplier = frm.doc.supplier;
+			}
+			return { filters };
 		});
 	},
 
@@ -138,7 +224,13 @@ frappe.ui.form.on("SC Bill", {
 	},
 
 	sc_work_order(frm) {
-		loadWorkOrderContext(frm);
+		if (!frm.doc.purchase_order) {
+			loadWorkOrderContext(frm);
+		}
+	},
+
+	purchase_order(frm) {
+		loadPurchaseOrderContext(frm);
 	},
 
 	billing_type(frm) {
@@ -153,7 +245,12 @@ frappe.ui.form.on("SC Bill", {
 });
 
 frappe.ui.form.on("SC Bill Item", {
-	current_qty: calculateScBillRow,
+	current_qty(frm, cdt, cdn) {
+		calculateScBillRow(frm, cdt, cdn, "current_qty");
+	},
+	current_percent(frm, cdt, cdn) {
+		calculateScBillRow(frm, cdt, cdn, "current_percent");
+	},
 	items_remove(frm) {
 		frm.trigger("calculate_totals");
 	},

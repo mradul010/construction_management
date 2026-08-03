@@ -1,5 +1,7 @@
 const SC_WORK_ORDER_METHOD =
 	"construction_management.construction_management.doctype.sc_work_order.sc_work_order";
+const CONSTRUCTION_PURCHASE_ORDER_METHOD =
+	"construction_management.construction_management.purchase_order";
 
 function fltValue(value) {
 	const parsed = parseFloat(value);
@@ -31,6 +33,12 @@ function toggleWorkOrderSections(frm) {
 	frm.toggle_display("standalone_section", isStandalone);
 }
 
+function getSelectedBoqItems(frm, currentCdn) {
+	return (frm.doc.items || [])
+		.filter((row) => row.name !== currentCdn && row.boq_item)
+		.map((row) => row.boq_item);
+}
+
 frappe.ui.form.on("SC Work Order", {
 	setup(frm) {
 		frm.set_query("boq", function () {
@@ -42,11 +50,12 @@ frappe.ui.form.on("SC Work Order", {
 			};
 		});
 
-		frm.set_query("boq_item", "items", function () {
+		frm.set_query("boq_item", "items", function (doc, cdt, cdn) {
 			return {
 				query: `${SC_WORK_ORDER_METHOD}.search_boq_items`,
 				filters: {
 					boq: frm.doc.boq,
+					selected_boq_items: getSelectedBoqItems(frm, cdn),
 				},
 			};
 		});
@@ -56,6 +65,19 @@ frappe.ui.form.on("SC Work Order", {
 		toggleWorkOrderSections(frm);
 
 		if (frm.doc.docstatus === 1 && frm.doc.status !== "Cancelled") {
+			if (!["Completed", "Closed", "Fully Ordered"].includes(frm.doc.status)) {
+				frm.add_custom_button(
+					__("Purchase Order"),
+					function () {
+						frappe.model.open_mapped_doc({
+							method: `${CONSTRUCTION_PURCHASE_ORDER_METHOD}.make_purchase_order`,
+							frm: frm,
+						});
+					},
+					__("Create"),
+				);
+			}
+
 			frm.add_custom_button(
 				__("Create SC Bill"),
 				function () {
@@ -77,12 +99,13 @@ frappe.ui.form.on("SC Work Order", {
 
 	boq(frm) {
 		if (!frm.doc.boq) return;
-		frappe.db.get_value("BOQ", frm.doc.boq, ["project", "company", "currency"]).then((r) => {
+		frappe.db.get_value("BOQ", frm.doc.boq, ["project", "company", "currency", "conversion_rate"]).then((r) => {
 			const boq = r.message || {};
 			frm.set_value({
 				project: boq.project || frm.doc.project,
 				company: boq.company || frm.doc.company,
 				currency: boq.currency || frm.doc.currency,
+				conversion_rate: boq.conversion_rate || frm.doc.conversion_rate,
 			});
 		});
 	},

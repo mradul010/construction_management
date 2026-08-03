@@ -5,12 +5,18 @@ from frappe.utils import flt
 
 def after_install():
 	create_boq_client_script()
+	ensure_construction_desktop_icons()
+	ensure_design_management_setup()
 	ensure_company_construction_accounting_fields()
 	ensure_project_current_boq_field()
 	ensure_sales_invoice_ra_bill_field()
 	ensure_sales_invoice_retention_records_field()
 	ensure_sales_invoice_payment_breakdown_field()
+	ensure_purchase_invoice_sc_bill_fields()
+	ensure_purchase_invoice_payment_breakdown_field()
+	ensure_purchase_order_subcontract_fields()
 	ensure_payment_entry_retention_record_field()
+	backfill_payment_entry_subcontract_links()
 	backfill_sales_invoice_ra_bill_links()
 	ensure_ra_bill_items()
 	backfill_boq_revision_fields()
@@ -18,12 +24,18 @@ def after_install():
 
 def after_migrate():
 	create_boq_client_script()
+	ensure_construction_desktop_icons()
+	ensure_design_management_setup()
 	ensure_company_construction_accounting_fields()
 	ensure_project_current_boq_field()
 	ensure_sales_invoice_ra_bill_field()
 	ensure_sales_invoice_retention_records_field()
 	ensure_sales_invoice_payment_breakdown_field()
+	ensure_purchase_invoice_sc_bill_fields()
+	ensure_purchase_invoice_payment_breakdown_field()
+	ensure_purchase_order_subcontract_fields()
 	ensure_payment_entry_retention_record_field()
+	backfill_payment_entry_subcontract_links()
 	backfill_sales_invoice_ra_bill_links()
 	ensure_ra_bill_items()
 	backfill_boq_revision_fields()
@@ -55,6 +67,293 @@ def create_boq_client_script():
 		doc.insert()
 	frappe.db.commit()
 	print("BOQ client script created/updated successfully")
+
+
+def ensure_construction_desktop_icons():
+	app_icon_name = (
+		frappe.db.exists("Desktop Icon", {"icon_type": "App", "app": "construction_management"})
+		or frappe.db.exists("Desktop Icon", "Construction")
+	)
+	app_icon = frappe.get_doc("Desktop Icon", app_icon_name) if app_icon_name else frappe.new_doc("Desktop Icon")
+	app_icon.update(
+		{
+			"label": "Construction",
+			"app": "construction_management",
+			"icon_type": "App",
+			"link_type": "External",
+			"link": "/app/construction-management",
+			"logo_url": "/assets/construction_management/techsolvo_logo.jpeg",
+			"hidden": 0,
+			"standard": 1,
+			"idx": 11,
+			"parent_icon": "",
+		}
+	)
+	if app_icon.is_new():
+		app_icon.name = "Construction"
+		app_icon.insert(ignore_permissions=True)
+	else:
+		app_icon.save(ignore_permissions=True)
+
+	if frappe.db.exists("Desktop Icon", "Construction Management"):
+		frappe.db.set_value(
+			"Desktop Icon",
+			"Construction Management",
+			{
+				"label": "Construction Management",
+				"app": "construction_management",
+				"icon_type": "Link",
+				"link_type": "Workspace Sidebar",
+				"link_to": "Construction Management",
+				"logo_url": "/assets/construction_management/techsolvo_logo.jpeg",
+				"hidden": 1,
+				"standard": 1,
+				"parent_icon": "",
+			},
+			update_modified=False,
+		)
+
+	frappe.db.set_value("Desktop Icon", {"parent_icon": "Construction"}, "hidden", 1, update_modified=False)
+	for icon_name in ("Design Management", "Design"):
+		if frappe.db.exists("Desktop Icon", icon_name):
+			frappe.db.set_value(
+				"Desktop Icon",
+				icon_name,
+				{"hidden": 1, "parent_icon": "Construction"},
+				update_modified=False,
+			)
+	frappe.db.commit()
+
+
+def ensure_design_management_setup():
+	ensure_design_management_roles()
+	ensure_design_reference_fields()
+	ensure_design_parent_reference_fields()
+	backfill_design_context_fields()
+
+
+def ensure_design_management_roles():
+	for role in [
+		"Design Engineer",
+		"Checker",
+		"Lead Engineer",
+		"Consultant",
+		"Project Manager",
+		"Construction Manager",
+		"Document Controller",
+		"Site Engineer",
+	]:
+		if frappe.db.exists("Role", role):
+			continue
+		frappe.get_doc(
+			{
+				"doctype": "Role",
+				"role_name": role,
+				"desk_access": 1,
+			}
+		).insert(ignore_permissions=True)
+
+	frappe.db.commit()
+
+
+def ensure_design_reference_fields():
+	child_doctypes = [
+		("BOQ Item", "notes"),
+		("SC Work Order Item", "notes"),
+		("RA Bill Item", "current_amount"),
+		("SC Bill Item", "cost_center"),
+		("Sales Order Item", "description"),
+		("Purchase Order Item", "description"),
+		("Purchase Invoice Item", "description"),
+		("Material Request Item", "description"),
+		("Stock Entry Detail", "description"),
+		("Purchase Receipt Item", "description"),
+	]
+
+	for doctype, insert_after in child_doctypes:
+		if not frappe.db.table_exists(doctype):
+			continue
+		ensure_design_custom_field(
+			doctype,
+			"design_reference_section",
+			"Design Reference",
+			"Section Break",
+			insert_after=insert_after,
+			collapsible=1,
+		)
+		ensure_design_custom_field(
+			doctype,
+			"drawing",
+			"Drawing",
+			"Link",
+			options="Drawing Register",
+			insert_after="design_reference_section",
+			in_list_view=0,
+		)
+		ensure_design_custom_field(
+			doctype,
+			"drawing_revision",
+			"Drawing Revision",
+			"Link",
+			options="Drawing Revision",
+			insert_after="drawing",
+			in_list_view=0,
+		)
+		ensure_design_custom_field(
+			doctype,
+			"ifc_revision",
+			"IFC Revision",
+			"Link",
+			options="Drawing Revision",
+			insert_after="drawing_revision",
+			in_list_view=0,
+			read_only=1,
+		)
+		frappe.clear_cache(doctype=doctype)
+
+	frappe.db.commit()
+
+
+def ensure_design_parent_reference_fields():
+	parent_doctypes = [
+		("BOQ", "project"),
+		("Sales Order", "project"),
+		("Sales Invoice", "project"),
+		("RA Bill", "project"),
+		("SC Work Order", "project"),
+		("Purchase Order", "project"),
+		("Purchase Receipt", "project"),
+		("SC Bill", "project"),
+		("Purchase Invoice", "project"),
+	]
+
+	for doctype, insert_after in parent_doctypes:
+		if not frappe.db.table_exists(doctype):
+			continue
+		ensure_design_custom_field(
+			doctype,
+			"design_reference_section",
+			"Design Reference",
+			"Section Break",
+			insert_after=insert_after,
+			collapsible=1,
+		)
+		ensure_design_custom_field(
+			doctype,
+			"drawing",
+			"Drawing",
+			"Link",
+			options="Drawing Register",
+			insert_after="design_reference_section",
+		)
+		ensure_design_custom_field(
+			doctype,
+			"design_package",
+			"Design Package",
+			"Link",
+			options="Design Package",
+			insert_after="drawing",
+			read_only=1,
+		)
+		ensure_design_custom_field(
+			doctype,
+			"discipline",
+			"Design Discipline",
+			"Link",
+			options="Design Discipline",
+			insert_after="design_package",
+			read_only=1,
+		)
+		ensure_design_custom_field(
+			doctype,
+			"revision_number",
+			"Drawing Revision Number",
+			"Data",
+			insert_after="discipline",
+			read_only=1,
+		)
+		ensure_design_custom_field(
+			doctype,
+			"drawing_revision",
+			"Drawing Revision",
+			"Link",
+			options="Drawing Revision",
+			insert_after="revision_number",
+		)
+		ensure_design_custom_field(
+			doctype,
+			"ifc_revision",
+			"IFC Revision",
+			"Link",
+			options="Drawing Revision",
+			insert_after="drawing_revision",
+			read_only=1,
+		)
+		frappe.clear_cache(doctype=doctype)
+
+	frappe.db.commit()
+
+
+def ensure_design_custom_field(doctype, fieldname, label, fieldtype, **kwargs):
+	if frappe.get_meta(doctype).has_field(fieldname):
+		return
+
+	custom_field_name = f"{doctype}-{fieldname}"
+	if frappe.db.exists("Custom Field", custom_field_name):
+		return
+
+	doc = {
+		"doctype": "Custom Field",
+		"dt": doctype,
+		"fieldname": fieldname,
+		"label": label,
+		"fieldtype": fieldtype,
+		"module": "Construction Management",
+	}
+	doc.update(kwargs)
+	frappe.get_doc(doc).insert(ignore_permissions=True)
+
+
+def backfill_design_context_fields():
+	context_doctypes = [
+		"Drawing Revision",
+		"Drawing Review",
+		"Drawing Approval",
+		"Drawing Distribution",
+		"Request For Information",
+		"Design Issue",
+		"Design Change Request",
+		"Design NCR",
+		"Drawing Transmittal",
+	]
+	for doctype in context_doctypes:
+		if not frappe.db.exists("DocType", doctype) or not frappe.db.table_exists(doctype):
+			continue
+		meta = frappe.get_meta(doctype)
+		if not meta.has_field("drawing"):
+			continue
+		assignments = []
+		for fieldname, source_field in (
+			("project", "project"),
+			("company", "company"),
+			("design_package", "design_package"),
+			("discipline", "discipline"),
+		):
+			if meta.has_field(fieldname):
+				assignments.append(f"`tab{doctype}`.`{fieldname}` = COALESCE(`tab{doctype}`.`{fieldname}`, `tabDrawing Register`.`{source_field}`)")
+		if not assignments:
+			continue
+		frappe.db.sql(
+			f"""
+			UPDATE `tab{doctype}`
+			INNER JOIN `tabDrawing Register`
+				ON `tabDrawing Register`.`name` = `tab{doctype}`.`drawing`
+			SET {", ".join(assignments)}
+			WHERE `tab{doctype}`.`drawing` IS NOT NULL
+			"""
+		)
+
+	frappe.db.commit()
 
 
 def ensure_company_construction_accounting_fields():
@@ -309,6 +608,135 @@ def ensure_sales_invoice_payment_breakdown_field():
 	print("Sales Invoice Retention Deduction custom fields are ready")
 
 
+def ensure_purchase_invoice_sc_bill_fields():
+	"""
+	Ensure Purchase Invoice carries the subcontract billing and retention payable references.
+	"""
+	for fieldname, label, options, insert_after in [
+		("sc_bill", "SC Bill", "SC Bill", "project"),
+		("sc_work_order", "SC Work Order", "SC Work Order", "sc_bill"),
+		("purchase_order", "Purchase Order", "Purchase Order", "sc_work_order"),
+		("retention_payable", "Retention Payable", "Retention Payable", "purchase_order"),
+	]:
+		ensure_custom_field(
+			"Purchase Invoice",
+			fieldname,
+			{
+				"label": label,
+				"fieldtype": "Link",
+				"options": options,
+				"insert_after": insert_after,
+				"read_only": 1,
+				"no_copy": 1,
+				"module": "Construction Management",
+			},
+		)
+
+	for fieldname, label, options, insert_after in [
+		("boq_item", "BOQ Item", "BOQ Item", "project"),
+		("sc_work_order_item", "SC Work Order Item", None, "boq_item"),
+		("sc_bill_item", "SC Bill Item", None, "sc_work_order_item"),
+	]:
+		values = {
+			"label": label,
+			"fieldtype": "Link" if options else "Data",
+			"insert_after": insert_after,
+			"read_only": 1,
+			"no_copy": 1,
+			"module": "Construction Management",
+		}
+		if options:
+			values["options"] = options
+		ensure_custom_field("Purchase Invoice Item", fieldname, values)
+
+	frappe.clear_cache(doctype="Purchase Invoice")
+	frappe.clear_cache(doctype="Purchase Invoice Item")
+	frappe.db.commit()
+	print("Purchase Invoice subcontract retention custom fields are ready")
+
+
+def ensure_purchase_invoice_payment_breakdown_field():
+	"""
+	Ensure Purchase Invoice has a payment breakdown table for subcontract retention payable.
+	"""
+	section_fieldname = "retention_payable_section"
+	fieldname = "payment_breakdown"
+
+	ensure_custom_field(
+		"Purchase Invoice",
+		section_fieldname,
+		{
+			"label": "Retention Payable",
+			"fieldtype": "Section Break",
+			"insert_after": "payment_schedule",
+			"collapsible": 1,
+			"depends_on": "eval:doc.payment_breakdown && doc.payment_breakdown.length",
+			"module": "Construction Management",
+		},
+	)
+	ensure_custom_field(
+		"Purchase Invoice",
+		fieldname,
+		{
+			"label": "Payment Breakdown",
+			"fieldtype": "Table",
+			"options": "Purchase Invoice Payment Breakdown",
+			"insert_after": section_fieldname,
+			"read_only": 1,
+			"no_copy": 1,
+			"module": "Construction Management",
+		},
+	)
+
+	frappe.clear_cache(doctype="Purchase Invoice")
+	frappe.db.commit()
+	print("Purchase Invoice Payment Breakdown custom fields are ready")
+
+
+def ensure_purchase_order_subcontract_fields():
+	"""
+	Ensure Purchase Order carries construction subcontract references.
+	"""
+	for fieldname, label, options, insert_after in [
+		("boq", "BOQ", "BOQ", "project"),
+		("sc_work_order", "SC Work Order", "SC Work Order", "boq"),
+	]:
+		ensure_custom_field(
+			"Purchase Order",
+			fieldname,
+			{
+				"label": label,
+				"fieldtype": "Link",
+				"options": options,
+				"insert_after": insert_after,
+				"read_only": 1,
+				"no_copy": 1,
+				"module": "Construction Management",
+			},
+		)
+
+	for fieldname, label, options, insert_after in [
+		("boq_item", "BOQ Item", "BOQ Item", "project"),
+		("sc_work_order_item", "SC Work Order Item", None, "boq_item"),
+	]:
+		values = {
+			"label": label,
+			"fieldtype": "Link" if options else "Data",
+			"insert_after": insert_after,
+			"read_only": 1,
+			"no_copy": 1,
+			"module": "Construction Management",
+		}
+		if options:
+			values["options"] = options
+		ensure_custom_field("Purchase Order Item", fieldname, values)
+
+	frappe.clear_cache(doctype="Purchase Order")
+	frappe.clear_cache(doctype="Purchase Order Item")
+	frappe.db.commit()
+	print("Purchase Order subcontract custom fields are ready")
+
+
 def ensure_custom_field(dt, fieldname, values):
 	custom_field_name = f"{dt}-{fieldname}"
 	if frappe.db.exists("Custom Field", custom_field_name):
@@ -408,6 +836,69 @@ def ensure_payment_entry_retention_record_field():
 			"options": "Account",
 			"insert_after": "custom_retention_release_amount",
 		},
+		{
+			"fieldname": "retention_payable",
+			"label": "Retention Payable",
+			"fieldtype": "Link",
+			"options": "Retention Payable",
+			"insert_after": "custom_retention_receivable_account",
+		},
+		{
+			"fieldname": "sc_work_order",
+			"label": "SC Work Order",
+			"fieldtype": "Link",
+			"options": "SC Work Order",
+			"insert_after": "retention_payable",
+		},
+		{
+			"fieldname": "purchase_order",
+			"label": "Purchase Order",
+			"fieldtype": "Link",
+			"options": "Purchase Order",
+			"insert_after": "sc_work_order",
+		},
+		{
+			"fieldname": "purchase_invoice",
+			"label": "Purchase Invoice",
+			"fieldtype": "Link",
+			"options": "Purchase Invoice",
+			"insert_after": "purchase_order",
+		},
+		{
+			"fieldname": "sc_bill",
+			"label": "SC Bill",
+			"fieldtype": "Link",
+			"options": "SC Bill",
+			"insert_after": "purchase_invoice",
+		},
+		{
+			"fieldname": "custom_retention_payable",
+			"label": "Retention Payable",
+			"fieldtype": "Link",
+			"options": "Retention Payable",
+			"insert_after": "sc_bill",
+		},
+		{
+			"fieldname": "custom_sc_bill",
+			"label": "SC Bill",
+			"fieldtype": "Link",
+			"options": "SC Bill",
+			"insert_after": "custom_retention_payable",
+		},
+		{
+			"fieldname": "custom_original_purchase_invoice",
+			"label": "Original Purchase Invoice",
+			"fieldtype": "Link",
+			"options": "Purchase Invoice",
+			"insert_after": "custom_sc_bill",
+		},
+		{
+			"fieldname": "custom_retention_payable_account",
+			"label": "Retention Payable Account",
+			"fieldtype": "Link",
+			"options": "Account",
+			"insert_after": "custom_original_purchase_invoice",
+		},
 	]
 
 	created_fields = []
@@ -435,6 +926,127 @@ def ensure_payment_entry_retention_record_field():
 	if created_fields:
 		frappe.db.commit()
 		print(f"Payment Entry retention custom fields created: {', '.join(created_fields)}")
+
+
+def backfill_payment_entry_subcontract_links():
+	"""Populate direct subcontract link fields on Payment Entry for dashboards."""
+	if not frappe.db.table_exists("Payment Entry") or not frappe.db.table_exists("Payment Entry Reference"):
+		return
+
+	payment_entry_meta = frappe.get_meta("Payment Entry")
+	available_fields = {
+		fieldname
+		for fieldname in ("purchase_invoice", "sc_bill", "sc_work_order", "purchase_order")
+		if payment_entry_meta.has_field(fieldname)
+	}
+	if not available_fields:
+		return
+
+	rows = frappe.db.sql(
+		"""
+		SELECT DISTINCT pe.name
+		FROM `tabPayment Entry` pe
+		LEFT JOIN `tabPayment Entry Reference` ref
+			ON ref.parent = pe.name
+			AND ref.parenttype = 'Payment Entry'
+			AND ref.reference_doctype = 'Purchase Invoice'
+		WHERE pe.docstatus < 2
+			AND (
+				ref.reference_name IS NOT NULL
+				OR pe.custom_original_purchase_invoice IS NOT NULL
+				OR pe.retention_payable IS NOT NULL
+				OR pe.custom_retention_payable IS NOT NULL
+				OR pe.sc_bill IS NOT NULL
+				OR pe.custom_sc_bill IS NOT NULL
+			)
+		""",
+		as_dict=True,
+	)
+
+	updated = 0
+	for row in rows:
+		values = get_payment_entry_subcontract_link_values(row.name)
+		values = {fieldname: value for fieldname, value in values.items() if fieldname in available_fields and value}
+		if not values:
+			continue
+
+		current = frappe.db.get_value("Payment Entry", row.name, list(values), as_dict=True) or {}
+		changes = {
+			fieldname: value
+			for fieldname, value in values.items()
+			if current.get(fieldname) != value
+		}
+		if not changes:
+			continue
+
+		frappe.db.set_value("Payment Entry", row.name, changes, update_modified=False)
+		updated += 1
+
+	if updated:
+		frappe.db.commit()
+		frappe.clear_cache(doctype="Payment Entry")
+		print(f"Payment Entry subcontract links backfilled: {updated}")
+
+
+def get_payment_entry_subcontract_link_values(payment_entry):
+	if isinstance(payment_entry, str):
+		payment_entry = frappe.get_doc("Payment Entry", payment_entry)
+	values = frappe._dict()
+
+	for reference in payment_entry.get("references") or []:
+		if reference.reference_doctype == "Purchase Invoice" and reference.reference_name:
+			values.purchase_invoice = reference.reference_name
+			break
+
+	if not values.purchase_invoice and payment_entry.get("custom_original_purchase_invoice"):
+		values.purchase_invoice = payment_entry.custom_original_purchase_invoice
+
+	if not values.sc_bill:
+		for fieldname in ("sc_bill", "custom_sc_bill"):
+			if payment_entry.meta.has_field(fieldname) and payment_entry.get(fieldname):
+				values.sc_bill = payment_entry.get(fieldname)
+				break
+
+	if not values.sc_bill:
+		for fieldname in ("retention_payable", "custom_retention_payable"):
+			if payment_entry.meta.has_field(fieldname) and payment_entry.get(fieldname):
+				retention_values = frappe.db.get_value(
+					"Retention Payable",
+					payment_entry.get(fieldname),
+					["sc_bill", "purchase_invoice", "sc_work_order"],
+					as_dict=True,
+				)
+				if retention_values:
+					values.sc_bill = retention_values.sc_bill
+					values.purchase_invoice = values.purchase_invoice or retention_values.purchase_invoice
+					values.sc_work_order = retention_values.sc_work_order
+				break
+
+	if values.purchase_invoice and not values.sc_bill:
+		invoice_values = frappe.db.get_value(
+			"Purchase Invoice",
+			values.purchase_invoice,
+			["sc_bill", "sc_work_order", "purchase_order"],
+			as_dict=True,
+		)
+		if invoice_values:
+			values.sc_bill = invoice_values.sc_bill
+			values.sc_work_order = values.sc_work_order or invoice_values.sc_work_order
+			values.purchase_order = invoice_values.purchase_order
+
+	if values.sc_bill:
+		bill_values = frappe.db.get_value(
+			"SC Bill",
+			values.sc_bill,
+			["sc_work_order", "purchase_order", "purchase_invoice"],
+			as_dict=True,
+		)
+		if bill_values:
+			values.sc_work_order = values.sc_work_order or bill_values.sc_work_order
+			values.purchase_order = values.purchase_order or bill_values.purchase_order
+			values.purchase_invoice = values.purchase_invoice or bill_values.purchase_invoice
+
+	return values
 
 
 def ensure_retention_receivable_account():

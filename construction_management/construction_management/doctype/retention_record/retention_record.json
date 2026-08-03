@@ -1,255 +1,255 @@
 {
-  "actions": [],
-  "allow_rename": 0,
-  "autoname": "RET-.YYYY.-.####",
-  "creation": "2026-07-07 00:00:00.000000",
-  "doctype": "DocType",
-  "engine": "InnoDB",
-  "field_order": [
-    "details_tab",
-    "retention_amounts_section",
-    "retention_percent",
-    "gross_amount",
-    "retention_amount",
-    "amounts_column",
-    "released_amount",
-    "balance_amount",
-    "status",
-    "related_documents_section",
-    "project",
-    "customer",
-    "boq",
-    "sales_order",
-    "ra_bill",
-    "sales_invoice",
-    "retention_release_invoice",
-    "release_invoice_details_section",
-    "invoice_date",
-    "invoice_status",
-    "paid_amount",
-    "outstanding_amount",
-    "last_payment_entry",
-    "release_date",
-    "remarks"
-  ],
-  "fields": [
-    {
-      "fieldname": "details_tab",
-      "fieldtype": "Tab Break",
-      "label": "Details"
-    },
-    {
-      "fieldname": "retention_amounts_section",
-      "fieldtype": "Section Break",
-      "label": "Retention Details"
-    },
-    {
-      "fieldname": "project",
-      "fieldtype": "Link",
-      "in_list_view": 1,
-      "label": "Project",
-      "options": "Project",
-      "reqd": 1,
-      "search_index": 1
-    },
-    {
-      "fieldname": "customer",
-      "fieldtype": "Link",
-      "in_list_view": 1,
-      "label": "Customer",
-      "options": "Customer",
-      "reqd": 1
-    },
-    {
-      "fieldname": "boq",
-      "fieldtype": "Link",
-      "in_list_view": 1,
-      "label": "BOQ",
-      "options": "BOQ"
-    },
-    {
-      "fieldname": "sales_order",
-      "fieldtype": "Link",
-      "in_standard_filter": 1,
-      "label": "Sales Order",
-      "options": "Sales Order",
-      "read_only": 1,
-      "search_index": 1
-    },
-    {
-      "fieldname": "reference_column",
-      "fieldtype": "Column Break"
-    },
-    {
-      "fieldname": "ra_bill",
-      "fieldtype": "Link",
-      "in_list_view": 1,
-      "label": "RA Bill",
-      "options": "RA Bill",
-      "reqd": 1,
-      "search_index": 1,
-      "unique": 1
-    },
-    {
-      "fieldname": "sales_invoice",
-      "fieldtype": "Link",
-      "in_list_view": 1,
-      "label": "Original Sales Invoice",
-      "options": "Sales Invoice"
-    },
-    {
-      "fieldname": "retention_release_invoice",
-      "fieldtype": "Link",
-      "label": "Retention Release Sales Invoice",
-      "options": "Sales Invoice",
-      "read_only": 1
-    },
-    {
-      "fieldname": "invoice_date",
-      "fieldtype": "Date",
-      "label": "Invoice Date"
-    },
-    {
-      "default": "Draft",
-      "fieldname": "invoice_status",
-      "fieldtype": "Select",
-      "label": "Invoice Status",
-      "options": "Draft\nSubmitted\nCancelled",
-      "read_only": 1
-    },
-    {
-      "default": "0",
-      "fieldname": "paid_amount",
-      "fieldtype": "Currency",
-      "label": "Paid Amount",
-      "read_only": 1
-    },
-    {
-      "default": "0",
-      "fieldname": "outstanding_amount",
-      "fieldtype": "Currency",
-      "label": "Outstanding Amount",
-      "read_only": 1
-    },
-    {
-      "fieldname": "last_payment_entry",
-      "fieldtype": "Link",
-      "label": "Last Payment Entry",
-      "options": "Payment Entry",
-      "read_only": 1
-    },
-    {
-      "fieldname": "related_documents_section",
-      "fieldtype": "Section Break",
-      "label": "Related Documents"
-    },
-    {
-      "fieldname": "retention_percent",
-      "fieldtype": "Percent",
-      "label": "Retention %"
-    },
-    {
-      "fieldname": "gross_amount",
-      "fieldtype": "Currency",
-      "label": "Gross Amount"
-    },
-    {
-      "fieldname": "retention_amount",
-      "fieldtype": "Currency",
-      "in_list_view": 1,
-      "label": "Retention Amount"
-    },
-    {
-      "fieldname": "amounts_column",
-      "fieldtype": "Column Break"
-    },
-    {
-      "default": "0",
-      "fieldname": "released_amount",
-      "fieldtype": "Currency",
-      "in_list_view": 1,
-      "label": "Released Amount",
-      "read_only": 1
-    },
-    {
-      "fieldname": "balance_amount",
-      "fieldtype": "Currency",
-      "in_list_view": 1,
-      "label": "Balance Amount",
-      "read_only": 1
-    },
-    {
-      "fieldname": "release_invoice_details_section",
-      "fieldtype": "Section Break",
-      "label": "Release Invoice Details"
-    },
-    {
-      "default": "Held",
-      "fieldname": "status",
-      "fieldtype": "Select",
-      "in_list_view": 1,
-      "label": "Status",
-      "options": "Held\nPartially Released\nReleased\nCancelled"
-    },
-    {
-      "fieldname": "release_date",
-      "fieldtype": "Date",
-      "label": "Release Date"
-    },
-    {
-      "fieldname": "remarks",
-      "fieldtype": "Small Text",
-      "label": "Remarks"
-    }
-  ],
-  "links": [],
-  "modified": "2026-07-07 00:00:00.000000",
-  "modified_by": "Administrator",
-  "module": "Construction Management",
-  "name": "Retention Record",
-  "owner": "Administrator",
-  "permissions": [
-    {
-      "create": 1,
-      "delete": 1,
-      "email": 1,
-      "export": 1,
-      "print": 1,
-      "read": 1,
-      "report": 1,
-      "role": "System Manager",
-      "share": 1,
-      "write": 1
-    },
-    {
-      "create": 1,
-      "delete": 0,
-      "email": 1,
-      "export": 1,
-      "print": 1,
-      "read": 1,
-      "report": 1,
-      "role": "Construction Manager",
-      "share": 1,
-      "write": 1
-    },
-    {
-      "create": 1,
-      "delete": 0,
-      "email": 1,
-      "export": 1,
-      "print": 1,
-      "read": 1,
-      "report": 1,
-      "role": "Construction User",
-      "share": 1,
-      "write": 1
-    }
-  ],
-  "search_fields": "project,customer,boq,sales_order,ra_bill,sales_invoice,status",
-  "sort_field": "creation",
-  "sort_order": "DESC",
-  "states": [],
-  "title_field": "ra_bill",
-  "track_changes": 1
+ "actions": [],
+ "allow_rename": 0,
+ "autoname": "RET-.YYYY.-.####",
+ "creation": "2026-07-07 00:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "details_tab",
+  "retention_amounts_section",
+  "retention_percent",
+  "gross_amount",
+  "retention_amount",
+  "amounts_column",
+  "released_amount",
+  "balance_amount",
+  "status",
+  "related_documents_section",
+  "project",
+  "customer",
+  "boq",
+  "sales_order",
+  "ra_bill",
+  "sales_invoice",
+  "retention_release_invoice",
+  "release_invoice_details_section",
+  "invoice_date",
+  "invoice_status",
+  "paid_amount",
+  "outstanding_amount",
+  "last_payment_entry",
+  "release_date",
+  "remarks"
+ ],
+ "fields": [
+  {
+   "fieldname": "details_tab",
+   "fieldtype": "Tab Break",
+   "label": "Details"
+  },
+  {
+   "fieldname": "retention_amounts_section",
+   "fieldtype": "Section Break",
+   "label": "Retention Details"
+  },
+  {
+   "fieldname": "project",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Project",
+   "options": "Project",
+   "reqd": 1,
+   "search_index": 1
+  },
+  {
+   "fieldname": "customer",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Customer",
+   "options": "Customer",
+   "reqd": 1
+  },
+  {
+   "fieldname": "boq",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "BOQ",
+   "options": "BOQ"
+  },
+  {
+   "fieldname": "sales_order",
+   "fieldtype": "Link",
+   "in_standard_filter": 1,
+   "label": "Sales Order",
+   "options": "Sales Order",
+   "read_only": 1,
+   "search_index": 1
+  },
+  {
+   "fieldname": "reference_column",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "ra_bill",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "RA Bill",
+   "options": "RA Bill",
+   "reqd": 1,
+   "search_index": 1,
+   "unique": 1
+  },
+  {
+   "fieldname": "sales_invoice",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Original Sales Invoice",
+   "options": "Sales Invoice"
+  },
+  {
+   "fieldname": "retention_release_invoice",
+   "fieldtype": "Link",
+   "label": "Retention Release Sales Invoice",
+   "options": "Sales Invoice",
+   "read_only": 1
+  },
+  {
+   "fieldname": "invoice_date",
+   "fieldtype": "Date",
+   "label": "Invoice Date"
+  },
+  {
+   "default": "Draft",
+   "fieldname": "invoice_status",
+   "fieldtype": "Select",
+   "label": "Invoice Status",
+   "options": "Draft\nSubmitted\nCancelled",
+   "read_only": 1
+  },
+  {
+   "default": "0",
+   "fieldname": "paid_amount",
+   "fieldtype": "Currency",
+   "label": "Paid Amount",
+   "read_only": 1
+  },
+  {
+   "default": "0",
+   "fieldname": "outstanding_amount",
+   "fieldtype": "Currency",
+   "label": "Outstanding Amount",
+   "read_only": 1
+  },
+  {
+   "fieldname": "last_payment_entry",
+   "fieldtype": "Link",
+   "label": "Last Payment Entry",
+   "options": "Payment Entry",
+   "read_only": 1
+  },
+  {
+   "fieldname": "related_documents_section",
+   "fieldtype": "Section Break",
+   "label": "Related Documents"
+  },
+  {
+   "fieldname": "retention_percent",
+   "fieldtype": "Percent",
+   "label": "Retention %"
+  },
+  {
+   "fieldname": "gross_amount",
+   "fieldtype": "Currency",
+   "label": "Gross Amount"
+  },
+  {
+   "fieldname": "retention_amount",
+   "fieldtype": "Currency",
+   "in_list_view": 1,
+   "label": "Retention Amount"
+  },
+  {
+   "fieldname": "amounts_column",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "0",
+   "fieldname": "released_amount",
+   "fieldtype": "Currency",
+   "in_list_view": 1,
+   "label": "Released Amount",
+   "read_only": 1
+  },
+  {
+   "fieldname": "balance_amount",
+   "fieldtype": "Currency",
+   "in_list_view": 1,
+   "label": "Balance Amount",
+   "read_only": 1
+  },
+  {
+   "fieldname": "release_invoice_details_section",
+   "fieldtype": "Section Break",
+   "label": "Release Invoice Details"
+  },
+  {
+   "default": "Held",
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "Status",
+   "options": "Held\nPartially Released\nReleased\nCancelled"
+  },
+  {
+   "fieldname": "release_date",
+   "fieldtype": "Date",
+   "label": "Release Date"
+  },
+  {
+   "fieldname": "remarks",
+   "fieldtype": "Small Text",
+   "label": "Remarks"
+  }
+ ],
+ "links": [],
+ "modified": "2026-07-07 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Construction Management",
+ "name": "Retention Record",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "delete": 0,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Construction Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "delete": 0,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Construction User",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "search_fields": "project,customer,boq,sales_order,ra_bill,sales_invoice,status",
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": [],
+ "title_field": "ra_bill",
+ "track_changes": 1
 }

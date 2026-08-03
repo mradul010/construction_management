@@ -65,6 +65,18 @@
    "link_type": "DocType",
    "show_arrow": 0,
    "type": "Link"
+  },
+  {
+   "child": 0,
+   "collapsible": 1,
+   "icon": "file-chart-column-increasing",
+   "indent": 0,
+   "keep_closed": 0,
+   "label": "Retention Payable",
+   "link_to": "Retention Payable",
+   "link_type": "DocType",
+   "show_arrow": 0,
+   "type": "Link"
   }
  ],
  "modified": "2026-07-08 12:45:29.784752",
@@ -73,5 +85,5 @@
  "name": "Construction Management",
  "owner": "Administrator",
  "standard": 1,
- "title": "Construction Management"
+ "title": "Construction"
 }

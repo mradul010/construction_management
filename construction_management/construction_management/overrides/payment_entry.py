@@ -18,6 +18,7 @@ from construction_management.construction_management.utils.accounting import (
 
 class ConstructionPaymentEntry(PaymentEntry):
 	def validate(self):
+		self.sync_subcontract_connection_fields()
 		apply_construction_accounts_to_payment_entry(self)
 		apply_ra_bill_cost_center_to_payment_entry(self)
 
@@ -94,9 +95,12 @@ class ConstructionPaymentEntry(PaymentEntry):
 		if self.meta.has_field("custom_is_retention_payment") and self.get("custom_is_retention_payment"):
 			return True
 
-		return bool(self.get_retention_record_name())
+		return bool(self.get_retention_record_name() or self.get_retention_payable_name())
 
 	def validate_retention_payment(self, for_submit=False):
+		if self.get_retention_payable_name():
+			return self.validate_retention_payable_payment(for_submit=for_submit)
+
 		record_name = self.get_retention_record_name()
 		if not record_name:
 			frappe.throw(_("Retention Record is required for a retention Payment Entry."))
@@ -167,6 +171,94 @@ class ConstructionPaymentEntry(PaymentEntry):
 
 		return None
 
+	def get_retention_payable_name(self):
+		for fieldname in ("custom_retention_payable", "retention_payable"):
+			if self.meta.has_field(fieldname) and self.get(fieldname):
+				return self.get(fieldname)
+
+		return None
+
+	def validate_retention_payable_payment(self, for_submit=False):
+		record_name = self.get_retention_payable_name()
+		if not record_name:
+			frappe.throw(_("Retention Payable is required for a retention Payment Entry."))
+
+		record = frappe.get_doc("Retention Payable", record_name)
+		if record.docstatus == 2 or record.status == "Cancelled":
+			frappe.throw(_("Cannot release retention against Cancelled Retention Payable {0}.").format(record.name))
+
+		if getattr(record.meta, "is_submittable", False) and record.docstatus != 1:
+			frappe.throw(_("Retention Payable {0} must be submitted before releasing retention.").format(record.name))
+
+		if self.payment_type != "Pay":
+			frappe.throw(_("Retention Payable Payment Entry must be a Pay entry."))
+
+		if self.party_type != "Supplier":
+			frappe.throw(_("Retention Payable Payment Entry must use Party Type Supplier."))
+
+		if self.party != record.supplier:
+			frappe.throw(_("Retention Payable Payment Entry Supplier must match Retention Payable {0}.").format(record.name))
+
+		if self.company != record.company:
+			frappe.throw(_("Retention Payable Payment Entry Company must match Retention Payable company {0}.").format(record.company))
+
+		retention_account = get_construction_account(
+			record.company,
+			"subcontractor_retention_payable",
+			project=record.project,
+			transaction=self,
+		)
+		if self.paid_to != retention_account:
+			frappe.throw(
+				_("Paid To must be the Retention Payable account {0}.").format(
+					frappe.bold(retention_account)
+				)
+			)
+
+		if self.get("deductions"):
+			frappe.throw(_("Retention payable Payment Entry cannot have deduction rows."))
+
+		release_amount = flt(self.paid_amount)
+		if release_amount <= 0:
+			frappe.throw(_("Retention release amount must be greater than zero."))
+
+		remaining_amount = self.get_remaining_retention_payable_amount(record)
+		if release_amount > remaining_amount + 0.0001:
+			frappe.throw(
+				_("Retention release amount {0} cannot exceed remaining retention {1} for {2}.").format(
+					release_amount,
+					remaining_amount,
+					record.name,
+				)
+			)
+
+		if self.paid_from:
+			if self.paid_from == self.paid_to:
+				frappe.throw(_("Paid From and Paid To cannot be the same account."))
+		elif for_submit:
+			frappe.throw(_("Paid From is required before submitting a retention payable Payment Entry."))
+
+		self.set_retention_payable_marker_values(record, retention_account, release_amount)
+
+	def get_remaining_retention_payable_amount(self, record):
+		submitted_amount = 0
+		seen_payment_entries = set()
+		meta = frappe.get_meta("Payment Entry")
+		for fieldname in ("custom_retention_payable", "retention_payable"):
+			if not meta.has_field(fieldname):
+				continue
+
+			filters = {"docstatus": 1, fieldname: record.name}
+
+			for row in frappe.get_all("Payment Entry", filters=filters, fields=["name", "paid_amount"]):
+				if row.name == self.name or row.name in seen_payment_entries:
+					continue
+
+				seen_payment_entries.add(row.name)
+				submitted_amount += flt(row.paid_amount)
+
+		return max(0, flt(record.retention_amount) - submitted_amount)
+
 	def get_retention_record_company(self, record):
 		for doctype, fieldname in (("Sales Invoice", "sales_invoice"), ("RA Bill", "ra_bill")):
 			document_name = record.get(fieldname)
@@ -229,6 +321,30 @@ class ConstructionPaymentEntry(PaymentEntry):
 		self.set_if_meta_has_field("custom_retention_receivable_account", retention_account)
 		self.set_if_meta_has_field("retention_record", record.name)
 
+	def set_retention_payable_marker_values(self, record, retention_account, release_amount):
+		self.set_if_meta_has_field("custom_is_retention_payment", 1)
+		self.set_if_meta_has_field("retention_payable", record.name)
+		self.set_if_meta_has_field("custom_retention_payable", record.name)
+		self.set_if_meta_has_field("purchase_invoice", record.purchase_invoice)
+		self.set_if_meta_has_field("sc_bill", record.sc_bill)
+		self.set_if_meta_has_field("sc_work_order", record.sc_work_order)
+		self.set_if_meta_has_field("custom_original_purchase_invoice", record.purchase_invoice)
+		self.set_if_meta_has_field("custom_sc_bill", record.sc_bill)
+		self.set_if_meta_has_field("custom_retention_release_amount", release_amount)
+		self.set_if_meta_has_field("custom_retention_payable_account", retention_account)
+		if record.sc_bill and self.meta.has_field("purchase_order"):
+			self.purchase_order = frappe.db.get_value("SC Bill", record.sc_bill, "purchase_order")
+
 	def set_if_meta_has_field(self, fieldname, value):
 		if self.meta.has_field(fieldname):
 			self.set(fieldname, value)
+
+	def sync_subcontract_connection_fields(self):
+		from construction_management.construction_management.setup import (
+			get_payment_entry_subcontract_link_values,
+		)
+
+		values = get_payment_entry_subcontract_link_values(self)
+		for fieldname, value in values.items():
+			if value and self.meta.has_field(fieldname):
+				self.set(fieldname, value)

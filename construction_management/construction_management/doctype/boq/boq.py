@@ -18,6 +18,7 @@ class BOQ(Document):
 	def validate(self):
 		self._set_revision_defaults()
 		self._sync_and_validate_sales_order()
+		self._validate_design_references()
 		self._validate_revision_edit_allowed()
 		self._ensure_component_keys()
 		self._fill_parent_categories()
@@ -77,6 +78,13 @@ class BOQ(Document):
 			frappe.throw(_("BOQ {0} must match Sales Order {0}.").format(label))
 		if not boq_value:
 			self.set(fieldname, sales_order_value)
+
+	def _validate_design_references(self):
+		from construction_management.design_management.design_management import (
+			validate_design_references,
+		)
+
+		validate_design_references(self)
 
 	def _set_revision_defaults(self):
 		if self.revision_no is None:

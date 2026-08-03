@@ -1,0 +1,63 @@
+{
+ "actions": [],
+ "allow_rename": 0,
+ "creation": "2026-07-24 00:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "comment_by",
+  "comment_on",
+  "parent_comment",
+  "comment",
+  "mentioned_users",
+  "resolved"
+ ],
+ "fields": [
+  {
+   "fieldname": "comment_by",
+   "fieldtype": "Link",
+   "label": "Comment By",
+   "options": "User",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "comment_on",
+   "fieldtype": "Datetime",
+   "label": "Comment On",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "parent_comment",
+   "fieldtype": "Data",
+   "label": "Parent Comment"
+  },
+  {
+   "fieldname": "comment",
+   "fieldtype": "Text Editor",
+   "label": "Comment",
+   "reqd": 1
+  },
+  {
+   "fieldname": "mentioned_users",
+   "fieldtype": "Small Text",
+   "label": "Mentioned Users"
+  },
+  {
+   "fieldname": "resolved",
+   "fieldtype": "Check",
+   "label": "Resolved"
+  }
+ ],
+ "istable": 1,
+ "links": [],
+ "modified": "2026-07-24 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Construction Management",
+ "name": "Drawing Comment",
+ "owner": "Administrator",
+ "permissions": [],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "track_changes": 1
+}
