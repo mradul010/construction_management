@@ -334,16 +334,17 @@ doc_events = {
 override_doctype_class = {
 	"Sales Invoice": "construction_management.construction_management.overrides.sales_invoice.ConstructionSalesInvoice",
 	"Purchase Invoice": "construction_management.construction_management.overrides.purchase_invoice.ConstructionPurchaseInvoice",
-	"Payment Entry": "construction_management.construction_management.overrides.payment_entry.ConstructionPaymentEntry",
 }
 
 # Extend DocType Class
 # ------------------------------
 #
 # Specify custom mixins to extend the standard doctype controller.
-# extend_doctype_class = {
-# 	"Task": "construction_management.custom.task.CustomTaskMixin"
-# }
+extend_doctype_class = {
+	"Payment Entry": [
+		"construction_management.construction_management.overrides.payment_entry.ConstructionPaymentEntryMixin"
+	],
+}
 
 # Overriding Methods
 # ------------------------------

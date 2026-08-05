@@ -2,7 +2,6 @@ import frappe
 from frappe import _
 from frappe.utils import flt
 
-from erpnext.accounts.doctype.payment_entry.payment_entry import PaymentEntry
 from erpnext.accounts.utils import get_account_currency
 
 from construction_management.construction_management.accounting_dimensions import (
@@ -16,7 +15,7 @@ from construction_management.construction_management.utils.accounting import (
 )
 
 
-class ConstructionPaymentEntry(PaymentEntry):
+class ConstructionPaymentEntryMixin:
 	def validate(self):
 		self.sync_subcontract_connection_fields()
 		apply_construction_accounts_to_payment_entry(self)

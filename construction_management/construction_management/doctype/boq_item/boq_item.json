@@ -229,7 +229,7 @@
  "owner": "Administrator",
  "permissions": [],
  "row_format": "Dynamic",
- "search_fields": "item_name,name",
+ "search_fields": "item_name",
  "show_title_field_in_link": 1,
  "sort_field": "creation",
  "sort_order": "DESC",
