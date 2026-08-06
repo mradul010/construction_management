@@ -11,8 +11,6 @@ from construction_management.construction_management.utils.accounting import (
 
 
 RETENTION_ACCOUNT_NAME = "Retention Receivable"
-RETENTION_COMPANY = "Qatra Building Contracting"
-RETENTION_PARENT_ACCOUNT = "Current Assets - QBC"
 RETENTION_PARENT_ACCOUNT_FALLBACK = "Current Assets"
 AMOUNT_TOLERANCE = 0.0001
 
@@ -103,9 +101,6 @@ def ensure_retention_receivable_account():
 
 
 def _get_retention_parent_account(company=None):
-	if frappe.db.exists("Account", RETENTION_PARENT_ACCOUNT):
-		return RETENTION_PARENT_ACCOUNT
-
 	filters = {
 		"account_name": RETENTION_PARENT_ACCOUNT_FALLBACK,
 		"is_group": 1,
@@ -118,7 +113,12 @@ def _get_retention_parent_account(company=None):
 	if parent_account:
 		return parent_account
 
-	frappe.throw(_("Parent Account {0} does not exist.").format(RETENTION_PARENT_ACCOUNT))
+	frappe.throw(
+		_("Please create a group Asset account named {0} for company {1}.").format(
+			frappe.bold(RETENTION_PARENT_ACCOUNT_FALLBACK),
+			frappe.bold(company),
+		)
+	)
 
 
 def _get_payment_entry_retention_context(payment_entry):

@@ -2,6 +2,7 @@ import frappe
 from frappe import _
 from frappe.utils import flt
 
+from erpnext.accounts.party import get_party_account
 from erpnext.accounts.utils import get_account_currency
 
 from construction_management.construction_management.accounting_dimensions import (
@@ -18,8 +19,11 @@ from construction_management.construction_management.utils.accounting import (
 class ConstructionPaymentEntryMixin:
 	def validate(self):
 		self.sync_subcontract_connection_fields()
+		self.validate_project_company()
 		apply_construction_accounts_to_payment_entry(self)
 		apply_ra_bill_cost_center_to_payment_entry(self)
+		self.validate_payment_accounts_exist()
+		self.validate_advance_party_account_setup()
 
 		if self.is_retention_payment() and self.docstatus == 0 and getattr(self, "_action", None) != "submit":
 			self.setup_party_account_field()
@@ -30,6 +34,123 @@ class ConstructionPaymentEntryMixin:
 		super().validate()
 		if self.is_retention_payment():
 			self.validate_retention_payment(for_submit=getattr(self, "_action", None) == "submit")
+
+	def validate_project_company(self):
+		if not self.project or not self.company:
+			return
+
+		if not frappe.get_meta("Project").has_field("company"):
+			return
+
+		project_company = frappe.db.get_value("Project", self.project, "company")
+		if project_company and project_company != self.company:
+			frappe.throw(
+				_("Payment Entry Company must match Project {0} Company {1}. Current Company is {2}.").format(
+					frappe.bold(self.project),
+					frappe.bold(project_company),
+					frappe.bold(self.company),
+				)
+			)
+
+	def validate_payment_accounts_exist(self):
+		for fieldname in ("paid_from", "paid_to"):
+			account = self.get(fieldname)
+			if account:
+				self.validate_payment_account(account, fieldname)
+
+		for row in self.get("deductions") or []:
+			if row.get("account"):
+				self.validate_payment_account(row.account, "deductions")
+
+		for row in self.get("taxes") or []:
+			if row.get("account_head"):
+				self.validate_payment_account(row.account_head, "taxes")
+
+	def validate_payment_account(self, account, fieldname):
+		account_values = frappe.db.get_value(
+			"Account",
+			account,
+			["company", "is_group", "disabled", "root_type", "account_type"],
+			as_dict=True,
+		)
+		if not account_values:
+			frappe.throw(
+				_("Payment Entry account {0} in {1} does not exist. Select an account from the current Project/Company.").format(
+					frappe.bold(account),
+					frappe.bold(fieldname),
+				)
+			)
+
+		if account_values.company != self.company:
+			frappe.throw(
+				_("Payment Entry account {0} belongs to Company {1}, but this Payment Entry is for Company {2}.").format(
+					frappe.bold(account),
+					frappe.bold(account_values.company),
+					frappe.bold(self.company),
+				)
+			)
+
+		if account_values.is_group or account_values.disabled:
+			frappe.throw(
+				_("Payment Entry account {0} must be an active ledger account.").format(
+					frappe.bold(account)
+				)
+			)
+
+		if fieldname in ("paid_from", "paid_to") and not account_values.root_type:
+			frappe.throw(
+				_("Payment Entry account {0} is missing Root Type. Please repair the Account master.").format(
+					frappe.bold(account)
+				)
+			)
+
+	def validate_advance_party_account_setup(self):
+		if (
+			self.docstatus > 0
+			or self.payment_type == "Internal Transfer"
+			or self.party_type not in ("Customer", "Supplier")
+			or not self.party
+			or not self.company
+			or not self.references
+		):
+			return
+
+		allowed_reference_types = {"Sales Order"} if self.party_type == "Customer" else {"Purchase Order"}
+		reference_types = {row.reference_doctype for row in self.references if row.reference_doctype}
+		if reference_types - allowed_reference_types:
+			return
+
+		if not frappe.db.get_value(
+			"Company", self.company, "book_advance_payments_in_separate_party_account"
+		):
+			return
+
+		accounts = get_party_account(self.party_type, self.party, self.company, include_advance=True)
+		party_account = accounts[0] if isinstance(accounts, list) and accounts else accounts
+		advance_account = accounts[1] if isinstance(accounts, list) and len(accounts) > 1 else None
+
+		if not advance_account:
+			return
+
+		if party_account and frappe.db.exists("Account", party_account):
+			return
+
+		company_field = (
+			"default_receivable_account" if self.party_type == "Customer" else "default_payable_account"
+		)
+		party_field = "Receivable" if self.party_type == "Customer" else "Payable"
+		frappe.throw(
+			_(
+				"Cannot save this advance Payment Entry because {0} has no valid {1} account for Company {2}. "
+				"Set {3} on the {0}, its group, or set {4} in Company {2}."
+			).format(
+				frappe.bold(self.party),
+				frappe.bold(party_field),
+				frappe.bold(self.company),
+				frappe.bold(party_field),
+				frappe.bold(frappe.get_meta("Company").get_label(company_field) or company_field),
+			)
+		)
 
 	def build_gl_map(self):
 		apply_party_to_payment_entry(self)

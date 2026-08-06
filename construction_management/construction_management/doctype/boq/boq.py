@@ -220,7 +220,10 @@ class BOQ(Document):
 		return qty * flt(row.unit_cost)
 
 	def _format_currency(self, value):
-		return fmt_money(flt(value), currency=self.currency or "AED")
+		return fmt_money(
+			flt(value),
+			currency=self.currency or frappe.defaults.get_global_default("currency"),
+		)
 
 	def _calculate_totals(self):
 		grand_total = 0

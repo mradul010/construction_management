@@ -493,6 +493,7 @@ class RABill(Document):
 			self.customer,
 			company,
 			invoice_currency,
+			project=self.project,
 		)
 		party_account_currency = (
 			frappe.db.get_value("Account", receivable_account, "account_currency")
@@ -604,12 +605,13 @@ class RABill(Document):
 			project=self.project,
 			transaction=self,
 		)
-		invoice_currency = self.currency or company_currency or "AED"
+		invoice_currency = self.currency or company_currency or frappe.defaults.get_global_default("currency")
 		conversion_rate = 1.0
 		receivable_account = get_ra_bill_sales_invoice_receivable_account(
 			self.customer,
 			company,
 			invoice_currency,
+			project=self.project,
 		)
 		source_sales_order = get_ra_bill_sales_order(self)
 		project_cost_center = get_ra_bill_project_cost_center(

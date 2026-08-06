@@ -855,7 +855,7 @@ frappe.ui.form.on("RA Bill", {
 			frm.add_custom_button(
 				"Create Sales Invoice",
 				function () {
-					const currency = frm.doc.currency || "AED";
+					const currency = frm.doc.currency || frappe.defaults.get_default("currency") || "";
 					const gross = formatNumber(frm.doc.gross_amount);
 					const retention = formatNumber(frm.doc.retention_amount);
 					const net = formatNumber(frm.doc.net_payable);

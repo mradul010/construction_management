@@ -9,6 +9,8 @@ def after_install():
 	ensure_design_management_setup()
 	ensure_company_construction_accounting_fields()
 	ensure_project_current_boq_field()
+	ensure_project_construction_accounting_fields()
+	backfill_project_construction_accounting_fields()
 	ensure_sales_invoice_ra_bill_field()
 	ensure_sales_invoice_retention_records_field()
 	ensure_sales_invoice_payment_breakdown_field()
@@ -28,6 +30,8 @@ def after_migrate():
 	ensure_design_management_setup()
 	ensure_company_construction_accounting_fields()
 	ensure_project_current_boq_field()
+	ensure_project_construction_accounting_fields()
+	backfill_project_construction_accounting_fields()
 	ensure_sales_invoice_ra_bill_field()
 	ensure_sales_invoice_retention_records_field()
 	ensure_sales_invoice_payment_breakdown_field()
@@ -499,6 +503,169 @@ def ensure_company_construction_accounting_fields():
 	if created_fields:
 		frappe.db.commit()
 		print(f"Company construction accounting fields created: {', '.join(created_fields)}")
+
+
+def ensure_project_construction_accounting_fields():
+	fields = [
+		{
+			"fieldname": "construction_accounting_settings_section",
+			"label": "Construction Accounting Settings",
+			"fieldtype": "Section Break",
+			"insert_after": "current_boq",
+			"collapsible": 1,
+		},
+		{
+			"fieldname": "default_ra_bill_receivable_account",
+			"label": "RA Bill Receivable Account",
+			"fieldtype": "Link",
+			"options": "Account",
+			"insert_after": "construction_accounting_settings_section",
+		},
+		{
+			"fieldname": "default_ra_bill_income_account",
+			"label": "RA Bill Income Account",
+			"fieldtype": "Link",
+			"options": "Account",
+			"insert_after": "default_ra_bill_receivable_account",
+		},
+		{
+			"fieldname": "default_retention_receivable_account",
+			"label": "Retention Receivable Account",
+			"fieldtype": "Link",
+			"options": "Account",
+			"insert_after": "default_ra_bill_income_account",
+		},
+		{
+			"fieldname": "default_customer_advance_account",
+			"label": "Customer Advance Account",
+			"fieldtype": "Link",
+			"options": "Account",
+			"insert_after": "default_retention_receivable_account",
+		},
+		{
+			"fieldname": "default_advance_recovery_account",
+			"label": "Advance Recovery Account",
+			"fieldtype": "Link",
+			"options": "Account",
+			"insert_after": "default_customer_advance_account",
+		},
+		{
+			"fieldname": "default_construction_receipt_account",
+			"label": "Construction Receipt Account",
+			"fieldtype": "Link",
+			"options": "Account",
+			"insert_after": "default_advance_recovery_account",
+		},
+		{
+			"fieldname": "subcontract_accounting_column",
+			"fieldtype": "Column Break",
+			"insert_after": "default_construction_receipt_account",
+		},
+		{
+			"fieldname": "default_subcontractor_payable_account",
+			"label": "Subcontractor Payable Account",
+			"fieldtype": "Link",
+			"options": "Account",
+			"insert_after": "subcontract_accounting_column",
+		},
+		{
+			"fieldname": "default_subcontractor_retention_payable_account",
+			"label": "Subcontractor Retention Payable Account",
+			"fieldtype": "Link",
+			"options": "Account",
+			"insert_after": "default_subcontractor_payable_account",
+		},
+		{
+			"fieldname": "default_subcontractor_advance_account",
+			"label": "Subcontractor Advance Account",
+			"fieldtype": "Link",
+			"options": "Account",
+			"insert_after": "default_subcontractor_retention_payable_account",
+		},
+		{
+			"fieldname": "default_subcontract_expense_account",
+			"label": "Subcontract Expense Account",
+			"fieldtype": "Link",
+			"options": "Account",
+			"insert_after": "default_subcontractor_advance_account",
+		},
+	]
+
+	if not frappe.get_meta("Project").has_field("current_boq"):
+		fields[0]["insert_after"] = "project_name"
+
+	created_fields = []
+	for field in fields:
+		fieldname = field["fieldname"]
+		field.update(
+			{
+				"doctype": "Custom Field",
+				"dt": "Project",
+				"module": "Construction Management",
+			}
+		)
+		existing_name = f"Project-{fieldname}"
+		if frappe.db.exists("Custom Field", existing_name):
+			doc = frappe.get_doc("Custom Field", existing_name)
+			changed = False
+			for key, value in field.items():
+				if doc.get(key) != value:
+					doc.set(key, value)
+					changed = True
+			if changed:
+				doc.save(ignore_permissions=True)
+			continue
+		if frappe.get_meta("Project").has_field(fieldname):
+			continue
+
+		frappe.get_doc(field).insert(ignore_permissions=True)
+		created_fields.append(fieldname)
+
+	frappe.clear_cache(doctype="Project")
+	if created_fields:
+		frappe.db.commit()
+		print(f"Project construction accounting fields created: {', '.join(created_fields)}")
+
+
+def backfill_project_construction_accounting_fields():
+	project_meta = frappe.get_meta("Project")
+	fieldnames = [
+		"default_ra_bill_receivable_account",
+		"default_ra_bill_income_account",
+		"default_retention_receivable_account",
+		"default_customer_advance_account",
+		"default_advance_recovery_account",
+		"default_construction_receipt_account",
+		"default_subcontractor_payable_account",
+		"default_subcontractor_retention_payable_account",
+		"default_subcontractor_advance_account",
+		"default_subcontract_expense_account",
+	]
+	fieldnames = [fieldname for fieldname in fieldnames if project_meta.has_field(fieldname)]
+	if not fieldnames or not project_meta.has_field("company"):
+		return
+
+	company_meta = frappe.get_meta("Company")
+	fieldnames = [fieldname for fieldname in fieldnames if company_meta.has_field(fieldname)]
+	if not fieldnames:
+		return
+
+	updated = 0
+	for project in frappe.get_all("Project", filters={"company": ["is", "set"]}, fields=["name", "company"]):
+		company_values = frappe.db.get_value("Company", project.company, fieldnames, as_dict=True) or {}
+		project_values = frappe.db.get_value("Project", project.name, fieldnames, as_dict=True) or {}
+		values = {
+			fieldname: company_values.get(fieldname)
+			for fieldname in fieldnames
+			if company_values.get(fieldname) and not project_values.get(fieldname)
+		}
+		if values:
+			frappe.db.set_value("Project", project.name, values, update_modified=False)
+			updated += 1
+
+	if updated:
+		frappe.db.commit()
+		print(f"Project construction accounting fields backfilled for {updated} project(s)")
 
 
 def ensure_sales_invoice_ra_bill_field():
@@ -1196,7 +1363,7 @@ def backfill_boq_revision_fields():
 	Idempotently backfill revision metadata and stable item lineage.
 
 	Run manually if needed:
-	bench --site Qatra.local execute construction_management.construction_management.setup.backfill_boq_revision_fields
+	bench --site <site-name> execute construction_management.construction_management.setup.backfill_boq_revision_fields
 	"""
 	frappe.clear_cache()
 	if not _table_exists("BOQ"):
@@ -1357,7 +1524,7 @@ def _backfill_project_current_boq():
 			)
 
 
-def get_or_create_ra_bill_receivable_account(company, currency):
+def get_or_create_ra_bill_receivable_account(company, currency, project=None):
 	"""
 	Return a receivable account whose currency matches the RA Bill invoice currency.
 	ERPNext requires Sales Invoice debit_to currency to match document currency.
@@ -1366,7 +1533,7 @@ def get_or_create_ra_bill_receivable_account(company, currency):
 		get_or_create_ra_bill_receivable_account as get_account,
 	)
 
-	return get_account(company, currency)
+	return get_account(company, currency, project=project)
 
 
 def ensure_ra_bill_items():

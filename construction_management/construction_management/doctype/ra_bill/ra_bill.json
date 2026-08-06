@@ -191,7 +191,6 @@
    "reqd": 1
   },
   {
-   "default": "AED",
    "fieldname": "currency",
    "fieldtype": "Link",
    "label": "Currency",

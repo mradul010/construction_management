@@ -918,7 +918,7 @@ def make_boq_from_drawing(source_name, target_doc=None):
 	def postprocess(source, target):
 		target.project = source.project
 		target.company = source.company
-		target.currency = frappe.db.get_value("Company", source.company, "default_currency") or target.get("currency") or "AED"
+		target.currency = frappe.db.get_value("Company", source.company, "default_currency") or target.get("currency")
 		target.status = "Draft"
 		_set_if_present(
 			target,
@@ -940,7 +940,7 @@ def make_boq_from_revision(source_name, target_doc=None):
 	def postprocess(source, target):
 		target.project = source.project
 		target.company = source.company
-		target.currency = frappe.db.get_value("Company", source.company, "default_currency") or target.get("currency") or "AED"
+		target.currency = frappe.db.get_value("Company", source.company, "default_currency") or target.get("currency")
 		target.status = "Draft"
 		_set_if_present(
 			target,

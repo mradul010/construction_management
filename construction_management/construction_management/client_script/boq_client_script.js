@@ -1466,7 +1466,7 @@ frappe.ui.form.on("BOQ", {
 			}
 
 			const items = frm.doc.items || [];
-			const CUR = frm.doc.currency || "AED";
+			const CUR = frm.doc.currency || frappe.defaults.get_default("currency") || "";
 			const isDraft = frm.boq_is_draft();
 
 			// Empty state — no items and no registered (pending) categories

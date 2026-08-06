@@ -25,7 +25,6 @@
    "label": "Default Settings"
   },
   {
-   "default": "AED",
    "fieldname": "default_currency",
    "fieldtype": "Link",
    "label": "Default Currency",

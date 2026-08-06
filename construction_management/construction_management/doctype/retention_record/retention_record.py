@@ -154,7 +154,7 @@ class RetentionRecord(Document):
 		currency = (
 			getattr(ra_bill_doc, "currency", None)
 			or company_currency
-			or "AED"
+			or frappe.defaults.get_global_default("currency")
 		)
 		remarks = f"Retention Release against RA Bill {self.ra_bill}"
 
@@ -602,7 +602,7 @@ def _get_retention_invoice_currency(records, company):
 
 	return next(iter(currencies), None) or frappe.get_cached_value(
 		"Company", company, "default_currency"
-	) or "AED"
+	) or frappe.defaults.get_global_default("currency")
 
 
 def _get_retention_invoice_item_description(record):
