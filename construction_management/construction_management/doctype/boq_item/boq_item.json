@@ -161,9 +161,8 @@
   },
   {
    "fieldname": "previous_boq_item",
-   "fieldtype": "Link",
+   "fieldtype": "Data",
    "label": "Previous BOQ Item",
-   "options": "BOQ Item",
    "read_only": 1
   },
   {

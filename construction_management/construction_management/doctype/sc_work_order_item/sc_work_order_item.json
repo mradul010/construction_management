@@ -31,10 +31,9 @@
  "fields": [
   {
    "fieldname": "boq_item",
-   "fieldtype": "Link",
+   "fieldtype": "Data",
    "in_list_view": 1,
-   "label": "BOQ Item",
-   "options": "BOQ Item"
+   "label": "BOQ Item"
   },
   {
    "fieldname": "boq_item_key",

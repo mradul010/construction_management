@@ -74,10 +74,9 @@
   },
   {
    "fieldname": "boq_item",
-   "fieldtype": "Link",
+   "fieldtype": "Data",
    "in_list_view": 1,
    "label": "BOQ Item",
-   "options": "BOQ Item",
    "reqd": 1
   },
   {
