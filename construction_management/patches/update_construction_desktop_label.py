@@ -5,6 +5,11 @@ import frappe
 
 WORKSPACE_NAME = "Construction Management"
 DESKTOP_LABEL = "Construction"
+APP_NAME = "construction_management"
+CANONICAL_DESKTOP_ICON = "Construction"
+LEGACY_DESKTOP_ICON = "Construction Management"
+DESKTOP_LINK = "/app/construction-management"
+LOGO_URL = "/assets/construction_management/techsolvo_logo.jpeg"
 
 
 def execute():
@@ -44,6 +49,77 @@ def update_workspace_sidebar_label():
 
 
 def update_desktop_icon_label():
-	if not frappe.db.exists("Desktop Icon", WORKSPACE_NAME):
+	canonical_name = get_canonical_desktop_icon_name()
+	if not canonical_name:
+		canonical_name = create_or_rename_canonical_desktop_icon()
+
+	ensure_canonical_desktop_icon(canonical_name)
+	hide_legacy_desktop_icon(canonical_name)
+
+
+def get_canonical_desktop_icon_name():
+	if frappe.db.exists("Desktop Icon", CANONICAL_DESKTOP_ICON):
+		return CANONICAL_DESKTOP_ICON
+
+	return frappe.db.exists("Desktop Icon", {"label": DESKTOP_LABEL})
+
+
+def create_or_rename_canonical_desktop_icon():
+	if frappe.db.exists("Desktop Icon", LEGACY_DESKTOP_ICON):
+		frappe.rename_doc(
+			"Desktop Icon",
+			LEGACY_DESKTOP_ICON,
+			CANONICAL_DESKTOP_ICON,
+			force=True,
+			ignore_permissions=True,
+		)
+		return CANONICAL_DESKTOP_ICON
+
+	doc = frappe.new_doc("Desktop Icon")
+	doc.name = CANONICAL_DESKTOP_ICON
+	doc.insert(ignore_permissions=True)
+	return doc.name
+
+
+def ensure_canonical_desktop_icon(icon_name):
+	icon = frappe.get_doc("Desktop Icon", icon_name)
+	icon.update(
+		{
+			"label": DESKTOP_LABEL,
+			"app": APP_NAME,
+			"icon_type": "App",
+			"link_type": "External",
+			"link": DESKTOP_LINK,
+			"link_to": None,
+			"logo_url": LOGO_URL,
+			"hidden": 0,
+			"standard": 1,
+			"parent_icon": "",
+		}
+	)
+	icon.save(ignore_permissions=True)
+
+
+def hide_legacy_desktop_icon(canonical_name):
+	if not frappe.db.exists("Desktop Icon", LEGACY_DESKTOP_ICON):
 		return
-	frappe.db.set_value("Desktop Icon", WORKSPACE_NAME, "label", DESKTOP_LABEL, update_modified=False)
+	if LEGACY_DESKTOP_ICON == canonical_name:
+		return
+
+	frappe.db.set_value(
+		"Desktop Icon",
+		LEGACY_DESKTOP_ICON,
+		{
+			"label": WORKSPACE_NAME,
+			"app": APP_NAME,
+			"icon_type": "Link",
+			"link_type": "Workspace Sidebar",
+			"link": None,
+			"link_to": WORKSPACE_NAME,
+			"logo_url": LOGO_URL,
+			"hidden": 1,
+			"standard": 1,
+			"parent_icon": "",
+		},
+		update_modified=False,
+	)
