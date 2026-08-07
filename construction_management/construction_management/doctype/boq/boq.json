@@ -114,7 +114,8 @@
    "fieldtype": "Column Break"
   },
   {
-   "default": "AED",
+   "fetch_from": "company.default_currency",
+   "fetch_if_empty": 1,
    "fieldname": "currency",
    "fieldtype": "Link",
    "label": "Currency",

@@ -45,10 +45,10 @@ def get_ra_bill_sales_order(ra_bill):
 	return None
 
 
-def get_ra_bill_sales_invoice_receivable_account(customer, company, currency):
+def get_ra_bill_sales_invoice_receivable_account(customer, company, currency, project=None):
 	"""
 	Use the construction RA Bill receivable account first so RA Bill debit_to
-	comes from Company Construction Accounting Settings.
+	comes from Project Construction Accounting Settings.
 	"""
 	if not company:
 		return None
@@ -57,7 +57,11 @@ def get_ra_bill_sales_invoice_receivable_account(customer, company, currency):
 		get_or_create_ra_bill_receivable_account,
 	)
 
-	construction_account = get_or_create_ra_bill_receivable_account(company, currency)
+	construction_account = get_or_create_ra_bill_receivable_account(
+		company,
+		currency,
+		project=project,
+	)
 	if construction_account:
 		return construction_account
 

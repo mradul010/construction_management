@@ -52,15 +52,39 @@ PARTY_TYPE_BY_ACCOUNT_TYPE = {
 }
 
 RETENTION_ACCOUNT_NAME = "Retention Receivable"
-RETENTION_PARENT_ACCOUNT = "Current Assets - QBC"
 RETENTION_PARENT_ACCOUNT_FALLBACK = "Current Assets"
 
 
 @frappe.whitelist()
 def get_construction_account(company, account_type, project=None, transaction=None):
 	"""
-	Return the construction account configured on Company.
+	Return the construction account configured on Project.
+
+	Company settings are only a fallback for setup helpers or old documents that
+	do not carry Project.
 	"""
+	if project:
+		account = get_project_construction_account(project, company, account_type)
+		if account:
+			return account
+
+		config = _get_construction_account_config(account_type)
+		project_field = config.get("project_field") or config.get("company_field")
+		project_meta = frappe.get_meta("Project")
+		if not project_meta.has_field(project_field):
+			frappe.throw(
+				_("Project is missing Construction Accounting Settings field {0}. Run migrate for this app.").format(
+					frappe.bold(project_field)
+				)
+			)
+
+		frappe.throw(
+			_("Please set {0} in Project {1} Construction Accounting Settings.").format(
+				frappe.bold(project_meta.get_label(project_field) or project_field),
+				frappe.bold(project),
+			)
+		)
+
 	return get_default_construction_account(company, account_type)
 
 
@@ -78,10 +102,7 @@ def get_default_construction_account(company, account_key):
 	if not company:
 		frappe.throw(_("Company is required to fetch construction accounts."))
 
-	account_type = (account_key or "").strip()
-	config = CONSTRUCTION_ACCOUNT_FIELDS.get(account_type)
-	if not config:
-		frappe.throw(_("Unknown construction account type {0}.").format(account_type))
+	account_type, config = _get_construction_account_config(account_key, include_key=True)
 
 	company_doc = get_construction_company_settings(company)
 	company_field = config.get("company_field")
@@ -111,6 +132,44 @@ def get_default_construction_account(company, account_key):
 		)
 
 	return account
+
+
+def get_project_construction_account(project, company, account_key):
+	if not project:
+		return None
+
+	account_type, config = _get_construction_account_config(account_key, include_key=True)
+	if not frappe.db.exists("Project", project):
+		return None
+
+	project_doc = frappe.get_cached_doc("Project", project)
+	project_field = config.get("project_field") or config.get("company_field")
+	if not project_doc.meta.has_field(project_field):
+		return None
+
+	account = project_doc.get(project_field)
+	if not account:
+		return None
+
+	if not _is_valid_account(account, company, config):
+		frappe.throw(
+			_("{0} configured in Project {1} is not a valid construction account for {2}.").format(
+				frappe.bold(account),
+				frappe.bold(project),
+				frappe.bold(account_type),
+			)
+		)
+
+	return account
+
+
+def _get_construction_account_config(account_key, include_key=False):
+	account_type = (account_key or "").strip()
+	config = CONSTRUCTION_ACCOUNT_FIELDS.get(account_type)
+	if not config:
+		frappe.throw(_("Unknown construction account type {0}.").format(account_type))
+
+	return (account_type, config) if include_key else config
 
 
 def get_project_cost_center(project, company):
@@ -155,7 +214,11 @@ def apply_construction_accounts_to_sales_invoice(invoice, method=None):
 		return
 
 	currency = invoice.get("currency") or frappe.get_cached_value("Company", invoice.company, "default_currency")
-	receivable_account = get_or_create_ra_bill_receivable_account(invoice.company, currency)
+	receivable_account = get_or_create_ra_bill_receivable_account(
+		invoice.company,
+		currency,
+		project=project,
+	)
 	income_account = get_construction_account(
 		invoice.company,
 		"ra_bill_income",
@@ -243,6 +306,7 @@ def apply_construction_accounts_to_payment_entry(payment_entry, method=None):
 				payment_entry.company,
 				payment_entry.get("paid_from_account_currency")
 				or frappe.get_cached_value("Company", payment_entry.company, "default_currency"),
+				project=context.project,
 			)
 
 		if not payment_entry.get("paid_to"):
@@ -404,11 +468,11 @@ def get_default_company_bank_account(company):
 	return frappe.get_cached_value("Company", company, "default_bank_account")
 
 
-def get_or_create_ra_bill_receivable_account(company, currency=None):
+def get_or_create_ra_bill_receivable_account(company, currency=None, project=None):
 	if not company:
 		return None
 
-	account = get_construction_account(company, "ra_bill_receivable")
+	account = get_construction_account(company, "ra_bill_receivable", project=project)
 	if currency:
 		account_currency = frappe.get_cached_value("Account", account, "account_currency")
 		company_currency = frappe.get_cached_value("Company", company, "default_currency")
@@ -433,6 +497,11 @@ def ensure_retention_receivable_account():
 
 def _candidate_accounts(company, account_type, config, project=None, transaction=None):
 	company_field = config.get("company_field")
+	if project:
+		project_field = config.get("project_field") or company_field
+		if project_field and frappe.get_meta("Project").has_field(project_field):
+			yield frappe.db.get_value("Project", project, project_field)
+
 	if company_field and frappe.get_meta("Company").has_field(company_field):
 		yield frappe.db.get_value("Company", company, company_field)
 
@@ -619,9 +688,23 @@ def _set_payment_entry_account_if_empty(payment_entry, account_field, currency_f
 	if default_account and not payment_entry.get(account_field):
 		payment_entry.set(account_field, default_account)
 		account = default_account
+	elif default_account and _is_stale_client_account(payment_entry, payment_entry.get(account_field)):
+		payment_entry.set(account_field, default_account)
+		account = default_account
 
 	if account and payment_entry.meta.has_field(currency_field):
 		payment_entry.set(currency_field, frappe.get_cached_value("Account", account, "account_currency"))
+
+
+def _is_stale_client_account(payment_entry, account):
+	if not account:
+		return False
+
+	if not frappe.db.exists("Account", account):
+		return True
+
+	account_company = frappe.get_cached_value("Account", account, "company")
+	return bool(payment_entry.get("company") and account_company and account_company != payment_entry.company)
 
 
 def _get_required_party_type_for_payment_entry(payment_entry):
@@ -766,9 +849,6 @@ def _is_valid_account(account, company, config):
 
 
 def _get_retention_parent_account(company=None):
-	if frappe.db.exists("Account", RETENTION_PARENT_ACCOUNT):
-		return RETENTION_PARENT_ACCOUNT
-
 	filters = {
 		"account_name": RETENTION_PARENT_ACCOUNT_FALLBACK,
 		"is_group": 1,
@@ -781,4 +861,9 @@ def _get_retention_parent_account(company=None):
 	if parent_account:
 		return parent_account
 
-	frappe.throw(_("Parent Account {0} does not exist.").format(RETENTION_PARENT_ACCOUNT))
+	frappe.throw(
+		_("Please create a group Asset account named {0} for company {1}.").format(
+			frappe.bold(RETENTION_PARENT_ACCOUNT_FALLBACK),
+			frappe.bold(company),
+		)
+	)
