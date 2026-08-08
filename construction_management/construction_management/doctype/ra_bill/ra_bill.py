@@ -16,6 +16,11 @@ from construction_management.construction_management.accounting_dimensions impor
 	get_ra_bill_project_cost_center,
 )
 from construction_management.construction_management.utils.accounting import get_construction_account
+from construction_management.construction_management.boq_permissions import (
+	get_authorized_boq,
+	get_authorized_boq_item,
+	get_authorized_boq_items,
+)
 from construction_management.construction_management.doctype.retention_record.retention_record import (
 	get_ra_bill_sales_order,
 	mark_cancelled_from_ra_bill,
@@ -217,10 +222,10 @@ class RABill(Document):
 			if not row.boq_item:
 				continue
 
-			boq_item = frappe.db.get_value(
-				"BOQ Item",
+			boq_item, _boq_doc = get_authorized_boq_item(
 				row.boq_item,
-				[
+				boq=self.boq,
+				fields=[
 					"item_name",
 					"qty",
 					"unit_rate",
@@ -229,7 +234,6 @@ class RABill(Document):
 					"boq_item_key",
 					"component_key",
 				],
-				as_dict=True,
 			)
 			if boq_item:
 				row.item_name = boq_item.item_name
@@ -672,7 +676,10 @@ class RABill(Document):
 			return min(due_dates) if due_dates else None
 
 		def get_posting_date():
-			return self.billing_period_to or today()
+			return getdate(self.billing_period_to or self.billing_period_from or today())
+
+		def should_set_posting_time():
+			return get_posting_date() != getdate(today())
 
 		def get_due_date():
 			schedule_due_date = get_first_payment_schedule_due_date()
@@ -689,6 +696,9 @@ class RABill(Document):
 			set_if_exists(si, "currency", invoice_currency)
 			set_if_exists(si, "conversion_rate", conversion_rate)
 			set_if_exists(si, "posting_date", get_posting_date())
+			set_if_exists(si, "billing_date", get_posting_date())
+			if should_set_posting_time():
+				set_if_exists(si, "set_posting_time", 1)
 			set_if_exists(si, "due_date", get_due_date())
 			set_if_exists(si, "remarks", self.remarks or f"Created from RA Bill {self.name}")
 			set_if_exists(si, "letter_head", self.letter_head)
@@ -1087,7 +1097,7 @@ def _get_boq_item_context(boq, boq_item):
 		if _doctype_has_field("BOQ Item", fieldname):
 			fields.append(fieldname)
 
-	row = frappe.db.get_value("BOQ Item", boq_item, fields, as_dict=True) or {}
+	row, _boq_doc = get_authorized_boq_item(boq_item, boq=boq, fields=fields)
 	boq_item_key = (
 		row.get("boq_item_key")
 		or row.get("component_key")
@@ -1486,6 +1496,37 @@ def get_boq_item_previous_work(boq, boq_item, current_ra_bill=None):
 
 
 @frappe.whitelist()
+def get_boq_item_details_for_ra_bill(boq, boq_item):
+	row, _boq_doc = get_authorized_boq_item(
+		boq_item,
+		boq=boq,
+		fields=[
+			"item",
+			"item_name",
+			"qty",
+			"unit_rate",
+			"unit_cost",
+			"uom",
+			"boq_category",
+			"boq_parent_category",
+			"boq_item_key",
+			"component_key",
+		],
+	)
+	return row
+
+
+@frappe.whitelist()
+def get_boq_items_for_ra_bill_context(boq):
+	return get_authorized_boq_items(
+		boq,
+		fields=["name", "boq_category", "item", "item_name", "boq_item_key"],
+		filters={"is_deleted_in_revision": 0},
+		limit=1000,
+	)
+
+
+@frappe.whitelist()
 @frappe.validate_and_sanitize_search_inputs
 def search_ra_bill_categories(doctype, txt, searchfield, start, page_len, filters, **kwargs):
 	if isinstance(filters, str):
@@ -1495,6 +1536,8 @@ def search_ra_bill_categories(doctype, txt, searchfield, start, page_len, filter
 
 	if not boq:
 		return []
+
+	get_authorized_boq(boq)
 
 	txt = txt or ""
 	like_txt = f"%{txt}%"
@@ -1546,6 +1589,8 @@ def search_ra_bill_subcategories(doctype, txt, searchfield, start, page_len, fil
 
 	if not boq or not category:
 		return []
+
+	get_authorized_boq(boq)
 
 	txt = txt or ""
 	like_txt = f"%{txt}%"
@@ -1599,6 +1644,8 @@ def search_boq_items_for_ra_bill(doctype, txt, searchfield, start, page_len, fil
 
 	if not boq or not subcategory:
 		return []
+
+	get_authorized_boq(boq)
 
 	txt = txt or ""
 	like_txt = f"%{txt}%"

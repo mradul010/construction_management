@@ -6,6 +6,10 @@ from frappe.utils import flt
 from construction_management.construction_management.accounting_dimensions import (
 	get_ra_bill_project_cost_center,
 )
+from construction_management.construction_management.boq_permissions import (
+	get_authorized_boq,
+	get_authorized_boq_item,
+)
 
 
 VALID_SCOPE_TYPES = {"BOQ Linked", "Standalone"}
@@ -78,14 +82,10 @@ class SCWorkOrder(Document):
 			if not row.boq_item:
 				continue
 
-			boq_item = frappe.db.get_value(
-				"BOQ Item",
-				{
-					"name": row.boq_item,
-					"parent": self.boq,
-					"parenttype": "BOQ",
-				},
-				[
+			boq_item, _boq_doc = get_authorized_boq_item(
+				row.boq_item,
+				boq=self.boq,
+				fields=[
 					"item",
 					"item_name",
 					"qty",
@@ -99,14 +99,7 @@ class SCWorkOrder(Document):
 					"component_key",
 					"notes",
 				],
-				as_dict=True,
 			)
-			if not boq_item:
-				frappe.throw(
-					_("BOQ Item {0} does not belong to BOQ {1}.").format(
-						row.boq_item, self.boq
-					)
-				)
 
 			row.item = boq_item.item
 			row.description = row.description or boq_item.item_name or boq_item.item or row.boq_item
@@ -305,10 +298,10 @@ def get_boq_item_details(boq, boq_item):
 	if not boq or not boq_item:
 		return {}
 
-	item = frappe.db.get_value(
-		"BOQ Item",
-		{"name": boq_item, "parent": boq, "parenttype": "BOQ"},
-		[
+	item, _boq_doc = get_authorized_boq_item(
+		boq_item,
+		boq=boq,
+		fields=[
 			"name",
 			"item",
 			"item_name",
@@ -323,10 +316,7 @@ def get_boq_item_details(boq, boq_item):
 			"component_key",
 			"notes",
 		],
-		as_dict=True,
 	)
-	if not item:
-		return {}
 
 	return {
 		"boq_item": item.name,
@@ -426,10 +416,13 @@ def make_sc_bill(source_name, target_doc=None):
 
 
 @frappe.whitelist()
+@frappe.validate_and_sanitize_search_inputs
 def search_boq_items(doctype, txt, searchfield, start, page_len, filters):
 	boq = (filters or {}).get("boq")
 	if not boq:
 		return []
+
+	get_authorized_boq(boq)
 
 	selected_boq_items = (filters or {}).get("selected_boq_items") or []
 	if isinstance(selected_boq_items, str):

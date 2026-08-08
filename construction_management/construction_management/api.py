@@ -1,6 +1,8 @@
 import json
 import frappe
 
+from construction_management.construction_management.boq_permissions import get_authorized_boq
+
 
 @frappe.whitelist()
 def get_item_default_cost_components(item):
@@ -71,6 +73,8 @@ def boq_item_search(doctype, txt, searchfield, start, page_len, filters, **kwarg
 
 	if not parent:
 		return []
+
+	get_authorized_boq(parent)
 
 	txt = txt or ""
 	like_txt = f"%{txt}%"

@@ -1,5 +1,6 @@
 import frappe
 
+from construction_management.construction_management.boq_permissions import get_authorized_boq_item
 from construction_management.portal_utils import (
 	log_portal_access,
 	require_portal_customer,
@@ -38,7 +39,12 @@ def get_ra_bill_items(ra_bill):
 	for row in ra_bill.get("items") or []:
 		item_name = row.get("item_name")
 		if not item_name and row.get("boq_item"):
-			item_name = frappe.db.get_value("BOQ Item", row.boq_item, "item_name")
+			boq_item, _boq_doc = get_authorized_boq_item(
+				row.boq_item,
+				boq=ra_bill.boq,
+				fields=["item_name"],
+			)
+			item_name = boq_item.item_name
 
 		items.append(
 			frappe._dict(

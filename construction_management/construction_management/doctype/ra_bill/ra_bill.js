@@ -573,7 +573,14 @@ async function setBoqItemDetails(frm, cdt, cdn) {
 		return rejectDuplicateBoqItem(frm, cdt, cdn);
 	}
 
-	const doc = await frappe.db.get_doc("BOQ Item", row.boq_item);
+	const response = await frappe.call({
+		method: `${RA_BILL_METHOD}.get_boq_item_details_for_ra_bill`,
+		args: {
+			boq: frm.doc.boq,
+			boq_item: row.boq_item,
+		},
+	});
+	const doc = response.message;
 	console.log("Fetched BOQ Item full doc:", doc);
 	console.log("Applying BOQ Item to RA Bill row:", doc);
 
@@ -755,19 +762,14 @@ frappe.ui.form.on("RA Bill", {
 				return Promise.resolve();
 			}
 
-			return frappe.db
-				.get_list("BOQ Item", {
-					filters: {
-						parent: frm.doc.boq,
-						parenttype: "BOQ",
-						parentfield: "items",
-						is_deleted_in_revision: 0,
-					},
-					fields: ["name", "boq_category", "item", "item_name", "boq_item_key"],
-					limit: 1000,
-					order_by: "idx asc",
-				})
+			return frappe.call({
+				method: `${RA_BILL_METHOD}.get_boq_items_for_ra_bill_context`,
+				args: {
+					boq: frm.doc.boq,
+				},
+			})
 				.then((items) => {
+					items = items.message || [];
 					const categoryNames = [
 						...new Set((items || []).map((item) => item.boq_category).filter(Boolean)),
 					];
