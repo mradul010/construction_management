@@ -676,7 +676,10 @@ class RABill(Document):
 			return min(due_dates) if due_dates else None
 
 		def get_posting_date():
-			return self.billing_period_to or today()
+			return getdate(self.billing_period_to or self.billing_period_from or today())
+
+		def should_set_posting_time():
+			return get_posting_date() != getdate(today())
 
 		def get_due_date():
 			schedule_due_date = get_first_payment_schedule_due_date()
@@ -693,6 +696,9 @@ class RABill(Document):
 			set_if_exists(si, "currency", invoice_currency)
 			set_if_exists(si, "conversion_rate", conversion_rate)
 			set_if_exists(si, "posting_date", get_posting_date())
+			set_if_exists(si, "billing_date", get_posting_date())
+			if should_set_posting_time():
+				set_if_exists(si, "set_posting_time", 1)
 			set_if_exists(si, "due_date", get_due_date())
 			set_if_exists(si, "remarks", self.remarks or f"Created from RA Bill {self.name}")
 			set_if_exists(si, "letter_head", self.letter_head)

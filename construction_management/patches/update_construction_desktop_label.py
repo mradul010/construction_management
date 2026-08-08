@@ -58,22 +58,40 @@ def update_desktop_icon_label():
 
 
 def get_canonical_desktop_icon_name():
+	label_owner = frappe.db.exists("Desktop Icon", {"label": DESKTOP_LABEL})
+	if label_owner:
+		return normalize_canonical_desktop_icon_name(label_owner)
+
 	if frappe.db.exists("Desktop Icon", CANONICAL_DESKTOP_ICON):
 		return CANONICAL_DESKTOP_ICON
 
-	return frappe.db.exists("Desktop Icon", {"label": DESKTOP_LABEL})
+	app_icon = frappe.db.exists("Desktop Icon", {"icon_type": "App", "app": APP_NAME})
+	if app_icon:
+		return normalize_canonical_desktop_icon_name(app_icon)
+
+	return None
 
 
-def create_or_rename_canonical_desktop_icon():
-	if frappe.db.exists("Desktop Icon", LEGACY_DESKTOP_ICON):
+def normalize_canonical_desktop_icon_name(icon_name):
+	if icon_name == CANONICAL_DESKTOP_ICON:
+		return icon_name
+
+	if not frappe.db.exists("Desktop Icon", CANONICAL_DESKTOP_ICON):
 		frappe.rename_doc(
 			"Desktop Icon",
-			LEGACY_DESKTOP_ICON,
+			icon_name,
 			CANONICAL_DESKTOP_ICON,
 			force=True,
 			ignore_permissions=True,
 		)
 		return CANONICAL_DESKTOP_ICON
+
+	return icon_name
+
+
+def create_or_rename_canonical_desktop_icon():
+	if frappe.db.exists("Desktop Icon", LEGACY_DESKTOP_ICON):
+		return normalize_canonical_desktop_icon_name(LEGACY_DESKTOP_ICON)
 
 	doc = frappe.new_doc("Desktop Icon")
 	doc.name = CANONICAL_DESKTOP_ICON
@@ -82,6 +100,10 @@ def create_or_rename_canonical_desktop_icon():
 
 
 def ensure_canonical_desktop_icon(icon_name):
+	label_owner = frappe.db.exists("Desktop Icon", {"label": DESKTOP_LABEL})
+	if label_owner and label_owner != icon_name:
+		icon_name = label_owner
+
 	icon = frappe.get_doc("Desktop Icon", icon_name)
 	icon.update(
 		{
@@ -98,6 +120,24 @@ def ensure_canonical_desktop_icon(icon_name):
 		}
 	)
 	icon.save(ignore_permissions=True)
+	hide_duplicate_app_icons(icon.name)
+
+
+def hide_duplicate_app_icons(canonical_name):
+	for row in frappe.get_all(
+		"Desktop Icon",
+		filters={"app": APP_NAME, "name": ["!=", canonical_name]},
+		fields=["name"],
+	):
+		if row.name == LEGACY_DESKTOP_ICON:
+			continue
+		frappe.db.set_value(
+			"Desktop Icon",
+			row.name,
+			"hidden",
+			1,
+			update_modified=False,
+		)
 
 
 def hide_legacy_desktop_icon(canonical_name):
