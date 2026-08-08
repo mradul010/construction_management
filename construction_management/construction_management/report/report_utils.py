@@ -7,7 +7,6 @@ from frappe.utils import cint, flt, fmt_money, formatdate
 from construction_management.construction_management.advance_management import (
 	get_project_advance_summary,
 )
-from construction_management.construction_management.boq_permissions import get_authorized_boq_item
 
 
 INTERNAL_REPORT_ROLES = {
@@ -538,7 +537,7 @@ def get_original_boq(boq, cache=None):
 	return original_boq
 
 
-def get_boq_item_context(boq_item, cache, boq=None):
+def get_boq_item_context(boq_item, cache):
 	if not boq_item:
 		return frappe._dict()
 
@@ -547,23 +546,15 @@ def get_boq_item_context(boq_item, cache, boq=None):
 			"BOQ Item",
 			["name", "parent", "boq_item_key", "component_key", "qty", "unit_rate"],
 		)
-		if boq:
-			cache[boq_item], _boq_doc = get_authorized_boq_item(
-				boq_item,
-				boq=boq,
-				fields=fields,
-			)
-		else:
-			cache[boq_item], _boq_doc = get_authorized_boq_item(boq_item, fields=fields)
+		cache[boq_item] = frappe.db.get_value("BOQ Item", boq_item, fields, as_dict=True) or frappe._dict()
 
 	return cache[boq_item]
 
 
 def completion_key(row, item_cache, original_cache):
 	boq_item = row.get("boq_item")
-	boq = row.get("boq_revision") or row.get("boq")
-	item_context = get_boq_item_context(boq_item, item_cache, boq=boq)
-	boq = boq or item_context.get("parent")
+	item_context = get_boq_item_context(boq_item, item_cache)
+	boq = row.get("boq_revision") or row.get("boq") or item_context.get("parent")
 	original_boq = row.get("original_boq") or get_original_boq(boq, original_cache)
 	item_key = (
 		row.get("boq_item_key")
