@@ -800,7 +800,7 @@ def ensure_purchase_invoice_sc_bill_fields():
 		)
 
 	for fieldname, label, options, insert_after in [
-		("boq_item", "BOQ Item", None, "project"),
+		("boq_item", "BOQ Item", "BOQ Item", "project"),
 		("sc_work_order_item", "SC Work Order Item", None, "boq_item"),
 		("sc_bill_item", "SC Bill Item", None, "sc_work_order_item"),
 	]:
@@ -883,7 +883,7 @@ def ensure_purchase_order_subcontract_fields():
 		)
 
 	for fieldname, label, options, insert_after in [
-		("boq_item", "BOQ Item", None, "project"),
+		("boq_item", "BOQ Item", "BOQ Item", "project"),
 		("sc_work_order_item", "SC Work Order Item", None, "boq_item"),
 	]:
 		values = {

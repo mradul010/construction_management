@@ -33,7 +33,8 @@ frappe.query_reports["RA Bill Item Report"] = {
 		{
 			fieldname: "boq_item",
 			label: __("BOQ Item"),
-			fieldtype: "Data",
+			fieldtype: "Link",
+			options: "BOQ Item",
 		},
 		{
 			fieldname: "status",
