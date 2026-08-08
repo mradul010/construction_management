@@ -58,33 +58,8 @@ RETENTION_PARENT_ACCOUNT_FALLBACK = "Current Assets"
 @frappe.whitelist()
 def get_construction_account(company, account_type, project=None, transaction=None):
 	"""
-	Return the construction account configured on Project.
-
-	Company settings are only a fallback for setup helpers or old documents that
-	do not carry Project.
+	Return the construction account configured on Company.
 	"""
-	if project:
-		account = get_project_construction_account(project, company, account_type)
-		if account:
-			return account
-
-		config = _get_construction_account_config(account_type)
-		project_field = config.get("project_field") or config.get("company_field")
-		project_meta = frappe.get_meta("Project")
-		if not project_meta.has_field(project_field):
-			frappe.throw(
-				_("Project is missing Construction Accounting Settings field {0}. Run migrate for this app.").format(
-					frappe.bold(project_field)
-				)
-			)
-
-		frappe.throw(
-			_("Please set {0} in Project {1} Construction Accounting Settings.").format(
-				frappe.bold(project_meta.get_label(project_field) or project_field),
-				frappe.bold(project),
-			)
-		)
-
 	return get_default_construction_account(company, account_type)
 
 
@@ -497,11 +472,6 @@ def ensure_retention_receivable_account():
 
 def _candidate_accounts(company, account_type, config, project=None, transaction=None):
 	company_field = config.get("company_field")
-	if project:
-		project_field = config.get("project_field") or company_field
-		if project_field and frappe.get_meta("Project").has_field(project_field):
-			yield frappe.db.get_value("Project", project, project_field)
-
 	if company_field and frappe.get_meta("Company").has_field(company_field):
 		yield frappe.db.get_value("Company", company, company_field)
 

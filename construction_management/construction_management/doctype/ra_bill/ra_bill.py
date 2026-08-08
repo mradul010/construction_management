@@ -1642,7 +1642,7 @@ def search_boq_items_for_ra_bill(doctype, txt, searchfield, start, page_len, fil
 	exclude_items = set(_coerce_list(filters.get("exclude_items")))
 	current_ra_bill = filters.get("current_ra_bill")
 
-	if not boq or not subcategory:
+	if not boq:
 		return []
 
 	get_authorized_boq(boq)
@@ -1658,18 +1658,20 @@ def search_boq_items_for_ra_bill(doctype, txt, searchfield, start, page_len, fil
 		"parent = %(boq)s",
 		"parenttype = 'BOQ'",
 		"parentfield = 'items'",
-		"boq_category = %(subcategory)s",
 		"COALESCE(is_deleted_in_revision, 0) = 0",
-		"(%(txt)s = '' OR item_name LIKE %(like_txt)s OR name LIKE %(like_txt)s)",
+		"(%(txt)s = '' OR item_name LIKE %(like_txt)s OR item LIKE %(like_txt)s OR name LIKE %(like_txt)s)",
 	]
 	params = {
 		"boq": boq,
-		"subcategory": subcategory,
 		"txt": txt,
 		"like_txt": like_txt,
 		"prefix_txt": prefix_txt,
 		"candidate_limit": candidate_limit,
 	}
+	if subcategory:
+		conditions.append("boq_category = %(subcategory)s")
+		params["subcategory"] = subcategory
+
 	if exclude_items:
 		conditions.append("name NOT IN %(exclude_items)s")
 		params["exclude_items"] = tuple(exclude_items)
