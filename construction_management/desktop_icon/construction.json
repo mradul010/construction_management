@@ -1,5 +1,6 @@
 {
  "app": "construction_management",
+ "creation": "2026-08-08 15:32:39.849646",
  "creation": "2026-07-30 15:21:21.507287",
  "docstatus": 0,
  "doctype": "Desktop Icon",
@@ -10,7 +11,7 @@
  "link": "/app/construction-management",
  "link_type": "External",
  "logo_url": "/assets/construction_management/techsolvo_logo.jpeg",
- "modified": "2026-07-30 15:21:32.247677",
+ "modified": "2026-08-08 15:33:00.028545",
  "modified_by": "Administrator",
  "name": "Construction",
  "owner": "Administrator",
