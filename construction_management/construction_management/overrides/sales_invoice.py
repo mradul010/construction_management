@@ -284,6 +284,45 @@ class ConstructionSalesInvoice(SalesInvoice):
 		)
 
 
+def apply_net_certified_vat_to_sales_invoice(si, ra_bill, advance_native=0):
+	"""
+	For RA Bill invoices, VAT must be charged on the net certified amount
+	(gross work done - retention - native advance recovery), not on the full
+	gross work done. Income (net_total / item amounts) is left untouched -
+	only the VAT tax row's amount is reduced.
+
+	Only called from RA Bill.create_sales_invoice, so ordinary Sales Invoices
+	(not created from an RA Bill) are never affected.
+	"""
+	if not si.meta.has_field("taxes") or not si.get("taxes"):
+		return None
+
+	vat_row = None
+	for row in si.get("taxes"):
+		if row.charge_type == "On Net Total" and "vat" in (row.account_head or "").lower():
+			vat_row = row
+			break
+
+	if not vat_row:
+		return None
+
+	retention_total = flt(ra_bill.get("retention_amount"))
+	net_total = flt(si.net_total)
+	vat_base = max(net_total - retention_total - flt(advance_native), 0)
+	vat_amount = flt(
+		vat_base * flt(vat_row.rate) / 100,
+		si.precision("tax_amount", "taxes"),
+	)
+
+	vat_row.charge_type = "Actual"
+	vat_row.tax_amount = vat_amount
+
+	if hasattr(si, "calculate_taxes_and_totals"):
+		si.calculate_taxes_and_totals()
+
+	return vat_amount
+
+
 def sync_sales_invoice_payment_breakdown(doc, method=None):
 	invoice = doc if getattr(doc, "doctype", None) == "Sales Invoice" else frappe.get_doc("Sales Invoice", doc)
 	if not invoice.meta.has_field("payment_breakdown") or not invoice.get("payment_breakdown"):

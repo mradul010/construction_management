@@ -23,6 +23,9 @@ from construction_management.construction_management.doctype.retention_record.re
 	sync_from_ra_bill,
 	validate_sales_invoice_references,
 )
+from construction_management.construction_management.overrides.sales_invoice import (
+	apply_net_certified_vat_to_sales_invoice,
+)
 
 
 OVERBILLING_TOLERANCE = 0.0001
@@ -842,6 +845,7 @@ class RABill(Document):
 						frappe.format_value(recovery_target, {"fieldtype": "Currency"}),
 					)
 				)
+			apply_net_certified_vat_to_sales_invoice(si, self, advance_native=allocated)
 			si.insert(ignore_permissions=True)
 			return si
 
