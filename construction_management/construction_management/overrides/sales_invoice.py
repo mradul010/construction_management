@@ -24,6 +24,7 @@ class ConstructionSalesInvoice(SalesInvoice):
 		super().validate()
 		self.validate_retention_account_for_submit()
 		self.set_payment_breakdown()
+		self.apply_retention_to_payment_schedule()
 
 	def make_customer_gl_entry(self, gl_entries):
 		retention_context = self.get_retention_accounting_context()
@@ -261,6 +262,38 @@ class ConstructionSalesInvoice(SalesInvoice):
 				"status": status,
 			},
 		)
+
+	def apply_retention_to_payment_schedule(self):
+		"""
+		Core ERPNext's set_payment_schedule() (run inside super().validate()) sizes
+		payment_schedule rows off grand_total and total_advance only - it has no
+		concept of retention, which is realised through a GL-account split instead
+		of a native field. Re-apply the retention deduction here, after the core
+		schedule rebuild, so payment_schedule stays consistent with the true
+		(GL-reconciled) outstanding amount instead of showing advance-only figures.
+		"""
+		if not self.get("payment_schedule"):
+			return
+
+		context = self.get_retention_accounting_context(validate_account=False)
+		if not context or context.retention_amount <= AMOUNT_TOLERANCE:
+			return
+
+		for row in self.payment_schedule:
+			if not row.invoice_portion:
+				continue
+
+			retention_share = flt(
+				context.retention_amount * flt(row.invoice_portion) / 100,
+				row.precision("payment_amount"),
+			)
+			row.payment_amount = flt(row.payment_amount - retention_share, row.precision("payment_amount"))
+			row.outstanding = row.payment_amount
+			row.base_payment_amount = flt(
+				row.payment_amount * flt(self.conversion_rate or 1),
+				row.precision("base_payment_amount"),
+			)
+			row.base_outstanding = row.base_payment_amount
 
 	def normalize_payment_schedule_date_types(self):
 		for row in self.get("payment_schedule") or []:

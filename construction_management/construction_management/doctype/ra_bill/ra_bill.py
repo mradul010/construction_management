@@ -944,10 +944,16 @@ class RABill(Document):
 
 		self.db_set("sales_invoice", si.name)
 		allocated_advance = sum(flt(row.allocated_amount) for row in si.get("advances") or [])
+		# si.outstanding_amount here is grand_total - advance only: the Sales Invoice is
+		# still a Draft, so retention hasn't been split into its own receivable account via
+		# GL entries yet (that only happens on submit). Net out retention here too, since it
+		# is already fully known from this RA Bill, so this cached field doesn't stay frozen
+		# at an advance-only figure once the invoice is submitted and truly reconciled.
+		outstanding_amount = max(flt(si.outstanding_amount) - flt(self.retention_amount), 0)
 		field_updates = {
 			"actual_advance_recovered": allocated_advance,
 			"total_advance": allocated_advance,
-			"outstanding_amount": flt(si.outstanding_amount),
+			"outstanding_amount": outstanding_amount,
 			"remaining_advance_after_current_bill": max(
 				flt(self.remaining_advance_before_current_bill) - allocated_advance,
 				0,
