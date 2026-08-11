@@ -15,7 +15,16 @@ class ConstructionPurchaseInvoice(PurchaseInvoice):
 	def validate(self):
 		super().validate()
 		self.validate_retention_account_for_submit()
+		self.validate_site_material_consumption_on_submit()
 		self.set_payment_breakdown()
+
+	def on_submit(self):
+		super().on_submit()
+		self.create_site_material_consumption_on_submit()
+
+	def on_cancel(self):
+		self.cancel_site_material_consumption()
+		super().on_cancel()
 
 	def make_supplier_gl_entry(self, gl_entries):
 		retention_context = self.get_retention_payable_accounting_context()
@@ -54,6 +63,164 @@ class ConstructionPurchaseInvoice(PurchaseInvoice):
 			project=self.project,
 			transaction=self,
 		)
+
+	def validate_site_material_consumption_on_submit(self):
+		if not self.should_consume_site_materials():
+			return
+
+		if self.is_return:
+			frappe.throw(_("Site materials cannot be auto-consumed from a return Purchase Invoice."))
+
+		if not self.update_stock:
+			frappe.throw(_("Enable Update Stock before consuming site materials from Purchase Invoice."))
+
+		if self.get("site_material_consumption"):
+			return
+
+		rows = self.get_site_material_consumption_rows()
+		if not rows:
+			frappe.throw(_("No stock item rows are available to consume."))
+
+		projects = {row.project for row in rows if row.project}
+		warehouses = {row.warehouse for row in rows if row.warehouse}
+		missing_project_rows = [row.idx for row in rows if not row.project]
+		missing_warehouse_rows = [row.idx for row in rows if not row.warehouse]
+
+		if missing_project_rows:
+			frappe.throw(
+				_("Project is required on Purchase Invoice item rows before site material consumption. Missing rows: {0}").format(
+					", ".join(str(idx) for idx in missing_project_rows)
+				)
+			)
+		if missing_warehouse_rows:
+			frappe.throw(
+				_("Warehouse is required on Purchase Invoice item rows before site material consumption. Missing rows: {0}").format(
+					", ".join(str(idx) for idx in missing_warehouse_rows)
+				)
+			)
+		if len(projects) > 1:
+			frappe.throw(_("Auto site material consumption supports one Project per Purchase Invoice."))
+		if len(warehouses) > 1:
+			frappe.throw(_("Auto site material consumption supports one Site Warehouse per Purchase Invoice."))
+
+	def should_consume_site_materials(self):
+		return bool(
+			self.meta.has_field("consume_site_materials_on_submit")
+			and self.get("consume_site_materials_on_submit")
+		)
+
+	def get_site_material_consumption_rows(self):
+		rows = []
+		for row in self.get("items") or []:
+			if not row.item_code or flt(row.qty) <= 0:
+				continue
+			item_values = frappe.db.get_value(
+				"Item",
+				row.item_code,
+				["is_stock_item", "disabled"],
+				as_dict=True,
+			)
+			if not item_values or not item_values.is_stock_item or item_values.disabled:
+				continue
+
+			rows.append(
+				frappe._dict(
+					{
+						"idx": row.idx,
+						"item_code": row.item_code,
+						"item_name": row.item_name,
+						"description": row.description,
+						"qty": row.qty,
+						"uom": row.uom,
+						"stock_uom": row.stock_uom,
+						"conversion_factor": row.conversion_factor or 1,
+						"warehouse": row.warehouse,
+						"project": row.project or self.project,
+						"cost_center": row.cost_center or self.cost_center,
+						"expense_account": self.get_site_material_consumption_expense_account(row.item_code),
+					}
+				)
+			)
+		return rows
+
+	def create_site_material_consumption_on_submit(self):
+		if not self.should_consume_site_materials():
+			return
+
+		if self.get("site_material_consumption"):
+			consumption = frappe.get_doc("Site Material Consumption", self.get("site_material_consumption"))
+			if consumption.docstatus == 1:
+				return
+			if consumption.docstatus == 0:
+				consumption.flags.ignore_permissions = True
+				consumption.submit()
+				return
+			frappe.throw(
+				_("Linked Site Material Consumption {0} is cancelled. Please amend this Purchase Invoice.").format(
+					consumption.name
+				)
+			)
+
+		rows = self.get_site_material_consumption_rows()
+		project = rows[0].project
+		warehouse = rows[0].warehouse
+		cost_center = rows[0].cost_center
+
+		consumption = frappe.new_doc("Site Material Consumption")
+		consumption.update(
+			{
+				"company": self.company,
+				"project": project,
+				"source_warehouse": warehouse,
+				"posting_date": self.posting_date,
+				"posting_time": self.posting_time,
+				"set_posting_time": 1,
+				"cost_center": cost_center,
+				"remarks": _("Auto-created from Purchase Invoice {0}").format(self.name),
+			}
+		)
+
+		for row in rows:
+			consumption.append(
+				"items",
+				{
+					"item_code": row.item_code,
+					"item_name": row.item_name,
+					"description": row.description,
+					"qty": row.qty,
+					"uom": row.uom,
+					"stock_uom": row.stock_uom,
+					"conversion_factor": row.conversion_factor,
+					"expense_account": row.expense_account,
+					"project": row.project,
+					"cost_center": row.cost_center,
+				},
+			)
+
+		consumption.flags.ignore_permissions = True
+		consumption.insert(ignore_permissions=True)
+		consumption.submit()
+		self.db_set("site_material_consumption", consumption.name, update_modified=False)
+
+	def cancel_site_material_consumption(self):
+		if not self.meta.has_field("site_material_consumption") or not self.get("site_material_consumption"):
+			return
+
+		consumption = frappe.get_doc("Site Material Consumption", self.get("site_material_consumption"))
+		if consumption.docstatus == 2:
+			return
+		if consumption.docstatus != 1:
+			frappe.throw(_("Linked Site Material Consumption {0} is not submitted.").format(consumption.name))
+
+		consumption.flags.ignore_permissions = True
+		consumption.cancel()
+
+	def get_site_material_consumption_expense_account(self, item_code):
+		from construction_management.construction_management.doctype.site_material_consumption.site_material_consumption import (
+			get_default_expense_account,
+		)
+
+		return get_default_expense_account(item_code, self.company)
 
 	def get_retention_payable_accounting_context(self, validate_account=True):
 		if self.is_internal_transfer() or self.is_return:

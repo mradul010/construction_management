@@ -1,0 +1,39 @@
+{
+ "add_total_row": 1,
+ "creation": "2026-08-10 00:00:00.000000",
+ "disable_prepared_report": 0,
+ "doctype": "Report",
+ "is_standard": "Yes",
+ "modified": "2026-08-10 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Construction Management",
+ "name": "Project Material Balance",
+ "owner": "Administrator",
+ "prepared_report": 0,
+ "ref_doctype": "Site Material Consumption",
+ "report_name": "Project Material Balance",
+ "report_type": "Script Report",
+ "roles": [
+  {
+   "role": "System Manager"
+  },
+  {
+   "role": "Construction Manager"
+  },
+  {
+   "role": "Site Engineer"
+  },
+  {
+   "role": "Stock Manager"
+  },
+  {
+   "role": "Accounts Manager"
+  },
+  {
+   "role": "Projects Manager"
+  },
+  {
+   "role": "Projects User"
+  }
+ ]
+}

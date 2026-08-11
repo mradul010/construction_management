@@ -10,6 +10,9 @@
   "default_company",
   "default_margin",
   "default_boq_price_list",
+  "stock_settings_section",
+  "default_material_consumption_expense_account",
+  "require_project_warehouse",
   "naming_series_section",
   "boq_naming_series",
   "ra_naming_series",
@@ -51,6 +54,25 @@
    "fieldtype": "Link",
    "label": "Default BOQ Price List",
    "options": "Price List"
+  },
+  {
+   "fieldname": "stock_settings_section",
+   "fieldtype": "Section Break",
+   "label": "Stock Settings"
+  },
+  {
+   "description": "Expense account used when site material consumption creates a Material Issue Stock Entry.",
+   "fieldname": "default_material_consumption_expense_account",
+   "fieldtype": "Link",
+   "label": "Default Material Consumption Expense Account",
+   "options": "Account"
+  },
+  {
+   "default": "1",
+   "description": "Require a project/site warehouse before materials can be consumed.",
+   "fieldname": "require_project_warehouse",
+   "fieldtype": "Check",
+   "label": "Require Project Warehouse"
   },
   {
    "fieldname": "naming_series_section",

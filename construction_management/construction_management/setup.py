@@ -1,5 +1,7 @@
-import frappe
+import json
 import os
+
+import frappe
 from frappe.utils import flt
 
 
@@ -14,6 +16,7 @@ def after_install():
 	ensure_sales_invoice_payment_breakdown_field()
 	ensure_purchase_invoice_sc_bill_fields()
 	ensure_purchase_invoice_payment_breakdown_field()
+	ensure_purchase_invoice_site_material_consumption_fields()
 	ensure_purchase_order_subcontract_fields()
 	ensure_payment_entry_retention_record_field()
 	backfill_payment_entry_subcontract_links()
@@ -33,6 +36,7 @@ def after_migrate():
 	ensure_sales_invoice_payment_breakdown_field()
 	ensure_purchase_invoice_sc_bill_fields()
 	ensure_purchase_invoice_payment_breakdown_field()
+	ensure_purchase_invoice_site_material_consumption_fields()
 	ensure_purchase_order_subcontract_fields()
 	ensure_payment_entry_retention_record_field()
 	backfill_payment_entry_subcontract_links()
@@ -70,6 +74,8 @@ def create_boq_client_script():
 
 
 def ensure_construction_desktop_icons():
+	ensure_construction_workspace_route()
+
 	app_icon_name = (
 		frappe.db.exists("Desktop Icon", {"icon_type": "App", "app": "construction_management"})
 		or frappe.db.exists("Desktop Icon", "Construction")
@@ -123,6 +129,39 @@ def ensure_construction_desktop_icons():
 				update_modified=False,
 			)
 	frappe.db.commit()
+
+
+def ensure_construction_workspace_route():
+	workspace_name = "Construction Management"
+	workspace_title = "Construction Management"
+
+	if frappe.db.exists("Workspace", workspace_name):
+		values = {"title": workspace_title}
+		meta = frappe.get_meta("Workspace")
+		if meta.has_field("label"):
+			values["label"] = workspace_title
+
+		content = frappe.db.get_value("Workspace", workspace_name, "content")
+		if content:
+			try:
+				content_rows = json.loads(content)
+			except Exception:
+				content_rows = []
+			for row in content_rows:
+				if row.get("id") == "cm_header":
+					row.setdefault("data", {})["text"] = f'<span class="h4"><b>{workspace_title}</b></span>'
+			values["content"] = json.dumps(content_rows, separators=(",", ":"))
+
+		frappe.db.set_value("Workspace", workspace_name, values, update_modified=False)
+
+	if frappe.db.exists("Workspace Sidebar", workspace_name):
+		frappe.db.set_value(
+			"Workspace Sidebar",
+			workspace_name,
+			"title",
+			workspace_title,
+			update_modified=False,
+		)
 
 
 def ensure_design_management_setup():
@@ -854,6 +893,41 @@ def ensure_purchase_invoice_payment_breakdown_field():
 	frappe.clear_cache(doctype="Purchase Invoice")
 	frappe.db.commit()
 	print("Purchase Invoice Payment Breakdown custom fields are ready")
+
+
+def ensure_purchase_invoice_site_material_consumption_fields():
+	"""
+	Allow a stock Purchase Invoice to immediately consume received site materials.
+	"""
+	ensure_custom_field(
+		"Purchase Invoice",
+		"consume_site_materials_on_submit",
+		{
+			"label": "Consume Site Materials on Submit",
+			"fieldtype": "Check",
+			"insert_after": "update_stock",
+			"description": "Create and submit Site Material Consumption automatically when this Purchase Invoice is submitted.",
+			"depends_on": "eval:doc.update_stock",
+			"module": "Construction Management",
+		},
+	)
+	ensure_custom_field(
+		"Purchase Invoice",
+		"site_material_consumption",
+		{
+			"label": "Site Material Consumption",
+			"fieldtype": "Link",
+			"options": "Site Material Consumption",
+			"insert_after": "consume_site_materials_on_submit",
+			"read_only": 1,
+			"no_copy": 1,
+			"module": "Construction Management",
+		},
+	)
+
+	frappe.clear_cache(doctype="Purchase Invoice")
+	frappe.db.commit()
+	print("Purchase Invoice site material consumption fields are ready")
 
 
 def ensure_purchase_order_subcontract_fields():
