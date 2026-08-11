@@ -4,7 +4,7 @@ import frappe
 
 
 WORKSPACE_NAME = "Construction Management"
-DESKTOP_LABEL = "Construction"
+DESKTOP_LABEL = "Construction Management"
 
 
 def execute():
