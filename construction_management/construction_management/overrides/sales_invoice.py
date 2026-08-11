@@ -24,6 +24,7 @@ class ConstructionSalesInvoice(SalesInvoice):
 		super().validate()
 		self.validate_retention_account_for_submit()
 		self.set_payment_breakdown()
+		self.apply_retention_to_payment_schedule()
 
 	def make_customer_gl_entry(self, gl_entries):
 		retention_context = self.get_retention_accounting_context()
@@ -262,6 +263,38 @@ class ConstructionSalesInvoice(SalesInvoice):
 			},
 		)
 
+	def apply_retention_to_payment_schedule(self):
+		"""
+		Core ERPNext's set_payment_schedule() (run inside super().validate()) sizes
+		payment_schedule rows off grand_total and total_advance only - it has no
+		concept of retention, which is realised through a GL-account split instead
+		of a native field. Re-apply the retention deduction here, after the core
+		schedule rebuild, so payment_schedule stays consistent with the true
+		(GL-reconciled) outstanding amount instead of showing advance-only figures.
+		"""
+		if not self.get("payment_schedule"):
+			return
+
+		context = self.get_retention_accounting_context(validate_account=False)
+		if not context or context.retention_amount <= AMOUNT_TOLERANCE:
+			return
+
+		for row in self.payment_schedule:
+			if not row.invoice_portion:
+				continue
+
+			retention_share = flt(
+				context.retention_amount * flt(row.invoice_portion) / 100,
+				row.precision("payment_amount"),
+			)
+			row.payment_amount = flt(row.payment_amount - retention_share, row.precision("payment_amount"))
+			row.outstanding = row.payment_amount
+			row.base_payment_amount = flt(
+				row.payment_amount * flt(self.conversion_rate or 1),
+				row.precision("base_payment_amount"),
+			)
+			row.base_outstanding = row.base_payment_amount
+
 	def normalize_payment_schedule_date_types(self):
 		for row in self.get("payment_schedule") or []:
 			if row.due_date:
@@ -282,6 +315,45 @@ class ConstructionSalesInvoice(SalesInvoice):
 			project=project,
 			transaction=self,
 		)
+
+
+def apply_net_certified_vat_to_sales_invoice(si, ra_bill, advance_native=0):
+	"""
+	For RA Bill invoices, VAT must be charged on the net certified amount
+	(gross work done - retention - native advance recovery), not on the full
+	gross work done. Income (net_total / item amounts) is left untouched -
+	only the VAT tax row's amount is reduced.
+
+	Only called from RA Bill.create_sales_invoice, so ordinary Sales Invoices
+	(not created from an RA Bill) are never affected.
+	"""
+	if not si.meta.has_field("taxes") or not si.get("taxes"):
+		return None
+
+	vat_row = None
+	for row in si.get("taxes"):
+		if row.charge_type == "On Net Total" and "vat" in (row.account_head or "").lower():
+			vat_row = row
+			break
+
+	if not vat_row:
+		return None
+
+	retention_total = flt(ra_bill.get("retention_amount"))
+	net_total = flt(si.net_total)
+	vat_base = max(net_total - retention_total - flt(advance_native), 0)
+	vat_amount = flt(
+		vat_base * flt(vat_row.rate) / 100,
+		si.precision("tax_amount", "taxes"),
+	)
+
+	vat_row.charge_type = "Actual"
+	vat_row.tax_amount = vat_amount
+
+	if hasattr(si, "calculate_taxes_and_totals"):
+		si.calculate_taxes_and_totals()
+
+	return vat_amount
 
 
 def sync_sales_invoice_payment_breakdown(doc, method=None):

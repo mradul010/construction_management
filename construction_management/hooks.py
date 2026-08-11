@@ -13,6 +13,7 @@ fixtures = [
     {"dt": "Workspace", "filters": [["name", "in", ["Construction Management"]]]},
     {"dt": "Workspace Sidebar", "filters": [["name", "in", ["Construction Management"]]]},
     {"dt": "Desktop Icon", "filters": [["app", "=", "construction_management"]]},
+    {"dt": "Print Format", "filters": [["name", "in", ["RA Bill Certificate"]]]},
 ]
 
 add_to_apps_screen = [
