@@ -6,11 +6,16 @@
  "engine": "InnoDB",
  "field_order": [
   "charge_type",
+  "row_id",
   "account_head",
   "description",
+  "included_in_print_rate",
+  "cost_center",
   "rate",
   "tax_amount",
-  "total"
+  "total",
+  "from_template",
+  "source_tax_template"
  ],
  "fields": [
   {
@@ -19,6 +24,12 @@
    "in_list_view": 1,
    "label": "Charge Type",
    "options": "Actual\nOn Net Total\nOn Previous Row Amount\nOn Previous Row Total\nOn Item Quantity"
+  },
+  {
+   "depends_on": "eval:[\"On Previous Row Amount\", \"On Previous Row Total\"].includes(doc.charge_type)",
+   "fieldname": "row_id",
+   "fieldtype": "Data",
+   "label": "Reference Row #"
   },
   {
    "fieldname": "account_head",
@@ -32,6 +43,18 @@
    "fieldtype": "Small Text",
    "in_list_view": 1,
    "label": "Description"
+  },
+  {
+   "default": "0",
+   "fieldname": "included_in_print_rate",
+   "fieldtype": "Check",
+   "label": "Is this Tax included in Basic Rate?"
+  },
+  {
+   "fieldname": "cost_center",
+   "fieldtype": "Link",
+   "label": "Cost Center",
+   "options": "Cost Center"
   },
   {
    "default": "0",
@@ -54,6 +77,22 @@
    "fieldtype": "Currency",
    "label": "Total",
    "options": "currency",
+   "read_only": 1
+  },
+  {
+   "default": "0",
+   "fieldname": "from_template",
+   "fieldtype": "Check",
+   "hidden": 1,
+   "label": "From Template",
+   "read_only": 1
+  },
+  {
+   "fieldname": "source_tax_template",
+   "fieldtype": "Link",
+   "hidden": 1,
+   "label": "Source Tax Template",
+   "options": "Sales Taxes and Charges Template",
    "read_only": 1
   }
  ],

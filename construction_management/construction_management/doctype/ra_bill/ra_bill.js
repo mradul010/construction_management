@@ -534,21 +534,173 @@ function setParentValueIfFieldExists(frm, fieldname, value) {
 	frappe.model.set_value(frm.doctype, frm.docname, fieldname, value);
 }
 
-function updateTaxRowTotals(frm, netPayable) {
+function getRaBillTaxReferenceRow(row, previousRows) {
+	const rowId = parseInt(row.row_id, 10);
+	if (!rowId || rowId < 1 || rowId > previousRows.length) {
+		return null;
+	}
+	return previousRows[rowId - 1];
+}
+
+function getRaBillTaxAmount(row, taxBase, previousRows) {
+	const chargeType = row.charge_type || "Actual";
+	const rate = getNumber(row.rate);
+
+	if (chargeType === "Actual") {
+		return getNumber(row.tax_amount);
+	}
+
+	if (chargeType === "On Net Total") {
+		return taxBase * rate / 100;
+	}
+
+	if (chargeType === "On Previous Row Amount" || chargeType === "On Previous Row Total") {
+		const referenceRow = getRaBillTaxReferenceRow(row, previousRows);
+		if (!referenceRow) return 0;
+
+		const referenceAmount =
+			chargeType === "On Previous Row Total"
+				? getNumber(referenceRow.total)
+				: getNumber(referenceRow.tax_amount);
+		return referenceAmount * rate / 100;
+	}
+
+	return getNumber(row.tax_amount);
+}
+
+function updateTaxRowTotals(frm, taxBase) {
 	let totalTaxes = 0;
+	let runningTotal = taxBase;
+	const previousRows = [];
 
 	(frm.doc.taxes || []).forEach((row) => {
-		totalTaxes += getNumber(row.tax_amount);
+		const chargeType = row.charge_type || "Actual";
+		const taxAmount = getRaBillTaxAmount(row, taxBase, previousRows);
 
-		if (row.doctype && row.name && childFieldExists(row.doctype, "total")) {
-			const rowTotal = netPayable + totalTaxes;
-			if (Math.abs(getNumber(row.total) - rowTotal) > 0.0001) {
-				frappe.model.set_value(row.doctype, row.name, "total", rowTotal);
-			}
+		if (
+			chargeType !== "Actual" &&
+			chargeType !== "On Item Quantity" &&
+			childFieldExists(row.doctype, "tax_amount")
+		) {
+			row.tax_amount = taxAmount;
 		}
+
+		totalTaxes += taxAmount;
+		runningTotal += taxAmount;
+
+		if (childFieldExists(row.doctype, "total")) {
+			row.total = runningTotal;
+		}
+
+		previousRows.push({
+			tax_amount: taxAmount,
+			total: runningTotal,
+		});
 	});
 
 	return totalTaxes;
+}
+
+function isTemplateTaxRow(row) {
+	return Boolean(row && (getNumber(row.from_template) || row.source_tax_template));
+}
+
+function copyTaxRowValues(row) {
+	const values = {};
+	Object.keys(row || {}).forEach((fieldname) => {
+		if (["doctype", "name", "owner", "creation", "modified", "modified_by", "parent", "parentfield", "parenttype", "idx", "__islocal"].includes(fieldname)) {
+			return;
+		}
+		values[fieldname] = row[fieldname];
+	});
+	return values;
+}
+
+function clearTemplateTaxRows(frm) {
+	const manualRows = (frm.doc.taxes || [])
+		.filter((row) => !isTemplateTaxRow(row))
+		.map(copyTaxRowValues);
+
+	frm.clear_table("taxes");
+	manualRows.forEach((source) => {
+		const row = frm.add_child("taxes");
+		Object.keys(source).forEach((fieldname) => {
+			if (childFieldExists(row.doctype, fieldname)) {
+				row[fieldname] = source[fieldname];
+			}
+		});
+	});
+}
+
+function getRaBillTaxCompany(frm) {
+	if (frm._ra_bill_tax_company || !frm.doc.boq) {
+		return Promise.resolve(frm._ra_bill_tax_company || "");
+	}
+
+	return frappe.db.get_value("BOQ", frm.doc.boq, "company").then((r) => {
+		const company = (r.message && r.message.company) || "";
+		frm._ra_bill_tax_company = company;
+		return company;
+	});
+}
+
+function getSalesTaxTemplateFilters(frm) {
+	const filters = { disabled: 0 };
+	if (frm._ra_bill_tax_company) {
+		filters.company = frm._ra_bill_tax_company;
+	}
+	if (frm.doc.tax_category) {
+		filters.tax_category = frm.doc.tax_category;
+	}
+	return filters;
+}
+
+function addTemplateTaxRows(frm, rows) {
+	(rows || []).forEach((source) => {
+		const row = frm.add_child("taxes");
+		Object.keys(source || {}).forEach((fieldname) => {
+			if (childFieldExists(row.doctype, fieldname)) {
+				row[fieldname] = source[fieldname];
+			}
+		});
+	});
+}
+
+function applySalesTaxesAndChargesTemplate(frm) {
+	const selectedTemplate = frm.doc.sales_taxes_and_charges_template;
+	const requestId = `${selectedTemplate || ""}:${Date.now()}:${Math.random()}`;
+	frm._ra_bill_tax_template_request = requestId;
+
+	clearTemplateTaxRows(frm);
+	frm.refresh_field("taxes");
+
+	if (!selectedTemplate) {
+		frm.trigger("recalculate_totals");
+		return Promise.resolve();
+	}
+
+	return getRaBillTaxCompany(frm).then((company) =>
+		frappe.call({
+			method: `${RA_BILL_METHOD}.get_ra_bill_template_tax_rows`,
+			args: {
+				template: selectedTemplate,
+				company: company,
+				boq: frm.doc.boq,
+			},
+			callback: function (r) {
+				if (
+					frm._ra_bill_tax_template_request !== requestId ||
+					frm.doc.sales_taxes_and_charges_template !== selectedTemplate
+				) {
+					return;
+				}
+
+				addTemplateTaxRows(frm, r.message || []);
+				frm.refresh_field("taxes");
+				frm.trigger("recalculate_totals");
+			},
+		}),
+	);
 }
 
 function getParentCategoryFromSubcategory(category) {
@@ -654,11 +806,12 @@ async function setBoqItemDetails(frm, cdt, cdn) {
 
 function applyBoqContractToRaBill(frm, selectedBoq) {
 	return frappe.db
-		.get_value("BOQ", selectedBoq, ["project", "client", "currency", "sales_order"])
+		.get_value("BOQ", selectedBoq, ["project", "client", "company", "currency", "sales_order"])
 		.then((r) => {
 			if (frm.doc.boq !== selectedBoq) return;
 
 			const boq = r.message || {};
+			frm._ra_bill_tax_company = boq.company || "";
 			const mappings = {
 				project: boq.project,
 				customer: boq.client,
@@ -700,6 +853,10 @@ frappe.ui.form.on("RA Bill", {
 					docstatus: 1,
 				},
 			};
+		});
+
+		frm.set_query("sales_taxes_and_charges_template", function () {
+			return { filters: getSalesTaxTemplateFilters(frm) };
 		});
 
 		frm.set_query("category_name", "items", function () {
@@ -817,6 +974,7 @@ frappe.ui.form.on("RA Bill", {
 
 	refresh: function (frm) {
 		showStandardItemsGrid(frm);
+		getRaBillTaxCompany(frm);
 		hydrateBoqLabels(frm);
 		refreshPreviousWorkSummaries(frm);
 
@@ -951,6 +1109,7 @@ frappe.ui.form.on("RA Bill", {
 
 	boq: function (frm) {
 		frm._ra_bill_context_boq = null;
+		frm._ra_bill_tax_company = "";
 
 		if (frm.doc.boq) {
 			const selectedBoq = frm.doc.boq;
@@ -968,6 +1127,16 @@ frappe.ui.form.on("RA Bill", {
 		}
 
 		hydrateBoqLabels(frm);
+	},
+
+	tax_category: function (frm) {
+		frm.set_query("sales_taxes_and_charges_template", function () {
+			return { filters: getSalesTaxTemplateFilters(frm) };
+		});
+	},
+
+	sales_taxes_and_charges_template: function (frm) {
+		return applySalesTaxesAndChargesTemplate(frm);
 	},
 
 	customer: function (frm) {
@@ -1059,8 +1228,8 @@ frappe.ui.form.on("RA Bill", {
 
 		const retention = gross * (getNumber(frm.doc.retention_percent) / 100);
 		const netPayable = gross - retention;
-		const totalTaxes = updateTaxRowTotals(frm, netPayable);
-		const grandTotal = netPayable + totalTaxes;
+		const totalTaxes = updateTaxRowTotals(frm, gross);
+		const grandTotal = gross + totalTaxes;
 		const allocatedAdvance = (frm.doc.advances || []).reduce(
 			(total, row) => total + getNumber(row.allocated_amount),
 			0,
@@ -1070,9 +1239,23 @@ frappe.ui.form.on("RA Bill", {
 		const remainingBefore = Math.max(totalAdvanceReceived - previouslyRecovered, 0);
 		const recoveryPercent = getNumber(frm.doc.advance_recovery_percent);
 		const proposedRecovery = recoveryPercent
-			? Math.min((gross * recoveryPercent) / 100, remainingBefore, grandTotal)
+			? (totalAdvanceReceived * recoveryPercent) / 100
 			: getNumber(frm.doc.proposed_advance_recovery);
-		const totalAdvance = recoveryPercent ? proposedRecovery : allocatedAdvance;
+		const totalAdvance = recoveryPercent
+			? Math.min(proposedRecovery, remainingBefore)
+			: allocatedAdvance;
+
+		if (recoveryPercent) {
+			let remainingAllocation = totalAdvance;
+			(frm.doc.advances || []).forEach((row) => {
+				const available = getNumber(row.advance_amount) || getNumber(row.allocated_amount);
+				row.allocated_amount = remainingAllocation > 0
+					? Math.min(available, remainingAllocation)
+					: 0;
+				remainingAllocation -= row.allocated_amount;
+			});
+			frm.refresh_field("advances");
+		}
 
 		frappe.model.set_value(frm.doctype, frm.docname, "gross_amount", gross);
 		frappe.model.set_value(frm.doctype, frm.docname, "retention_amount", retention);
@@ -1086,6 +1269,7 @@ frappe.ui.form.on("RA Bill", {
 		setParentValueIfFieldExists(frm, "proposed_advance_recovery", proposedRecovery);
 		setParentValueIfFieldExists(frm, "actual_advance_recovered", totalAdvance);
 		setParentValueIfFieldExists(frm, "remaining_advance_after_current_bill", Math.max(remainingBefore - totalAdvance, 0));
+		frm.refresh_field("taxes");
 	},
 });
 
@@ -1245,8 +1429,16 @@ frappe.ui.form.on("RA Bill Taxes and Charges", {
 		setChildValues(frm, cdt, cdn, {
 			rate: 0,
 			tax_amount: 0,
-			total: getNumber(frm.doc.net_payable),
+			total: getNumber(frm.doc.net_total),
 		}, "taxes").then(() => frm.trigger("recalculate_totals"));
+	},
+
+	charge_type: function (frm) {
+		frm.trigger("recalculate_totals");
+	},
+
+	row_id: function (frm) {
+		frm.trigger("recalculate_totals");
 	},
 
 	rate: function (frm) {

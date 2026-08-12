@@ -342,10 +342,37 @@ function addGlobalMarginButton(frm) {
 	);
 }
 
+const BOQ_INVALID_SALES_ORDER_STATUSES = ["Closed", "Cancelled", "On Hold"];
+
+function getBoqSalesOrderFilters(frm, options = {}) {
+	const filters = [
+		["Sales Order", "docstatus", "=", 1],
+		["Sales Order", "status", "not in", BOQ_INVALID_SALES_ORDER_STATUSES],
+	];
+	const project =
+		Object.prototype.hasOwnProperty.call(options, "project") ? options.project : frm.doc.project;
+	const includeContractFilters = options.includeContractFilters !== false;
+
+	if (includeContractFilters && frm.doc.client) {
+		filters.push(["Sales Order", "customer", "=", frm.doc.client]);
+	}
+	if (project) {
+		filters.push(["Sales Order", "project", "=", project]);
+	}
+	if (includeContractFilters && frm.doc.company) {
+		filters.push(["Sales Order", "company", "=", frm.doc.company]);
+	}
+
+	return filters;
+}
+
 function applySalesOrderToBoq(frm) {
 	if (!frm.doc.sales_order) return Promise.resolve();
 
 	const selectedSalesOrder = frm.doc.sales_order;
+	const previousApplyState = frm._boq_applying_sales_order;
+	frm._boq_applying_sales_order = true;
+
 	return frappe.db
 		.get_value("Sales Order", selectedSalesOrder, [
 			"customer",
@@ -387,7 +414,91 @@ function applySalesOrderToBoq(frm) {
 			}
 
 			return Promise.all(updates);
+		})
+		.finally(() => {
+			frm._boq_applying_sales_order = previousApplyState;
 		});
+}
+
+function getSalesOrdersForProject(frm, project) {
+	return frappe.db.get_list("Sales Order", {
+		filters: getBoqSalesOrderFilters(frm, {
+			project: project,
+			includeContractFilters: false,
+		}),
+		fields: ["name", "customer", "company", "currency", "transaction_date", "modified"],
+		order_by: "transaction_date desc, modified desc",
+		limit: 20,
+	});
+}
+
+function showMultipleSalesOrdersForProject(project, salesOrders) {
+	const orderList = (salesOrders || [])
+		.slice(0, 10)
+		.map((row) => `<li>${escapeBoqHtml(row.name)}</li>`)
+		.join("");
+
+	frappe.msgprint({
+		title: __("Multiple Sales Orders"),
+		indicator: "orange",
+		message: __(
+			"Project {0} has multiple submitted Sales Orders. Select the correct Sales Order in the Sales Order field.",
+			[project],
+		) + (orderList ? `<ul>${orderList}</ul>` : ""),
+	});
+}
+
+function autoSelectSalesOrderForProject(frm) {
+	if (frm._boq_applying_sales_order) return Promise.resolve();
+
+	const selectedProject = frm.doc.project;
+	const requestId = `${selectedProject || ""}:${Date.now()}:${Math.random()}`;
+	frm._boq_project_sales_order_request = requestId;
+
+	const clearSalesOrder = frm.doc.sales_order
+		? frm.set_value("sales_order", "")
+		: Promise.resolve();
+
+	if (!selectedProject) {
+		return clearSalesOrder;
+	}
+
+	return clearSalesOrder.then(() => {
+		return getSalesOrdersForProject(frm, selectedProject).then((salesOrders) => {
+			if (
+				frm._boq_project_sales_order_request !== requestId ||
+				frm.doc.project !== selectedProject
+			) {
+				return;
+			}
+
+			if (!salesOrders.length) {
+				frappe.show_alert(
+					{
+						message: __("No submitted Sales Order found for Project {0}.", [
+							selectedProject,
+						]),
+						indicator: "orange",
+					},
+					5,
+				);
+				return;
+			}
+
+			if (salesOrders.length > 1) {
+				showMultipleSalesOrdersForProject(selectedProject, salesOrders);
+				return;
+			}
+
+			frm._boq_skip_sales_order_apply = true;
+			return frm
+				.set_value("sales_order", salesOrders[0].name)
+				.then(() => applySalesOrderToBoq(frm))
+				.finally(() => {
+					frm._boq_skip_sales_order_apply = false;
+				});
+		});
+	});
 }
 
 function isSubmittedApprovedOrActiveBoq(frm) {
@@ -607,14 +718,7 @@ frappe.ui.form.on("BOQ", {
 		frm._boq_sub_state = {};
 		frm._boq_registered = [];
 		frm.set_query("sales_order", function () {
-			const filters = [
-				["Sales Order", "docstatus", "=", 1],
-				["Sales Order", "status", "not in", ["Closed", "Cancelled", "On Hold"]],
-			];
-			if (frm.doc.client) filters.push(["Sales Order", "customer", "=", frm.doc.client]);
-			if (frm.doc.project) filters.push(["Sales Order", "project", "=", frm.doc.project]);
-			if (frm.doc.company) filters.push(["Sales Order", "company", "=", frm.doc.company]);
-			return { filters };
+			return { filters: getBoqSalesOrderFilters(frm) };
 		});
 
 		frm.boq_is_draft = function () {
@@ -2244,7 +2348,12 @@ title="${buildCostTooltip(row).replace(/"/g, "&quot;")}">
 	},
 
 	sales_order: function (frm) {
+		if (frm._boq_skip_sales_order_apply) return Promise.resolve();
 		return applySalesOrderToBoq(frm);
+	},
+
+	project: function (frm) {
+		return autoSelectSalesOrderForProject(frm);
 	},
 
 	global_margin_percent: function (frm) {

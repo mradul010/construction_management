@@ -115,7 +115,7 @@ def get_sales_order_advance_recovered(sales_order, exclude_invoice=None, exclude
 	if exclude_invoice:
 		exclude_invoice_condition = "AND si.`name` != %(exclude_invoice)s"
 
-	return flt(
+	standard_recovery = flt(
 		frappe.db.sql(
 			f"""
 			SELECT COALESCE(SUM(sia.`allocated_amount`), 0)
@@ -141,6 +141,41 @@ def get_sales_order_advance_recovered(sales_order, exclude_invoice=None, exclude
 			},
 		)[0][0]
 	)
+	tax_row_recovery = 0
+	if has_field("Sales Invoice", "ra_bill") and has_field("Company", "default_customer_advance_account"):
+		tax_row_recovery = flt(
+			frappe.db.sql(
+				f"""
+			SELECT COALESCE(SUM(ABS(stc.`tax_amount`)), 0)
+			FROM `tabSales Taxes and Charges` stc
+			INNER JOIN `tabSales Invoice` si ON si.`name` = stc.`parent`
+			INNER JOIN `tabCompany` company ON company.`name` = si.`company`
+			WHERE si.`docstatus` = 1
+				AND stc.`parenttype` = 'Sales Invoice'
+				AND COALESCE(si.`ra_bill`, '') != ''
+				AND stc.`charge_type` = 'Actual'
+				AND stc.`tax_amount` < 0
+				AND stc.`account_head` = company.`default_customer_advance_account`
+				{exclude_invoice_condition}
+				{ra_bill_condition}
+				AND (
+					{header_condition}
+					OR EXISTS (
+						SELECT 1
+						FROM `tabSales Invoice Item` sii
+						WHERE sii.`parent` = si.`name`
+							AND sii.`sales_order` = %(sales_order)s
+					)
+				)
+			""",
+				{
+					"sales_order": sales_order,
+					"exclude_invoice": exclude_invoice,
+					"exclude_ra_bill": exclude_ra_bill,
+				},
+			)[0][0]
+		)
+	return standard_recovery + tax_row_recovery
 
 
 def get_sales_order_last_advance_receipt_date(sales_order):
@@ -169,7 +204,7 @@ def get_sales_order_last_advance_recovery_date(sales_order):
 	if has_field("Sales Invoice", "sales_order"):
 		header_condition = "si.`sales_order` = %(sales_order)s"
 
-	return frappe.db.sql(
+	standard_date = frappe.db.sql(
 		f"""
 		SELECT MAX(si.`posting_date`)
 		FROM `tabSales Invoice Advance` sia
@@ -188,6 +223,33 @@ def get_sales_order_last_advance_recovery_date(sales_order):
 		""",
 		{"sales_order": sales_order},
 	)[0][0]
+	tax_row_date = None
+	if has_field("Sales Invoice", "ra_bill") and has_field("Company", "default_customer_advance_account"):
+		tax_row_date = frappe.db.sql(
+			f"""
+		SELECT MAX(si.`posting_date`)
+		FROM `tabSales Taxes and Charges` stc
+		INNER JOIN `tabSales Invoice` si ON si.`name` = stc.`parent`
+		INNER JOIN `tabCompany` company ON company.`name` = si.`company`
+		WHERE si.`docstatus` = 1
+			AND stc.`parenttype` = 'Sales Invoice'
+			AND COALESCE(si.`ra_bill`, '') != ''
+			AND stc.`charge_type` = 'Actual'
+			AND stc.`tax_amount` < 0
+			AND stc.`account_head` = company.`default_customer_advance_account`
+			AND (
+				{header_condition}
+				OR EXISTS (
+					SELECT 1
+					FROM `tabSales Invoice Item` sii
+					WHERE sii.`parent` = si.`name`
+						AND sii.`sales_order` = %(sales_order)s
+				)
+			)
+		""",
+			{"sales_order": sales_order},
+		)[0][0]
+	return max([d for d in (standard_date, tax_row_date) if d], default=None)
 
 
 def get_sales_order_advance_summary(sales_order, exclude_invoice=None, exclude_ra_bill=None):
@@ -404,12 +466,14 @@ def update_ra_bill_advance_fields(ra_bill):
 	)
 	remaining_before = summary.remaining_advance_balance
 	proposed = 0
-	if flt(ra_bill.get("advance_recovery_percent")) > 0:
-		proposed = flt(ra_bill.get("gross_amount")) * flt(ra_bill.get("advance_recovery_percent")) / 100
-		proposed = min(proposed, remaining_before, flt(ra_bill.get("grand_total")))
+	recovery_percent = flt(ra_bill.get("advance_recovery_percent"))
+	if recovery_percent > 0:
+		proposed = flt(summary.total_advance_received) * recovery_percent / 100
 
 	allocated_from_rows = sum(flt(row.allocated_amount) for row in ra_bill.get("advances") or [])
-	actual = proposed if flt(ra_bill.get("advance_recovery_percent")) > 0 else allocated_from_rows
+	actual = min(proposed, remaining_before) if recovery_percent > 0 else allocated_from_rows
+	if recovery_percent > 0:
+		sync_ra_bill_advance_rows(ra_bill, sales_order, actual, summary.total_advance_recovered)
 	values = frappe._dict(
 		{
 			"sales_order": sales_order,
@@ -426,6 +490,109 @@ def update_ra_bill_advance_fields(ra_bill):
 		if ra_bill.meta.has_field(fieldname):
 			ra_bill.set(fieldname, value)
 	return values
+
+
+def sync_ra_bill_advance_rows(ra_bill, sales_order, target_amount, previously_recovered=0):
+	reference_rows = get_sales_order_advance_reference_rows(sales_order)
+	if not reference_rows:
+		allocate_ra_bill_advance_rows(ra_bill, target_amount)
+		return
+
+	allocations = get_advance_reference_allocations(
+		reference_rows,
+		target_amount,
+		previously_recovered=previously_recovered,
+	)
+	ra_bill.set("advances", [])
+	for allocation in allocations:
+		ra_bill.append("advances", allocation)
+
+
+def get_sales_order_advance_reference_rows(sales_order):
+	if not sales_order:
+		return []
+
+	rows = frappe.db.sql(
+		"""
+		SELECT
+			voucher_type AS reference_type,
+			voucher_no AS reference_name,
+			SUM(ABS(amount)) AS advance_amount,
+			MAX(currency) AS currency,
+			MAX(company) AS company
+		FROM `tabAdvance Payment Ledger Entry`
+		WHERE against_voucher_type = 'Sales Order'
+			AND against_voucher_no = %s
+			AND delinked = 0
+			AND amount < 0
+		GROUP BY voucher_type, voucher_no
+		ORDER BY MIN(creation), voucher_type, voucher_no
+		""",
+		sales_order,
+		as_dict=True,
+	)
+
+	for row in rows:
+		row.difference_posting_date = get_advance_reference_posting_date(
+			row.reference_type,
+			row.reference_name,
+		)
+		row.remarks = get_advance_reference_remarks(row.reference_type, row.reference_name)
+	return rows
+
+
+def get_advance_reference_allocations(reference_rows, target_amount, previously_recovered=0):
+	remaining_previous = flt(previously_recovered)
+	remaining_current = flt(target_amount)
+	allocations = []
+
+	for row in reference_rows:
+		advance_amount = flt(row.advance_amount)
+		available_for_current = max(advance_amount - remaining_previous, 0)
+		remaining_previous = max(remaining_previous - advance_amount, 0)
+		allocated = min(available_for_current, remaining_current) if remaining_current > ADVANCE_TOLERANCE else 0
+		remaining_current -= allocated
+		allocations.append(
+			{
+				"reference_type": row.reference_type,
+				"reference_name": row.reference_name,
+				"remarks": row.get("remarks"),
+				"advance_amount": advance_amount,
+				"allocated_amount": allocated,
+				"difference_posting_date": row.get("difference_posting_date"),
+			}
+		)
+
+	return allocations
+
+
+def get_advance_reference_posting_date(reference_type, reference_name):
+	if not reference_type or not reference_name or not frappe.db.exists(reference_type, reference_name):
+		return None
+
+	for fieldname in ("posting_date", "transaction_date"):
+		if has_field(reference_type, fieldname):
+			return frappe.db.get_value(reference_type, reference_name, fieldname)
+	return None
+
+
+def get_advance_reference_remarks(reference_type, reference_name):
+	if not reference_type or not reference_name or not frappe.db.exists(reference_type, reference_name):
+		return None
+
+	for fieldname in ("remarks", "remark", "user_remark"):
+		if has_field(reference_type, fieldname):
+			return frappe.db.get_value(reference_type, reference_name, fieldname)
+	return None
+
+
+def allocate_ra_bill_advance_rows(ra_bill, target_amount):
+	remaining = flt(target_amount)
+	for row in sorted(ra_bill.get("advances") or [], key=lambda item: (item.idx or 0, item.name or "")):
+		available = flt(row.advance_amount) or flt(row.allocated_amount)
+		allocated = min(available, remaining) if remaining > ADVANCE_TOLERANCE else 0
+		row.allocated_amount = allocated
+		remaining -= allocated
 
 
 def validate_ra_bill_advance_recovery(ra_bill):
@@ -454,7 +621,7 @@ def get_ra_bill_advance_recovery_target(ra_bill):
 		return 0
 
 	values = update_ra_bill_advance_fields(ra_bill)
-	if values and flt(values.get("actual_advance_recovered")) > 0:
+	if values:
 		return flt(values.actual_advance_recovered)
 
 	return flt(ra_bill.get("total_advance")) or flt(ra_bill.get("proposed_advance_recovery"))
@@ -486,35 +653,6 @@ def apply_standard_advances_to_sales_invoice(si, target_amount=None):
 	si.set("advances", [row.as_dict() for row in kept_rows])
 	if si.meta.has_field("total_advance"):
 		si.total_advance = allocated
-	return allocated
-
-
-def apply_ra_bill_advances_to_sales_invoice(si, ra_bill):
-	target = get_ra_bill_advance_recovery_target(ra_bill)
-	if target <= ADVANCE_TOLERANCE and not ra_bill.get("allocate_advances_automatically"):
-		return 0
-
-	allocated = apply_standard_advances_to_sales_invoice(si, target)
-	if target > ADVANCE_TOLERANCE and allocated + ADVANCE_TOLERANCE < target:
-		frappe.throw(
-			_(
-				"Could not allocate the requested advance recovery of {0}. "
-				"Only {1} is available through standard Sales Invoice advances for this Sales Order."
-			).format(
-				frappe.format_value(target, {"fieldtype": "Currency"}),
-				frappe.format_value(allocated, {"fieldtype": "Currency"}),
-			)
-		)
-
-	if ra_bill.meta.has_field("actual_advance_recovered"):
-		ra_bill.actual_advance_recovered = allocated
-	if ra_bill.meta.has_field("total_advance"):
-		ra_bill.total_advance = allocated
-	if ra_bill.meta.has_field("outstanding_amount"):
-		ra_bill.outstanding_amount = flt(ra_bill.get("grand_total")) - allocated
-	if ra_bill.meta.has_field("remaining_advance_after_current_bill"):
-		before = flt(ra_bill.get("remaining_advance_before_current_bill"))
-		ra_bill.remaining_advance_after_current_bill = max(before - allocated, 0)
 	return allocated
 
 
