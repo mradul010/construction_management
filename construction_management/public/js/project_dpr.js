@@ -2,7 +2,7 @@ frappe.ui.form.on("Project", {
 	setup(frm) {
 		const construction_account_filters = {
 			default_ra_bill_receivable_account: { account_type: "Receivable" },
-			default_retention_receivable_account: { account_type: "Receivable" },
+			default_retention_receivable_account: { root_type: "Asset", account_type: "" },
 			default_customer_advance_account: { account_type: "Receivable" },
 			default_advance_recovery_account: { account_type: "Receivable" },
 			default_construction_receipt_account: { root_type: "Asset" },

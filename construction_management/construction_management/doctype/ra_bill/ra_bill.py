@@ -2,12 +2,13 @@ import frappe
 from frappe import _
 from frappe.model.document import Document
 from frappe.utils import flt, getdate, today
+from erpnext.controllers.accounts_controller import get_taxes_and_charges
 
 from construction_management.construction_management.advance_management import (
-	apply_ra_bill_advances_to_sales_invoice,
 	get_ra_bill_advance_recovery_target,
 	get_ra_bill_sales_invoice_receivable_account,
 	set_item_sales_order,
+	sync_ra_bill_advance_rows,
 	update_ra_bill_advance_fields,
 	validate_ra_bill_advance_recovery,
 )
@@ -24,7 +25,8 @@ from construction_management.construction_management.doctype.retention_record.re
 	validate_sales_invoice_references,
 )
 from construction_management.construction_management.overrides.sales_invoice import (
-	apply_net_certified_vat_to_sales_invoice,
+	apply_ra_bill_deduction_taxes_to_sales_invoice,
+	clear_ra_bill_item_tax_overrides,
 )
 
 
@@ -37,6 +39,16 @@ RA_BILL_TAX_CHARGE_TYPES = {
 	"On Previous Row Total",
 	"On Item Quantity",
 }
+
+RA_BILL_TEMPLATE_TAX_FIELDS = (
+	"charge_type",
+	"row_id",
+	"account_head",
+	"description",
+	"included_in_print_rate",
+	"cost_center",
+	"rate",
+)
 
 
 class RABill(Document):
@@ -53,6 +65,7 @@ class RABill(Document):
 		self._validate_no_duplicate_items()
 		self._validate_not_overbilling()
 		self._calculate_header_totals()
+		self._set_template_tax_rows_if_missing()
 		self._validate_payment_and_tax_fields()
 		self.calculate_taxes_and_grand_total()
 		validate_ra_bill_advance_recovery(self)
@@ -401,20 +414,28 @@ class RABill(Document):
 			if row.charge_type and row.charge_type not in RA_BILL_TAX_CHARGE_TYPES:
 				frappe.throw(_("Invalid tax charge type: {0}").format(row.charge_type))
 
+		if self.sales_taxes_and_charges_template:
+			validate_ra_bill_tax_template_company(
+				self.sales_taxes_and_charges_template,
+				get_ra_bill_tax_company(boq=self.boq),
+			)
+
+	def _set_template_tax_rows_if_missing(self):
+		if not self.sales_taxes_and_charges_template or self.get("taxes"):
+			return
+
+		for row in get_ra_bill_template_tax_rows(
+			self.sales_taxes_and_charges_template,
+			boq=self.boq,
+		):
+			self.append("taxes", row)
+
 	def calculate_taxes_and_grand_total(self):
 		"""
-		Keep the new Sales Invoice-like totals passive.
-		RA Bill's existing gross/retention/net calculation remains authoritative.
+		Calculate Sales Invoice-like tax totals on the RA Bill certified amount.
+		Retention remains a separate RA Bill field and does not reduce this tax base.
 		"""
-		self.net_total = flt(self.gross_amount)
-
-		total_taxes = 0
-		for row in self.get("taxes") or []:
-			total_taxes += flt(row.tax_amount)
-			row.total = flt(self.net_payable) + total_taxes
-
-		self.total_taxes_and_charges = total_taxes
-		self.grand_total = flt(self.net_payable) + total_taxes
+		calculate_ra_bill_taxes(self)
 
 		advance_values = update_ra_bill_advance_fields(self)
 		self.total_advance = (
@@ -490,66 +511,14 @@ class RABill(Document):
 		if not company:
 			frappe.throw(_("Please set default Company before fetching advances."))
 
-		company_currency = frappe.get_cached_value("Company", company, "default_currency")
-		invoice_currency = self.currency or company_currency
-		receivable_account = get_ra_bill_sales_invoice_receivable_account(
-			self.customer,
-			company,
-			invoice_currency,
-			project=self.project,
-		)
-		party_account_currency = (
-			frappe.db.get_value("Account", receivable_account, "account_currency")
-			or invoice_currency
-		)
-
 		self.calculate_taxes_and_grand_total()
-		target_amount = flt(self.get("proposed_advance_recovery")) or flt(self.grand_total)
-		si = frappe.new_doc("Sales Invoice")
-		si.customer = self.customer
-		si.company = company
-		si.debit_to = receivable_account
-		si.currency = invoice_currency
-		si.party_account_currency = party_account_currency
-		si.conversion_rate = 1
-		si.posting_date = self.billing_period_to or today()
-		si.grand_total = flt(self.grand_total)
-		si.base_grand_total = flt(self.grand_total)
-		si.append(
-			"items",
-			{
-				"item_code": "RA Bill Services",
-				"qty": 1,
-				"rate": flt(self.gross_amount) or 1,
-				"sales_order": source_sales_order,
-			},
+		advance_values = update_ra_bill_advance_fields(self)
+		sync_ra_bill_advance_rows(
+			self,
+			source_sales_order,
+			flt(advance_values.get("actual_advance_recovered")),
+			flt(advance_values.get("previously_recovered_advance")),
 		)
-		si.grand_total = flt(self.grand_total)
-		si.base_grand_total = flt(self.grand_total)
-		if hasattr(si, "set_missing_values"):
-			si.set_missing_values()
-		if hasattr(si, "calculate_taxes_and_totals"):
-			si.calculate_taxes_and_totals()
-
-		from construction_management.construction_management.advance_management import (
-			apply_standard_advances_to_sales_invoice,
-		)
-
-		apply_standard_advances_to_sales_invoice(si, target_amount)
-		self.set("advances", [])
-		for row in si.get("advances") or []:
-			self.append(
-				"advances",
-				{
-					"reference_type": row.reference_type,
-					"reference_name": row.reference_name,
-					"remarks": row.remarks,
-					"advance_amount": row.advance_amount,
-					"allocated_amount": row.allocated_amount,
-					"difference_posting_date": row.difference_posting_date,
-				},
-			)
-		self.calculate_taxes_and_grand_total()
 		return {
 			"advances": [row.as_dict() for row in self.get("advances")],
 			"total_advance": self.total_advance,
@@ -641,18 +610,6 @@ class RABill(Document):
 			if filtered_row:
 				doc.append(table_field, filtered_row)
 
-		def get_advance_row_data(row):
-			return {
-				"reference_type": row.reference_type,
-				"reference_name": row.reference_name,
-				"reference_row": row.get("reference_row"),
-				"remarks": row.remarks,
-				"advance_amount": row.advance_amount,
-				"allocated_amount": row.allocated_amount,
-				"ref_exchange_rate": row.get("ref_exchange_rate"),
-				"difference_posting_date": row.difference_posting_date,
-			}
-
 		def set_link_if_valid(doc, fieldname, value, parenttype, link_doctype, link_name):
 			if not doc.meta.has_field(fieldname) or value in (None, ""):
 				return
@@ -700,6 +657,7 @@ class RABill(Document):
 			set_if_exists(si, "ra_bill", self.name)
 			set_if_exists(si, "boq", self.boq)
 			set_if_exists(si, "sales_order", source_sales_order)
+			set_if_exists(si, "allocate_advances_automatically", 0)
 
 			set_link_if_valid(
 				si,
@@ -782,27 +740,6 @@ class RABill(Document):
 					},
 				)
 
-			for row in self.get("taxes") or []:
-				append_child_if_table_exists(
-					si,
-					"taxes",
-					{
-						"charge_type": row.charge_type,
-						"account_head": row.account_head,
-						"description": row.description,
-						"rate": row.rate,
-						"tax_amount": row.tax_amount,
-						"total": row.total,
-					},
-				)
-
-			for row in self.get("advances") or []:
-				append_child_if_table_exists(
-					si,
-					"advances",
-					get_advance_row_data(row),
-				)
-
 			for row in self.get("timesheets") or []:
 				append_child_if_table_exists(
 					si,
@@ -828,24 +765,15 @@ class RABill(Document):
 			if hasattr(si, "set_missing_values"):
 				si.set_missing_values()
 			apply_ra_bill_cost_center_to_sales_invoice(si)
-			if hasattr(si, "calculate_taxes_and_totals"):
-				si.calculate_taxes_and_totals()
 			recovery_target = get_ra_bill_advance_recovery_target(self)
-			apply_ra_bill_advances_to_sales_invoice(si, self)
+			apply_ra_bill_deduction_taxes_to_sales_invoice(
+				si,
+				self,
+				advance_native=recovery_target,
+			)
 			if hasattr(si, "calculate_taxes_and_totals"):
 				si.calculate_taxes_and_totals()
-			allocated = sum(flt(row.allocated_amount) for row in si.get("advances") or [])
-			if recovery_target and flt(allocated, 2) != flt(recovery_target, 2):
-				frappe.throw(
-					_(
-						"Sales Invoice advance allocation {0} does not match RA Bill "
-						"advance recovery {1}."
-					).format(
-						frappe.format_value(allocated, {"fieldtype": "Currency"}),
-						frappe.format_value(recovery_target, {"fieldtype": "Currency"}),
-					)
-				)
-			apply_net_certified_vat_to_sales_invoice(si, self, advance_native=allocated)
+			clear_ra_bill_item_tax_overrides(si)
 			si.insert(ignore_permissions=True)
 			return si
 
@@ -918,6 +846,7 @@ class RABill(Document):
 		if not invoice_items:
 			frappe.throw("No RA Bill Items with a positive current amount were found to invoice.")
 
+		validate_ra_bill_advance_recovery(self)
 		set_item_sales_order(invoice_items, source_sales_order)
 
 		invoice_gross = sum(
@@ -943,13 +872,8 @@ class RABill(Document):
 		si = make_sales_invoice(invoice_items)
 
 		self.db_set("sales_invoice", si.name)
-		allocated_advance = sum(flt(row.allocated_amount) for row in si.get("advances") or [])
-		# si.outstanding_amount here is grand_total - advance only: the Sales Invoice is
-		# still a Draft, so retention hasn't been split into its own receivable account via
-		# GL entries yet (that only happens on submit). Net out retention here too, since it
-		# is already fully known from this RA Bill, so this cached field doesn't stay frozen
-		# at an advance-only figure once the invoice is submitted and truly reconciled.
-		outstanding_amount = max(flt(si.outstanding_amount) - flt(self.retention_amount), 0)
+		allocated_advance = get_ra_bill_advance_recovery_target(self)
+		outstanding_amount = flt(si.outstanding_amount)
 		field_updates = {
 			"actual_advance_recovered": allocated_advance,
 			"total_advance": allocated_advance,
@@ -974,6 +898,134 @@ class RABill(Document):
 		)
 
 		return si.name
+
+
+def get_ra_bill_tax_company(company=None, boq=None):
+	if company:
+		return company
+
+	if boq:
+		boq_company = frappe.db.get_value("BOQ", boq, "company")
+		if boq_company:
+			return boq_company
+
+	return frappe.defaults.get_user_default("Company") or frappe.defaults.get_global_default("company")
+
+
+def validate_ra_bill_tax_template_company(template, company=None):
+	if not template:
+		return
+
+	template_doc = frappe.db.get_value(
+		"Sales Taxes and Charges Template",
+		template,
+		["name", "company", "disabled"],
+		as_dict=True,
+	)
+	if not template_doc:
+		frappe.throw(_("Sales Taxes and Charges Template {0} does not exist.").format(template))
+
+	if template_doc.disabled:
+		frappe.throw(_("Sales Taxes and Charges Template {0} is disabled.").format(template))
+
+	if company and template_doc.company and template_doc.company != company:
+		frappe.throw(
+			_("Sales Taxes and Charges Template {0} belongs to Company {1}, not {2}.").format(
+				template,
+				template_doc.company,
+				company,
+			)
+		)
+
+
+@frappe.whitelist()
+def get_ra_bill_template_tax_rows(template, company=None, boq=None):
+	company = get_ra_bill_tax_company(company=company, boq=boq)
+	validate_ra_bill_tax_template_company(template, company)
+
+	child_meta = frappe.get_meta("RA Bill Taxes and Charges")
+	rows = []
+	for source in get_taxes_and_charges("Sales Taxes and Charges Template", template) or []:
+		row = {}
+		for fieldname in RA_BILL_TEMPLATE_TAX_FIELDS:
+			if child_meta.has_field(fieldname):
+				row[fieldname] = source.get(fieldname)
+		if source.get("charge_type") == "Actual" and child_meta.has_field("tax_amount"):
+			row["tax_amount"] = flt(source.get("tax_amount"))
+		if child_meta.has_field("from_template"):
+			row["from_template"] = 1
+		if child_meta.has_field("source_tax_template"):
+			row["source_tax_template"] = template
+		rows.append(row)
+
+	return rows
+
+
+def calculate_ra_bill_taxes(doc):
+	doc.net_total = flt(doc.gross_amount)
+	running_total = flt(doc.net_total)
+	total_taxes = 0
+	calculated_rows = []
+
+	for row in doc.get("taxes") or []:
+		tax_amount = get_ra_bill_tax_amount(row, doc.net_total, calculated_rows)
+		if row.charge_type != "On Item Quantity":
+			row.tax_amount = tax_amount
+		else:
+			tax_amount = flt(row.tax_amount)
+
+		total_taxes += tax_amount
+		running_total += tax_amount
+		row.total = running_total
+		calculated_rows.append(
+			frappe._dict(
+				{
+					"tax_amount": tax_amount,
+					"total": running_total,
+				}
+			)
+		)
+
+	doc.total_taxes_and_charges = total_taxes
+	doc.grand_total = running_total
+
+
+def get_ra_bill_tax_amount(row, net_total, previous_rows):
+	charge_type = row.charge_type or "Actual"
+
+	if charge_type == "Actual":
+		return flt(row.tax_amount)
+
+	if charge_type == "On Net Total":
+		return flt(net_total) * flt(row.rate) / 100
+
+	if charge_type in ("On Previous Row Amount", "On Previous Row Total"):
+		reference_row = get_previous_ra_bill_tax_row(row, previous_rows)
+		reference_amount = (
+			flt(reference_row.total)
+			if charge_type == "On Previous Row Total"
+			else flt(reference_row.tax_amount)
+		)
+		return reference_amount * flt(row.rate) / 100
+
+	return flt(row.tax_amount)
+
+
+def get_previous_ra_bill_tax_row(row, previous_rows):
+	try:
+		row_id = int(row.row_id)
+	except (TypeError, ValueError):
+		row_id = 0
+
+	if row_id < 1 or row_id > len(previous_rows):
+		frappe.throw(
+			_("Tax row {0} must reference a previous row for charge type {1}.").format(
+				row.idx or "",
+				row.charge_type,
+			)
+		)
+
+	return previous_rows[row_id - 1]
 
 
 @frappe.whitelist()

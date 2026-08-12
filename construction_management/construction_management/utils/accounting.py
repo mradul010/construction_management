@@ -13,7 +13,8 @@ CONSTRUCTION_ACCOUNT_FIELDS = {
 	},
 	"retention_receivable": {
 		"company_field": "default_retention_receivable_account",
-		"account_type": "Receivable",
+		"root_type": "Asset",
+		"account_type": "",
 	},
 	"customer_advance": {
 		"company_field": "default_customer_advance_account",
@@ -810,12 +811,18 @@ def _is_valid_account(account, company, config):
 		return False
 
 	filters = {"name": account, "company": company, "is_group": 0, "disabled": 0}
-	if config.get("account_type"):
+	if "account_type" in config and config.get("account_type"):
 		filters["account_type"] = config["account_type"]
 	if config.get("root_type"):
 		filters["root_type"] = config["root_type"]
 
-	return bool(frappe.db.exists("Account", filters))
+	if not frappe.db.exists("Account", filters):
+		return False
+
+	if "account_type" in config and not config.get("account_type"):
+		return not frappe.db.get_value("Account", account, "account_type")
+
+	return True
 
 
 def _get_retention_parent_account(company=None):
