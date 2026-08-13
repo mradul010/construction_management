@@ -961,6 +961,119 @@ def get_ra_bill_template_tax_rows(template, company=None, boq=None):
 	return rows
 
 
+def _get_permission_checked_boq(boq, permission_type="read"):
+	if not boq:
+		frappe.throw(_("Please select a BOQ."))
+
+	doc = frappe.get_doc("BOQ", boq)
+	doc.check_permission(permission_type)
+	return doc
+
+
+def _get_boq_child_item_row(boq_doc, boq_item):
+	for row in boq_doc.get("items") or []:
+		if row.name == boq_item:
+			return row
+
+	frappe.throw(_("BOQ Item {0} does not belong to BOQ {1}.").format(boq_item, boq_doc.name))
+
+
+def _get_boq_category_label_map(category_names):
+	category_names = [name for name in set(category_names or []) if name]
+	if not category_names:
+		return {}, []
+
+	categories = frappe.get_all(
+		"BOQ Category",
+		filters={"name": ["in", category_names]},
+		fields=["name", "category_name", "parent_node"],
+		limit_page_length=1000,
+	)
+	parent_names = [row.parent_node for row in categories if row.parent_node]
+	parents = []
+	if parent_names:
+		parents = frappe.get_all(
+			"BOQ Category",
+			filters={"name": ["in", list(set(parent_names))]},
+			fields=["name", "category_name", "parent_node"],
+			limit_page_length=1000,
+		)
+
+	label_map = {}
+	for row in [*categories, *parents]:
+		label_map[row.name] = row.category_name or row.name
+
+	return label_map, categories
+
+
+@frappe.whitelist()
+def get_boq_item_details_for_ra_bill(boq, boq_item):
+	boq_doc = _get_permission_checked_boq(boq)
+	row = _get_boq_child_item_row(boq_doc, boq_item)
+	label_map, categories = _get_boq_category_label_map([row.boq_category])
+	category = next((category for category in categories if category.name == row.boq_category), None)
+	parent_category = (
+		(category.parent_node if category else None)
+		or row.get("boq_parent_category")
+		or ""
+	)
+
+	return {
+		"name": row.name,
+		"parent": boq_doc.name,
+		"item": row.get("item"),
+		"item_name": row.get("item_name"),
+		"qty": flt(row.get("qty")),
+		"unit_rate": flt(row.get("unit_rate")),
+		"unit_cost": flt(row.get("unit_cost")),
+		"uom": row.get("uom"),
+		"boq_category": row.get("boq_category"),
+		"boq_parent_category": row.get("boq_parent_category"),
+		"parent_category": parent_category,
+		"category_label": label_map.get(row.get("boq_category")) or row.get("boq_category"),
+		"parent_category_label": label_map.get(parent_category) or parent_category,
+		"boq_item_key": row.get("boq_item_key"),
+		"component_key": row.get("component_key"),
+		"is_deleted_in_revision": row.get("is_deleted_in_revision"),
+	}
+
+
+@frappe.whitelist()
+def get_boq_context_for_ra_bill(boq):
+	boq_doc = _get_permission_checked_boq(boq)
+	items = []
+	category_names = []
+
+	for row in boq_doc.get("items") or []:
+		if row.get("is_deleted_in_revision"):
+			continue
+
+		if row.get("boq_category"):
+			category_names.append(row.boq_category)
+		items.append(
+			{
+				"name": row.name,
+				"boq_category": row.get("boq_category"),
+				"item": row.get("item"),
+				"item_name": row.get("item_name"),
+				"boq_item_key": row.get("boq_item_key"),
+			}
+		)
+
+	label_map, categories = _get_boq_category_label_map(category_names)
+	parent_names = [category.parent_node for category in categories if category.parent_node]
+	all_category_names = list(set([*category_names, *parent_names]))
+
+	return {
+		"items": items,
+		"categories": [
+			{"name": name, "category_name": label_map.get(name) or name}
+			for name in all_category_names
+			if name
+		],
+	}
+
+
 def calculate_ra_bill_taxes(doc):
 	doc.net_total = flt(doc.gross_amount)
 	running_total = flt(doc.net_total)
@@ -1535,6 +1648,7 @@ def _coerce_list(value):
 
 @frappe.whitelist()
 def get_boq_item_billing_summary(boq, boq_item, current_ra_bill=None):
+	_get_permission_checked_boq(boq)
 	return _get_boq_item_billing_summary(boq, boq_item, current_ra_bill)
 
 
@@ -1544,6 +1658,7 @@ def get_boq_item_previous_work(boq, boq_item, current_ra_bill=None):
 	Return previous completed qty/percent and remaining qty/percent
 	for selected BOQ Item in selected BOQ.
 	"""
+	_get_permission_checked_boq(boq)
 	return _get_boq_item_billing_summary(boq, boq_item, current_ra_bill)
 
 
@@ -1557,6 +1672,7 @@ def search_ra_bill_categories(doctype, txt, searchfield, start, page_len, filter
 
 	if not boq:
 		return []
+	_get_permission_checked_boq(boq)
 
 	txt = txt or ""
 	like_txt = f"%{txt}%"
@@ -1608,6 +1724,7 @@ def search_ra_bill_subcategories(doctype, txt, searchfield, start, page_len, fil
 
 	if not boq or not category:
 		return []
+	_get_permission_checked_boq(boq)
 
 	txt = txt or ""
 	like_txt = f"%{txt}%"
@@ -1661,6 +1778,7 @@ def search_boq_items_for_ra_bill(doctype, txt, searchfield, start, page_len, fil
 
 	if not boq:
 		return []
+	_get_permission_checked_boq(boq)
 
 	txt = txt or ""
 	like_txt = f"%{txt}%"
