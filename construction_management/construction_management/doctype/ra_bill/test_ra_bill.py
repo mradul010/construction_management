@@ -277,7 +277,7 @@ class IntegrationTestRABill(UnitTestCase):
 			with self.assertRaises(frappe.ValidationError):
 				validate_ra_bill_advance_recovery_balance(si, 2000.01)
 
-	def test_ra_bill_advance_recovery_percent_uses_total_advance_received(self):
+	def test_ra_bill_advance_recovery_percent_uses_gross_amount_and_caps_actual(self):
 		ra_bill = _fake_ra_bill(
 			name="RA-BILL-TEST",
 			sales_order="SO-TEST",
@@ -313,10 +313,51 @@ class IntegrationTestRABill(UnitTestCase):
 		):
 			values = update_ra_bill_advance_fields(ra_bill)
 
-		self.assertEqual(values.proposed_advance_recovery, 200)
-		self.assertEqual(values.actual_advance_recovered, 200)
-		self.assertEqual(values.remaining_advance_after_current_bill, 1800)
-		self.assertEqual([row.allocated_amount for row in ra_bill.advances], [200, 0])
+		self.assertEqual(values.proposed_advance_recovery, 6880)
+		self.assertEqual(values.actual_advance_recovered, 2000)
+		self.assertEqual(values.remaining_advance_after_current_bill, 0)
+		self.assertEqual([row.allocated_amount for row in ra_bill.advances], [1000, 1000])
+
+	def test_ra_bill_advance_recovery_percent_recovers_calculated_amount_when_advance_is_available(self):
+		ra_bill = _fake_ra_bill(
+			name="RA-BILL-TEST",
+			sales_order="SO-TEST",
+			gross_amount=10000,
+			grand_total=10000,
+			advance_recovery_percent=10,
+			advances=[
+				_FakeRow({"idx": 1, "advance_amount": 1000, "allocated_amount": 1000}),
+				_FakeRow({"idx": 2, "advance_amount": 1000, "allocated_amount": 1000}),
+			],
+		)
+
+		with (
+			patch(
+				"construction_management.construction_management.advance_management.get_ra_bill_sales_order",
+				return_value="SO-TEST",
+			),
+			patch(
+				"construction_management.construction_management.advance_management.get_sales_order_advance_summary",
+				return_value=frappe._dict(
+					{
+						"sales_order": "SO-TEST",
+						"total_advance_received": 5000,
+						"total_advance_recovered": 0,
+						"remaining_advance_balance": 5000,
+					}
+				),
+			),
+			patch(
+				"construction_management.construction_management.advance_management.get_sales_order_advance_reference_rows",
+				return_value=_fake_advance_sources(),
+			),
+		):
+			values = update_ra_bill_advance_fields(ra_bill)
+
+		self.assertEqual(values.proposed_advance_recovery, 1000)
+		self.assertEqual(values.actual_advance_recovered, 1000)
+		self.assertEqual(values.remaining_advance_after_current_bill, 4000)
+		self.assertEqual([row.allocated_amount for row in ra_bill.advances], [1000, 0])
 
 	def test_ra_bill_advance_recovery_percent_caps_actual_by_remaining_balance(self):
 		ra_bill = _fake_ra_bill(
@@ -351,7 +392,7 @@ class IntegrationTestRABill(UnitTestCase):
 		):
 			values = update_ra_bill_advance_fields(ra_bill)
 
-		self.assertEqual(values.proposed_advance_recovery, 200)
+		self.assertEqual(values.proposed_advance_recovery, 6880)
 		self.assertEqual(values.actual_advance_recovered, 150)
 		self.assertEqual(values.remaining_advance_after_current_bill, 0)
 		self.assertEqual([row.allocated_amount for row in ra_bill.advances], [0, 150])
@@ -389,7 +430,7 @@ class IntegrationTestRABill(UnitTestCase):
 		):
 			values = update_ra_bill_advance_fields(ra_bill)
 
-		self.assertEqual(values.proposed_advance_recovery, 200)
+		self.assertEqual(values.proposed_advance_recovery, 6880)
 		self.assertEqual(values.actual_advance_recovered, 0)
 		self.assertEqual(values.remaining_advance_after_current_bill, 0)
 		self.assertEqual([row.allocated_amount for row in ra_bill.advances], [0, 0])
@@ -439,7 +480,7 @@ class IntegrationTestRABill(UnitTestCase):
 
 			ra_bill.advance_recovery_percent = 100
 			values = update_ra_bill_advance_fields(ra_bill)
-			self.assertEqual(values.proposed_advance_recovery, 2000)
+			self.assertEqual(values.proposed_advance_recovery, 68800)
 			self.assertEqual(values.actual_advance_recovered, 2000)
 			self.assertEqual(values.remaining_advance_after_current_bill, 0)
 			self.assertEqual([row.allocated_amount for row in ra_bill.advances], [1000, 1000])
