@@ -725,9 +725,15 @@ async function setBoqItemDetails(frm, cdt, cdn) {
 		return rejectDuplicateBoqItem(frm, cdt, cdn);
 	}
 
-	const doc = await frappe.db.get_doc("BOQ Item", row.boq_item);
-	console.log("Fetched BOQ Item full doc:", doc);
-	console.log("Applying BOQ Item to RA Bill row:", doc);
+	const doc = await frappe
+		.call({
+			method: `${RA_BILL_METHOD}.get_boq_item_details_for_ra_bill`,
+			args: {
+				boq: frm.doc.boq,
+				boq_item: row.boq_item,
+			},
+		})
+		.then((r) => r.message);
 
 	if (!doc) {
 		frappe.msgprint("Unable to fetch BOQ Item details.");
@@ -756,8 +762,7 @@ async function setBoqItemDetails(frm, cdt, cdn) {
 		});
 	}
 
-	const parentCategoryFromTree = await getParentCategoryFromSubcategory(subCategory);
-	const parentCategory = parentCategoryFromTree || doc.boq_parent_category || row.category_name || "";
+	const parentCategory = doc.parent_category || doc.boq_parent_category || row.category_name || "";
 	const previousWork = await fetchPreviousWorkSummary(frm, row);
 	const previousWorkValues = getPreviousWorkValues(previousWork, qty);
 	const boqItemKey = doc.boq_item_key || doc.component_key || row.boq_item;
@@ -793,15 +798,15 @@ async function setBoqItemDetails(frm, cdt, cdn) {
 
 	boqItemLabels[row.boq_item] = itemName;
 	if (subCategory) {
-		cacheCategoryLabel(subCategory);
+		boqCategoryLabels[subCategory] = doc.category_label || boqCategoryLabels[subCategory] || subCategory;
 	}
 	if (parentCategory) {
-		cacheCategoryLabel(parentCategory);
+		boqCategoryLabels[parentCategory] =
+			doc.parent_category_label || boqCategoryLabels[parentCategory] || parentCategory;
 	}
 
 	await setChildValues(frm, cdt, cdn, values);
 	frm.trigger("recalculate_totals");
-	console.log("RA Bill row after BOQ item apply:", locals[cdt][cdn]);
 }
 
 function applyBoqContractToRaBill(frm, selectedBoq) {
@@ -912,62 +917,22 @@ frappe.ui.form.on("RA Bill", {
 				return Promise.resolve();
 			}
 
-			return frappe.db
-				.get_list("BOQ Item", {
-					filters: {
-						parent: frm.doc.boq,
-						parenttype: "BOQ",
-						parentfield: "items",
-						is_deleted_in_revision: 0,
+			return frappe
+				.call({
+					method: `${RA_BILL_METHOD}.get_boq_context_for_ra_bill`,
+					args: {
+						boq: frm.doc.boq,
 					},
-					fields: ["name", "boq_category", "item", "item_name", "boq_item_key"],
-					limit: 1000,
-					order_by: "idx asc",
 				})
-				.then((items) => {
-					const categoryNames = [
-						...new Set((items || []).map((item) => item.boq_category).filter(Boolean)),
-					];
-
-					(items || []).forEach((item) => {
+				.then((r) => {
+					const context = r.message || {};
+					(context.items || []).forEach((item) => {
 						boqItemLabels[item.name] = item.item_name || item.item || item.name;
 					});
-
-					if (!categoryNames.length) {
-						frm._ra_bill_context_boq = frm.doc.boq;
-						return [];
-					}
-
-					return frappe.db
-						.get_list("BOQ Category", {
-							filters: [["name", "in", categoryNames]],
-							fields: ["name", "category_name", "parent_node"],
-							limit: 1000,
-						})
-						.then((subcategories) => {
-							const parentNames = [
-								...new Set(
-									(subcategories || [])
-										.map((category) => category.parent_node)
-										.filter(Boolean),
-								),
-							];
-							const parentPromise = parentNames.length
-								? frappe.db.get_list("BOQ Category", {
-										filters: [["name", "in", parentNames]],
-										fields: ["name", "category_name"],
-										limit: 1000,
-								  })
-								: Promise.resolve([]);
-
-							return parentPromise.then((parents) => {
-								[...(subcategories || []), ...(parents || [])].forEach((category) => {
-									boqCategoryLabels[category.name] =
-										category.category_name || category.name;
-								});
-								frm._ra_bill_context_boq = frm.doc.boq;
-							});
-						});
+					(context.categories || []).forEach((category) => {
+						boqCategoryLabels[category.name] = category.category_name || category.name;
+					});
+					frm._ra_bill_context_boq = frm.doc.boq;
 				});
 		};
 	},
