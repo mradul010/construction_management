@@ -468,7 +468,7 @@ def update_ra_bill_advance_fields(ra_bill):
 	proposed = 0
 	recovery_percent = flt(ra_bill.get("advance_recovery_percent"))
 	if recovery_percent > 0:
-		proposed = flt(summary.total_advance_received) * recovery_percent / 100
+		proposed = flt(ra_bill.get("gross_amount")) * recovery_percent / 100
 
 	allocated_from_rows = sum(flt(row.allocated_amount) for row in ra_bill.get("advances") or [])
 	actual = min(proposed, remaining_before) if recovery_percent > 0 else allocated_from_rows

@@ -1239,7 +1239,7 @@ frappe.ui.form.on("RA Bill", {
 		const remainingBefore = Math.max(totalAdvanceReceived - previouslyRecovered, 0);
 		const recoveryPercent = getNumber(frm.doc.advance_recovery_percent);
 		const proposedRecovery = recoveryPercent
-			? (totalAdvanceReceived * recoveryPercent) / 100
+			? (gross * recoveryPercent) / 100
 			: getNumber(frm.doc.proposed_advance_recovery);
 		const totalAdvance = recoveryPercent
 			? Math.min(proposedRecovery, remainingBefore)
