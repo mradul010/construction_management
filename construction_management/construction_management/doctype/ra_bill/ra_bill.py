@@ -28,6 +28,13 @@ from construction_management.construction_management.overrides.sales_invoice imp
 	apply_ra_bill_deduction_taxes_to_sales_invoice,
 	clear_ra_bill_item_tax_overrides,
 )
+from construction_management.construction_management.ra_bill_dates import (
+	apply_ra_bill_dates_to_sales_invoice,
+	get_ra_bill_due_date,
+	get_ra_bill_posting_date,
+	set_default_ra_bill_invoice_dates,
+	validate_ra_bill_invoice_dates,
+)
 
 
 OVERBILLING_TOLERANCE = 0.0001
@@ -57,6 +64,8 @@ class RABill(Document):
 		self._sync_and_validate_boq_contract()
 		self._validate_boq_matches_project()
 		self._validate_boq_is_active_for_new_bill()
+		self._set_default_invoice_dates()
+		validate_ra_bill_invoice_dates(self)
 		self._set_bill_no()
 		self._fetch_boq_item_details()
 		self._fill_previous_work_summary()
@@ -123,6 +132,25 @@ class RABill(Document):
 			frappe.throw(_("RA Bill {0} must match BOQ {0}.").format(label))
 		if not current_value:
 			self.set(fieldname, boq_value)
+
+	def _set_default_invoice_dates(self):
+		if self.docstatus == 2:
+			return
+
+		set_default_ra_bill_invoice_dates(
+			self,
+			company=get_ra_bill_tax_company(boq=self.boq),
+		)
+
+	@frappe.whitelist()
+	def get_invoice_date_defaults(self):
+		company = get_ra_bill_tax_company(boq=self.boq)
+		posting_date = get_ra_bill_posting_date(self)
+		due_date = get_ra_bill_due_date(self, posting_date=posting_date, company=company)
+		return {
+			"posting_date": posting_date,
+			"due_date": due_date,
+		}
 
 	def _set_bill_no(self):
 		"""
@@ -625,20 +653,15 @@ class RABill(Document):
 			):
 				doc.set(fieldname, value)
 
-		def get_first_payment_schedule_due_date():
-			due_dates = [
-				row.due_date for row in self.get("payment_schedule") or [] if row.due_date
-			]
-			return min(due_dates) if due_dates else None
-
 		def get_posting_date():
-			return self.billing_period_to or today()
+			return get_ra_bill_posting_date(self)
 
 		def get_due_date():
-			schedule_due_date = get_first_payment_schedule_due_date()
-			if schedule_due_date:
-				return schedule_due_date
-			return frappe.utils.add_days(get_posting_date(), 30)
+			return get_ra_bill_due_date(
+				self,
+				posting_date=get_posting_date(),
+				company=company,
+			)
 
 		def add_advanced_fields(si):
 			set_if_exists(si, "customer", self.customer)
@@ -760,10 +783,12 @@ class RABill(Document):
 			}
 			si = frappe.get_doc(si_data)
 			add_advanced_fields(si)
+			apply_ra_bill_dates_to_sales_invoice(si, self, company=company)
 			apply_ra_bill_cost_center_to_sales_invoice(si)
 			validate_sales_invoice_references(si)
 			if hasattr(si, "set_missing_values"):
 				si.set_missing_values()
+			apply_ra_bill_dates_to_sales_invoice(si, self, company=company)
 			apply_ra_bill_cost_center_to_sales_invoice(si)
 			recovery_target = get_ra_bill_advance_recovery_target(self)
 			apply_ra_bill_deduction_taxes_to_sales_invoice(
@@ -773,6 +798,7 @@ class RABill(Document):
 			)
 			if hasattr(si, "calculate_taxes_and_totals"):
 				si.calculate_taxes_and_totals()
+			apply_ra_bill_dates_to_sales_invoice(si, self, company=company)
 			clear_ra_bill_item_tax_overrides(si)
 			si.insert(ignore_permissions=True)
 			return si

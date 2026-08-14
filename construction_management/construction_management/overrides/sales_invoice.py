@@ -10,6 +10,9 @@ from construction_management.construction_management.accounting_dimensions impor
 	get_ra_bill_project_cost_center,
 )
 from construction_management.construction_management.utils.accounting import get_construction_account
+from construction_management.construction_management.ra_bill_dates import (
+	apply_ra_bill_dates_to_sales_invoice,
+)
 
 
 AMOUNT_TOLERANCE = 0.0001
@@ -38,8 +41,10 @@ class ConstructionSalesInvoice(SalesInvoice):
 		if self.is_ra_bill_invoice():
 			clear_ra_bill_item_tax_overrides(self)
 			self.set("advances", [])
+			apply_ra_bill_dates_to_sales_invoice(self, self.get_ra_bill_doc(), company=self.company)
 		super().validate()
 		if self.is_ra_bill_invoice():
+			apply_ra_bill_dates_to_sales_invoice(self, self.get_ra_bill_doc(), company=self.company)
 			clear_ra_bill_item_tax_overrides(self)
 		self.validate_retention_account_for_submit()
 		self.set_payment_breakdown()
@@ -127,6 +132,11 @@ class ConstructionSalesInvoice(SalesInvoice):
 			return False
 
 		return True
+
+	def get_ra_bill_doc(self):
+		if not self.is_ra_bill_invoice():
+			return None
+		return frappe.get_cached_doc("RA Bill", self.ra_bill)
 
 	def has_ra_bill_deduction_tax_rows(self):
 		if not self.is_ra_bill_invoice():

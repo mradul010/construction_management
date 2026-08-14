@@ -14,6 +14,11 @@ from construction_management.construction_management.overrides.sales_invoice imp
 from construction_management.construction_management.doctype.ra_bill.ra_bill import (
 	calculate_ra_bill_taxes,
 )
+from construction_management.construction_management.ra_bill_dates import (
+	apply_ra_bill_dates_to_sales_invoice,
+	set_default_ra_bill_invoice_dates,
+	validate_ra_bill_invoice_dates,
+)
 from construction_management.construction_management.advance_management import (
 	get_ra_bill_advance_recovery_target,
 	update_ra_bill_advance_fields,
@@ -544,3 +549,42 @@ class IntegrationTestRABill(UnitTestCase):
 		self.assertEqual(ra_bill.taxes[2].total, 8400)
 		self.assertEqual(ra_bill.total_taxes_and_charges, -1600)
 		self.assertEqual(ra_bill.grand_total, 8400)
+
+	def test_ra_bill_invoice_date_defaults_use_billing_period_and_schedule(self):
+		ra_bill = _fake_ra_bill(
+			billing_period_to="2026-05-31",
+			payment_schedule=[_FakeRow({"due_date": "2026-06-30"})],
+		)
+
+		with patch(
+			"construction_management.construction_management.ra_bill_dates.get_customer_due_date",
+			return_value=None,
+		):
+			set_default_ra_bill_invoice_dates(ra_bill)
+
+		self.assertEqual(ra_bill.posting_date, "2026-05-31")
+		self.assertEqual(ra_bill.due_date, "2026-06-30")
+
+	def test_ra_bill_rejects_due_date_before_posting_date(self):
+		ra_bill = _fake_ra_bill(
+			posting_date="2026-06-01",
+			due_date="2026-05-31",
+		)
+
+		with self.assertRaises(frappe.ValidationError):
+			validate_ra_bill_invoice_dates(ra_bill)
+
+	def test_ra_bill_dates_are_applied_to_sales_invoice_and_schedule(self):
+		si = _fake_sales_invoice()
+		si.payment_schedule = [_FakeRow({"due_date": "2026-09-30", "invoice_portion": 100})]
+		ra_bill = _fake_ra_bill(
+			posting_date="2026-05-31",
+			due_date="2026-06-30",
+		)
+
+		apply_ra_bill_dates_to_sales_invoice(si, ra_bill)
+
+		self.assertEqual(si.posting_date, "2026-05-31")
+		self.assertEqual(si.due_date, "2026-06-30")
+		self.assertEqual(si.payment_schedule[0].due_date, "2026-06-30")
+		self.assertEqual(si.set_posting_time, 1)
