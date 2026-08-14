@@ -59,7 +59,12 @@ RA_BILL_TEMPLATE_TAX_FIELDS = (
 
 
 class RABill(Document):
+	def _validate_links(self):
+		self._reset_generated_fields_for_amendment()
+		super()._validate_links()
+
 	def validate(self):
+		self._reset_generated_fields_for_amendment()
 		self._set_active_boq_for_project()
 		self._sync_and_validate_boq_contract()
 		self._validate_boq_matches_project()
@@ -78,6 +83,13 @@ class RABill(Document):
 		self._validate_payment_and_tax_fields()
 		self.calculate_taxes_and_grand_total()
 		validate_ra_bill_advance_recovery(self)
+
+	def _reset_generated_fields_for_amendment(self):
+		if not self.amended_from or self.docstatus != 0:
+			return
+
+		self.sales_invoice = None
+		self.status = "Draft"
 
 	def _sync_and_validate_boq_contract(self):
 		if not self.boq:

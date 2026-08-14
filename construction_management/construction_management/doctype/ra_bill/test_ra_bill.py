@@ -174,6 +174,23 @@ class IntegrationTestRABill(UnitTestCase):
 			with self.assertRaises(frappe.ValidationError):
 				ra_bill._sync_and_validate_boq_contract()
 
+	def test_amended_ra_bill_clears_generated_invoice_state_before_link_validation(self):
+		ra_bill = frappe.get_doc(
+			{
+				"doctype": "RA Bill",
+				"amended_from": "RA-BILL-OLD",
+				"sales_invoice": "ACC-SINV-CANCELLED",
+				"status": "Invoiced",
+			}
+		)
+
+		with patch("frappe.model.document.Document._validate_links") as validate_links:
+			ra_bill._validate_links()
+
+		validate_links.assert_called_once()
+		self.assertIsNone(ra_bill.sales_invoice)
+		self.assertEqual(ra_bill.status, "Draft")
+
 	def test_ra_bill_invoice_deduction_tax_rows_are_ordered_before_vat(self):
 		si = _fake_sales_invoice()
 		ra_bill = _fake_ra_bill()
