@@ -534,6 +534,55 @@ function setParentValueIfFieldExists(frm, fieldname, value) {
 	frappe.model.set_value(frm.doctype, frm.docname, fieldname, value);
 }
 
+function validateRaBillInvoiceDates(frm, options = {}) {
+	if (!formFieldExists(frm, "posting_date") || !formFieldExists(frm, "due_date")) {
+		return true;
+	}
+
+	if (!frm.doc.posting_date || !frm.doc.due_date) {
+		return true;
+	}
+
+	if (frm.doc.due_date >= frm.doc.posting_date) {
+		return true;
+	}
+
+	frappe.msgprint({
+		title: __("Invalid Due Date"),
+		indicator: "red",
+		message: __("Due Date cannot be before Posting Date."),
+	});
+
+	if (options.clear_due_date) {
+		frm.set_value("due_date", "");
+	}
+
+	return false;
+}
+
+function setRaBillInvoiceDateDefaults(frm) {
+	if (frm.doc.docstatus !== 0) return;
+	if (frm.doc.posting_date && frm.doc.due_date) return;
+
+	return frappe
+		.call({
+			doc: frm.doc,
+			method: "get_invoice_date_defaults",
+		})
+		.then((r) => {
+			const defaults = r.message || {};
+			const values = {};
+			if (formFieldExists(frm, "posting_date") && !frm.doc.posting_date) {
+				values.posting_date = defaults.posting_date;
+			}
+			if (formFieldExists(frm, "due_date") && !frm.doc.due_date) {
+				values.due_date = defaults.due_date;
+			}
+
+			return setFormValuesIfChanged(frm, values);
+		});
+}
+
 function getRaBillTaxReferenceRow(row, previousRows) {
 	const rowId = parseInt(row.row_id, 10);
 	if (!rowId || rowId < 1 || rowId > previousRows.length) {
@@ -942,6 +991,7 @@ frappe.ui.form.on("RA Bill", {
 		getRaBillTaxCompany(frm);
 		hydrateBoqLabels(frm);
 		refreshPreviousWorkSummaries(frm);
+		setRaBillInvoiceDateDefaults(frm);
 
 		if (frm.doc.status === "Submitted" && frm.doc.docstatus === 1) {
 			frm.add_custom_button(
@@ -1040,12 +1090,32 @@ frappe.ui.form.on("RA Bill", {
 	},
 
 	validate: function (frm) {
+		if (!validateRaBillInvoiceDates(frm)) {
+			frappe.validated = false;
+			return;
+		}
+
 		if (!validateAllRaBillItemValues(frm)) {
 			frappe.validated = false;
 			return;
 		}
 
 		frm.trigger("recalculate_totals");
+	},
+
+	billing_period_to: function (frm) {
+		setRaBillInvoiceDateDefaults(frm);
+	},
+
+	posting_date: function (frm) {
+		if (!frm.doc.due_date) {
+			setRaBillInvoiceDateDefaults(frm);
+		}
+		validateRaBillInvoiceDates(frm, { clear_due_date: true });
+	},
+
+	due_date: function (frm) {
+		validateRaBillInvoiceDates(frm, { clear_due_date: true });
 	},
 
 	project: function (frm) {

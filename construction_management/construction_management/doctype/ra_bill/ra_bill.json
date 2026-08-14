@@ -17,8 +17,10 @@
   "currency",
   "billing_period_section",
   "billing_period_from",
+  "posting_date",
   "billing_period_column",
   "billing_period_to",
+  "due_date",
   "ra_bill_items_section",
   "items",
   "totals_section",
@@ -173,10 +175,20 @@
    "reqd": 1
   },
   {
+   "fieldname": "posting_date",
+   "fieldtype": "Date",
+   "label": "Posting Date"
+  },
+  {
    "fieldname": "billing_period_to",
    "fieldtype": "Date",
    "label": "Billing Period To",
    "reqd": 1
+  },
+  {
+   "fieldname": "due_date",
+   "fieldtype": "Date",
+   "label": "Due Date"
   },
   {
    "fieldname": "customer_column",
