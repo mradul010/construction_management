@@ -156,6 +156,7 @@
    "fieldtype": "Select",
    "in_list_view": 1,
    "label": "Status",
+   "no_copy": 1,
    "options": "Draft\nSubmitted\nApproved\nInvoiced\nCancelled",
    "read_only": 1
   },
@@ -346,6 +347,7 @@
    "fieldname": "sales_invoice",
    "fieldtype": "Link",
    "label": "Sales Invoice",
+   "no_copy": 1,
    "options": "Sales Invoice",
    "read_only": 1
   },
