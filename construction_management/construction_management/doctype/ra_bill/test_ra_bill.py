@@ -13,6 +13,8 @@ from construction_management.construction_management.overrides.sales_invoice imp
 )
 from construction_management.construction_management.doctype.ra_bill.ra_bill import (
 	calculate_ra_bill_taxes,
+	search_boq_adjustment_items_for_ra_bill,
+	search_boq_items_for_ra_bill,
 )
 from construction_management.construction_management.ra_bill_dates import (
 	apply_ra_bill_dates_to_sales_invoice,
@@ -725,6 +727,70 @@ class IntegrationTestRABill(UnitTestCase):
 			ra_bill._create_ra_bill_transactions()
 
 		create_transaction.assert_called_once_with(ra_bill, ra_bill.items[0], 0.9)
+
+	def test_adjustment_picker_includes_fully_certified_items(self):
+		candidates = [
+			("BOQ-ITEM-100", "Item A", 100, 900, "Nos"),
+			("BOQ-ITEM-50", "Item B", 100, 900, "Nos"),
+			("BOQ-ITEM-0", "Item C", 100, 900, "Nos"),
+		]
+		summaries = {
+			"BOQ-ITEM-100": {
+				"previous_qty": 100,
+				"previous_percent": 100,
+				"remaining_qty": 0,
+				"remaining_percent": 0,
+			},
+			"BOQ-ITEM-50": {
+				"previous_qty": 50,
+				"previous_percent": 50,
+				"remaining_qty": 50,
+				"remaining_percent": 50,
+			},
+			"BOQ-ITEM-0": {
+				"previous_qty": 0,
+				"previous_percent": 0,
+				"remaining_qty": 100,
+				"remaining_percent": 100,
+			},
+		}
+
+		def billing_summary(_boq, boq_item, _current_ra_bill=None):
+			return summaries[boq_item]
+
+		with (
+			patch(
+				"construction_management.construction_management.doctype.ra_bill.ra_bill._get_permission_checked_boq",
+				return_value=frappe._dict({"name": "BOQ-TEST"}),
+			),
+			patch("frappe.db.sql", return_value=candidates),
+			patch(
+				"construction_management.construction_management.doctype.ra_bill.ra_bill._get_boq_item_billing_summary",
+				side_effect=billing_summary,
+			),
+		):
+			normal_items = search_boq_items_for_ra_bill(
+				"BOQ Item",
+				"",
+				"name",
+				0,
+				20,
+				{"boq": "BOQ-TEST"},
+			)
+			adjustment_items = search_boq_adjustment_items_for_ra_bill(
+				"BOQ Item",
+				"",
+				"name",
+				0,
+				20,
+				{"boq": "BOQ-TEST"},
+			)
+
+		self.assertEqual([row[0] for row in normal_items], ["BOQ-ITEM-50", "BOQ-ITEM-0"])
+		self.assertEqual([row[0] for row in adjustment_items], ["BOQ-ITEM-100", "BOQ-ITEM-50"])
+		self.assertEqual(adjustment_items[0][5], 100)
+		self.assertEqual(adjustment_items[0][6], 100)
+		self.assertEqual(adjustment_items[0][7], 0)
 
 	def test_progress_after_adjustment_uses_corrected_baseline(self):
 		ra_bill = frappe.get_doc(
