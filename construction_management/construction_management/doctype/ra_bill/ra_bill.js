@@ -137,8 +137,12 @@ function getRemainingPercent(row) {
 	return boqQty ? (getRemainingQty(row || {}) / boqQty) * 100 : 0;
 }
 
+function isAdjustmentRow(row) {
+	return (row && row.progress_type) === "Adjustment";
+}
+
 function getRowTotals(row, workPercent) {
-	const pct = clampPercent(workPercent);
+	const pct = isAdjustmentRow(row) ? getNumber(workPercent) : clampPercent(workPercent);
 	const boqQty = getNumber(row.boq_qty);
 	const boqRate = getNumber(row.boq_rate);
 	const prevQty = getPreviousQty(row);
@@ -177,6 +181,7 @@ function clearItemDetailFields(frm, cdt, cdn, options = {}) {
 		remaining_qty: 0,
 		remaining_percent: 0,
 		prev_cumulative_qty: 0,
+		progress_type: "Progress",
 		work_percent: 0,
 		current_qty: 0,
 		cumulative_qty: 0,
@@ -208,6 +213,7 @@ function clearDuplicateBoqItemFields(frm, cdt, cdn) {
 		remaining_qty: 0,
 		remaining_percent: 0,
 		prev_cumulative_qty: 0,
+		progress_type: "Progress",
 		work_percent: 0,
 		current_qty: 0,
 		cumulative_qty: 0,
@@ -254,18 +260,47 @@ function validateRaBillItemValues(row) {
 	if (!row || !row.boq_item) return true;
 
 	const item = getRaBillItemLabel(row);
+	const workPercent = getNumber(row.work_percent);
+	const currentQty = getNumber(row.current_qty);
+	const cumulativeQty = getPreviousQty(row) + currentQty;
 
-	if (getNumber(row.work_percent) <= 0) {
+	if (isAdjustmentRow(row)) {
+		if (workPercent === 0) {
+			showRaBillItemValidation(__("Adjustment % for item {0} cannot be zero.", [item]));
+			return false;
+		}
+
+		if (getPreviousQty(row) <= 0.0001) {
+			showRaBillItemValidation(
+				__("Adjustment item {0} must have previous submitted RA progress.", [item]),
+			);
+			return false;
+		}
+
+		if (cumulativeQty < -0.0001) {
+			showRaBillItemValidation(
+				__("Adjustment for item {0} would reduce cumulative progress below zero.", [item]),
+			);
+			return false;
+		}
+
+		if (cumulativeQty > getNumber(row.boq_qty) + 0.0001) {
+			showRaBillItemValidation(
+				__("Adjustment for item {0} would increase cumulative progress above 100%.", [item]),
+			);
+			return false;
+		}
+	} else if (workPercent <= 0) {
 		showRaBillItemValidation(__("Work % for item {0} must be greater than 0.", [item]));
 		return false;
 	}
 
-	if (getNumber(row.work_percent) > 100) {
+	if (!isAdjustmentRow(row) && workPercent > 100) {
 		showRaBillItemValidation(__("Work % for item {0} cannot be greater than 100.", [item]));
 		return false;
 	}
 
-	if (getNumber(row.current_qty) < 0) {
+	if (!isAdjustmentRow(row) && currentQty < 0) {
 		showRaBillItemValidation(__("Current Qty for item {0} cannot be negative.", [item]));
 		return false;
 	}
@@ -280,7 +315,7 @@ function validateRaBillItemValues(row) {
 		return false;
 	}
 
-	if (getNumber(row.current_qty) > getRemainingQty(row) + 0.0001) {
+	if (!isAdjustmentRow(row) && currentQty > getRemainingQty(row) + 0.0001) {
 		showOverbillingCapMessage(row, getNumber(row.work_percent));
 		return false;
 	}
@@ -372,7 +407,11 @@ function updatePreviousWorkSummary(frm, cdt, cdn, options = {}) {
 		const currentQty = getNumber(updatedRow.current_qty);
 		const currentPercent = getNumber(updatedRow.work_percent);
 
-		if (options.cap_current !== false && currentQty > values.remaining_qty + 0.0001) {
+		if (
+			!isAdjustmentRow(updatedRow) &&
+			options.cap_current !== false &&
+			currentQty > values.remaining_qty + 0.0001
+		) {
 			return capWorkToRemaining(frm, cdt, cdn, updatedRow, currentPercent);
 		}
 
@@ -824,7 +863,7 @@ async function setBoqItemDetails(frm, cdt, cdn) {
 	};
 	let workPercent = getCurrentWorkPercent(rowWithPreviousWork);
 	const enteredQty = qty ? (qty * workPercent) / 100 : 0;
-	if (enteredQty > previousWorkValues.remaining_qty + 0.0001) {
+	if (!isAdjustmentRow(rowWithPreviousWork) && enteredQty > previousWorkValues.remaining_qty + 0.0001) {
 		showOverbillingCapMessage(rowWithPreviousWork, workPercent);
 		workPercent = previousWorkValues.remaining_percent;
 	}
@@ -856,6 +895,58 @@ async function setBoqItemDetails(frm, cdt, cdn) {
 
 	await setChildValues(frm, cdt, cdn, values);
 	frm.trigger("recalculate_totals");
+}
+
+function addAdjustmentItems(frm) {
+	if (!frm.doc.boq) {
+		frappe.msgprint({
+			title: __("BOQ Required"),
+			indicator: "orange",
+			message: __("Please select a BOQ before adding adjustment items."),
+		});
+		return;
+	}
+
+	const selectedItems = () =>
+		(frm.doc.items || []).filter((item) => item.boq_item).map((item) => item.boq_item);
+
+	const dialog = new frappe.ui.form.MultiSelectDialog({
+		doctype: "BOQ Item",
+		target: frm,
+		setters: {
+			item_name: null,
+			boq_category: null,
+		},
+		columns: ["name", "item_name", "qty", "unit_rate", "uom"],
+		primary_action_label: __("Add Adjustment"),
+		get_query: function () {
+			return {
+				query: `${RA_BILL_METHOD}.search_boq_items_for_ra_bill`,
+				filters: {
+					boq: frm.doc.boq,
+					current_ra_bill: frm.doc.name,
+					include_completed_for_adjustment: 1,
+					exclude_items: selectedItems(),
+				},
+			};
+		},
+		action: function (selections) {
+			if (!selections || !selections.length) return;
+
+			const additions = selections.map((boqItem) => {
+				const row = frm.add_child("items");
+				row.progress_type = "Adjustment";
+				row.boq_item = boqItem;
+				return setBoqItemDetails(frm, row.doctype, row.name);
+			});
+
+			Promise.all(additions).then(() => {
+				frm.refresh_field("items");
+				frm.trigger("recalculate_totals");
+				dialog.dialog.hide();
+			});
+		},
+	});
 }
 
 function applyBoqContractToRaBill(frm, selectedBoq) {
@@ -992,6 +1083,16 @@ frappe.ui.form.on("RA Bill", {
 		hydrateBoqLabels(frm);
 		refreshPreviousWorkSummaries(frm);
 		setRaBillInvoiceDateDefaults(frm);
+
+		if (frm.doc.docstatus === 0 && frm.doc.boq) {
+			frm.add_custom_button(
+				__("Add Adjustment Item"),
+				function () {
+					addAdjustmentItems(frm);
+				},
+				__("Actions"),
+			);
+		}
 
 		if (frm.doc.status === "Submitted" && frm.doc.docstatus === 1) {
 			frm.add_custom_button(
@@ -1312,6 +1413,7 @@ frappe.ui.form.on("RA Bill Item", {
 	items_add: function (frm, cdt, cdn) {
 		setChildValues(frm, cdt, cdn, {
 			uom: "Nos",
+			progress_type: "Progress",
 			work_percent: 0,
 			current_qty: 0,
 			current_amount: 0,
@@ -1325,6 +1427,18 @@ frappe.ui.form.on("RA Bill Item", {
 			boq_revision: "",
 			original_boq: "",
 		});
+	},
+
+	progress_type: function (frm, cdt, cdn) {
+		if (isSettingChildValues(frm, cdn)) return;
+
+		const row = locals[cdt][cdn];
+		if (!row || !row.boq_item) return;
+
+		const nextTotals = isAdjustmentRow(row)
+			? getRowTotals(row, row.work_percent)
+			: getRowTotals(row, clampPercent(row.work_percent));
+		setChildValues(frm, cdt, cdn, nextTotals).then(() => frm.trigger("recalculate_totals"));
 	},
 
 	category_name: function (frm, cdt, cdn) {
@@ -1376,7 +1490,7 @@ frappe.ui.form.on("RA Bill Item", {
 		const item = getRaBillItemLabel(row);
 		const workPercent = getNumber(row.work_percent);
 
-		if (row.boq_item && workPercent <= 0) {
+		if (row.boq_item && !isAdjustmentRow(row) && workPercent <= 0) {
 			showRaBillItemValidation(__("Work % for item {0} must be greater than 0.", [item]));
 			setChildValues(frm, cdt, cdn, {
 				work_percent: 0,
@@ -1387,7 +1501,18 @@ frappe.ui.form.on("RA Bill Item", {
 			return;
 		}
 
-		if (row.boq_item && workPercent > 100) {
+		if (row.boq_item && isAdjustmentRow(row) && workPercent === 0) {
+			showRaBillItemValidation(__("Adjustment % for item {0} cannot be zero.", [item]));
+			setChildValues(frm, cdt, cdn, {
+				work_percent: 0,
+				current_qty: 0,
+				cumulative_qty: getNumber(row.prev_cumulative_qty),
+				current_amount: 0,
+			}).then(() => frm.trigger("recalculate_totals"));
+			return;
+		}
+
+		if (row.boq_item && !isAdjustmentRow(row) && workPercent > 100) {
 			showRaBillItemValidation(__("Work % for item {0} cannot be greater than 100.", [item]));
 			setChildValues(frm, cdt, cdn, getRowTotals(row, 100)).then(() =>
 				frm.trigger("recalculate_totals"),
@@ -1396,7 +1521,7 @@ frappe.ui.form.on("RA Bill Item", {
 		}
 
 		const requestedQty = getNumber(row.boq_qty) * (workPercent / 100);
-		if (row.boq_item && requestedQty > getRemainingQty(row) + 0.0001) {
+		if (!isAdjustmentRow(row) && row.boq_item && requestedQty > getRemainingQty(row) + 0.0001) {
 			capWorkToRemaining(frm, cdt, cdn, row, workPercent);
 			return;
 		}
@@ -1410,7 +1535,7 @@ frappe.ui.form.on("RA Bill Item", {
 		if (isSettingChildValues(frm, cdn)) return;
 
 		const row = locals[cdt][cdn];
-		if (row.boq_item && getNumber(row.current_qty) < 0) {
+		if (row.boq_item && !isAdjustmentRow(row) && getNumber(row.current_qty) < 0) {
 			showRaBillItemValidation(
 				__("Current Qty for item {0} cannot be negative.", [getRaBillItemLabel(row)]),
 			);
@@ -1420,7 +1545,7 @@ frappe.ui.form.on("RA Bill Item", {
 			return;
 		}
 
-		if (row.boq_item && getNumber(row.current_qty) > getRemainingQty(row) + 0.0001) {
+		if (!isAdjustmentRow(row) && row.boq_item && getNumber(row.current_qty) > getRemainingQty(row) + 0.0001) {
 			const enteredPercent = getNumber(row.boq_qty)
 				? (getNumber(row.current_qty) / getNumber(row.boq_qty)) * 100
 				: getNumber(row.work_percent);

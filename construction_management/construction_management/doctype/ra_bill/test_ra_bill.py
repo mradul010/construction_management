@@ -567,6 +567,222 @@ class IntegrationTestRABill(UnitTestCase):
 		self.assertEqual(ra_bill.total_taxes_and_charges, -1600)
 		self.assertEqual(ra_bill.grand_total, 8400)
 
+	def test_adjustment_row_reduces_cumulative_progress(self):
+		ra_bill = frappe.get_doc(
+			{
+				"doctype": "RA Bill",
+				"boq": "BOQ-TEST",
+				"items": [
+					{
+						"boq_item": "BOQ-ITEM-TEST",
+						"item_name": "Site Management and Supervision",
+						"boq_qty": 100,
+						"boq_rate": 900,
+						"progress_type": "Adjustment",
+						"work_percent": -50,
+					}
+				],
+			}
+		)
+
+		with patch(
+			"construction_management.construction_management.doctype.ra_bill.ra_bill._get_boq_item_billing_summary",
+			return_value={
+				"previous_qty": 100,
+				"previous_percent": 100,
+				"remaining_qty": 0,
+				"remaining_percent": 0,
+			},
+		):
+			ra_bill.validate_item_values()
+			ra_bill._calculate_row_totals()
+			ra_bill._validate_not_overbilling()
+
+		row = ra_bill.items[0]
+		self.assertEqual(row.current_qty, -50)
+		self.assertEqual(row.current_amount, -45000)
+		self.assertEqual(row.cumulative_qty, 50)
+
+	def test_progress_after_adjustment_uses_corrected_baseline(self):
+		ra_bill = frappe.get_doc(
+			{
+				"doctype": "RA Bill",
+				"boq": "BOQ-TEST",
+				"items": [
+					{
+						"boq_item": "BOQ-ITEM-TEST",
+						"item_name": "Site Management and Supervision",
+						"boq_qty": 100,
+						"boq_rate": 900,
+						"progress_type": "Progress",
+						"work_percent": 10,
+					}
+				],
+			}
+		)
+
+		with patch(
+			"construction_management.construction_management.doctype.ra_bill.ra_bill._get_boq_item_billing_summary",
+			return_value={
+				"previous_qty": 50,
+				"previous_percent": 50,
+				"remaining_qty": 50,
+				"remaining_percent": 50,
+			},
+		):
+			ra_bill.validate_item_values()
+			ra_bill._calculate_row_totals()
+			ra_bill._validate_not_overbilling()
+
+		row = ra_bill.items[0]
+		self.assertEqual(row.current_qty, 10)
+		self.assertEqual(row.current_amount, 9000)
+		self.assertEqual(row.cumulative_qty, 60)
+
+	def test_adjustment_row_cannot_reduce_cumulative_below_zero(self):
+		ra_bill = frappe.get_doc(
+			{
+				"doctype": "RA Bill",
+				"boq": "BOQ-TEST",
+				"items": [
+					{
+						"boq_item": "BOQ-ITEM-TEST",
+						"item_name": "Site Management and Supervision",
+						"boq_qty": 100,
+						"boq_rate": 900,
+						"progress_type": "Adjustment",
+						"work_percent": -40,
+					}
+				],
+			}
+		)
+
+		with patch(
+			"construction_management.construction_management.doctype.ra_bill.ra_bill._get_boq_item_billing_summary",
+			return_value={
+				"previous_qty": 30,
+				"previous_percent": 30,
+				"remaining_qty": 70,
+				"remaining_percent": 70,
+			},
+		):
+			ra_bill.validate_item_values()
+			ra_bill._calculate_row_totals()
+			with self.assertRaises(frappe.ValidationError):
+				ra_bill._validate_not_overbilling()
+
+	def test_cancelled_ra_bill_delete_clears_cancelled_sales_invoice_back_reference(self):
+		ra_bill = frappe.get_doc(
+			{
+				"doctype": "RA Bill",
+				"name": "RA-BILL-CANCELLED",
+				"docstatus": 2,
+				"sales_invoice": "SI-CANCELLED",
+			}
+		)
+
+		with (
+			patch(
+				"frappe.db.get_value",
+				return_value=frappe._dict(
+					{
+						"name": "SI-CANCELLED",
+						"docstatus": 2,
+						"ra_bill": "RA-BILL-CANCELLED",
+					}
+				),
+			),
+			patch("frappe.db.set_value") as set_value,
+		):
+			ra_bill.on_trash()
+
+		set_value.assert_called_once_with(
+			"Sales Invoice",
+			"SI-CANCELLED",
+			"ra_bill",
+			None,
+			update_modified=False,
+		)
+
+	def test_cancelled_ra_bill_delete_blocks_active_sales_invoice_unlink(self):
+		ra_bill = frappe.get_doc(
+			{
+				"doctype": "RA Bill",
+				"name": "RA-BILL-CANCELLED",
+				"docstatus": 2,
+				"sales_invoice": "SI-SUBMITTED",
+			}
+		)
+
+		with patch(
+			"frappe.db.get_value",
+			return_value=frappe._dict(
+				{
+					"name": "SI-SUBMITTED",
+					"docstatus": 1,
+					"ra_bill": "RA-BILL-CANCELLED",
+				}
+			),
+		):
+			with self.assertRaises(frappe.ValidationError):
+				ra_bill.on_trash()
+
+	def test_cancelled_sales_invoice_delete_clears_cancelled_ra_bill_reference(self):
+		invoice = frappe.get_doc(
+			{
+				"doctype": "Sales Invoice",
+				"name": "SI-CANCELLED",
+				"docstatus": 2,
+				"ra_bill": "RA-BILL-CANCELLED",
+			}
+		)
+
+		with (
+			patch(
+				"frappe.db.get_value",
+				return_value=frappe._dict(
+					{
+						"name": "RA-BILL-CANCELLED",
+						"docstatus": 2,
+						"sales_invoice": "SI-CANCELLED",
+					}
+				),
+			),
+			patch("frappe.db.set_value") as set_value,
+		):
+			invoice.unlink_cancelled_ra_bill_for_delete()
+
+		set_value.assert_called_once_with(
+			"RA Bill",
+			"RA-BILL-CANCELLED",
+			"sales_invoice",
+			None,
+			update_modified=False,
+		)
+
+	def test_cancelled_sales_invoice_delete_blocks_active_ra_bill_unlink(self):
+		invoice = frappe.get_doc(
+			{
+				"doctype": "Sales Invoice",
+				"name": "SI-CANCELLED",
+				"docstatus": 2,
+				"ra_bill": "RA-BILL-SUBMITTED",
+			}
+		)
+
+		with patch(
+			"frappe.db.get_value",
+			return_value=frappe._dict(
+				{
+					"name": "RA-BILL-SUBMITTED",
+					"docstatus": 1,
+					"sales_invoice": "SI-CANCELLED",
+				}
+			),
+		):
+			with self.assertRaises(frappe.ValidationError):
+				invoice.unlink_cancelled_ra_bill_for_delete()
+
 	def test_ra_bill_invoice_date_defaults_use_billing_period_and_schedule(self):
 		ra_bill = _fake_ra_bill(
 			billing_period_to="2026-05-31",

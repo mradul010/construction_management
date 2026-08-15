@@ -1,7 +1,7 @@
 import frappe
 from frappe import _
 from frappe.model.document import Document
-from frappe.utils import flt, getdate, today
+from frappe.utils import cint, flt, getdate, today
 from erpnext.controllers.accounts_controller import get_taxes_and_charges
 
 from construction_management.construction_management.advance_management import (
@@ -90,6 +90,9 @@ class RABill(Document):
 
 		self.sales_invoice = None
 		self.status = "Draft"
+
+	def _is_adjustment_row(self, row):
+		return (row.get("progress_type") or "Progress") == "Adjustment"
 
 	def _sync_and_validate_boq_contract(self):
 		if not self.boq:
@@ -238,18 +241,29 @@ class RABill(Document):
 				continue
 
 			item = row.item_name or row.boq_item
+			progress_type = row.get("progress_type") or "Progress"
+			if progress_type not in ("Progress", "Adjustment"):
+				frappe.throw(
+					_("Progress Type for item {0} must be Progress or Adjustment.").format(item)
+				)
+			row.progress_type = progress_type
 
-			if flt(row.work_percent) <= 0:
+			if progress_type == "Progress" and flt(row.work_percent) <= 0:
 				frappe.throw(
 					_("Work % for item {0} must be greater than 0.").format(item)
 				)
 
-			if flt(row.work_percent) > 100:
+			if progress_type == "Adjustment" and flt(row.work_percent) == 0:
+				frappe.throw(
+					_("Adjustment % for item {0} cannot be zero.").format(item)
+				)
+
+			if progress_type == "Progress" and flt(row.work_percent) > 100:
 				frappe.throw(
 					_("Work % for item {0} cannot be greater than 100.").format(item)
 				)
 
-			if flt(row.current_qty) < 0:
+			if progress_type == "Progress" and flt(row.current_qty) < 0:
 				frappe.throw(
 					_("Current Qty for item {0} cannot be negative.").format(item)
 				)
@@ -335,6 +349,7 @@ class RABill(Document):
 	def _calculate_row_totals(self):
 		"""
 		Calculate current_qty and current_amount for each row from Work %.
+		Adjustment rows intentionally keep the sign of Work %.
 		"""
 		for row in self.items:
 			row.work_percent = flt(row.work_percent)
@@ -379,6 +394,45 @@ class RABill(Document):
 			row.remaining_percent = remaining_pct
 			row.prev_cumulative_qty = previous_qty
 			row.cumulative_qty = previous_qty + current_qty
+
+			if self._is_adjustment_row(row):
+				if previous_qty <= OVERBILLING_TOLERANCE:
+					frappe.throw(
+						_("Adjustment item {0} must have previous submitted RA progress.").format(
+							row.item_name or row.boq_item
+						)
+					)
+
+				if row.cumulative_qty < -OVERBILLING_TOLERANCE:
+					frappe.throw(
+						_(
+							"Adjustment for item {item} would reduce cumulative progress below zero.<br>"
+							"Previous Qty: {previous_qty}<br>"
+							"Adjustment Qty: {current_qty}"
+						).format(
+							item=row.item_name or row.boq_item,
+							previous_qty=flt(previous_qty, 4),
+							current_qty=flt(current_qty, 4),
+						),
+						title=_("Invalid Adjustment"),
+					)
+
+				if row.cumulative_qty > boq_qty + OVERBILLING_TOLERANCE:
+					frappe.throw(
+						_(
+							"Adjustment for item {item} would increase cumulative progress above 100%.<br>"
+							"BOQ Qty: {boq_qty}<br>"
+							"Previous Qty: {previous_qty}<br>"
+							"Adjustment Qty: {current_qty}"
+						).format(
+							item=row.item_name or row.boq_item,
+							boq_qty=flt(boq_qty, 4),
+							previous_qty=flt(previous_qty, 4),
+							current_qty=flt(current_qty, 4),
+						),
+						title=_("Invalid Adjustment"),
+					)
+				continue
 
 			if current_qty > remaining_qty + OVERBILLING_TOLERANCE:
 				frappe.throw(
@@ -493,9 +547,60 @@ class RABill(Document):
 		self.db_set("status", "Submitted")
 
 	def on_cancel(self):
+		self._cancel_linked_sales_invoice()
 		self._delete_ra_bill_transactions()
 		mark_cancelled_from_ra_bill(self)
 		self.db_set("status", "Cancelled")
+
+	def _cancel_linked_sales_invoice(self):
+		if not self.sales_invoice:
+			return
+
+		invoice = frappe.db.get_value(
+			"Sales Invoice",
+			self.sales_invoice,
+			["name", "docstatus"],
+			as_dict=True,
+		)
+		if not invoice or invoice.docstatus == 2:
+			return
+
+		if invoice.docstatus != 1:
+			frappe.throw(
+				_(
+					"Sales Invoice {0} must be submitted before it can be cancelled with RA Bill {1}."
+				).format(self.sales_invoice, self.name)
+			)
+
+		frappe.get_doc("Sales Invoice", self.sales_invoice).cancel()
+
+	def on_trash(self):
+		if self.docstatus != 2 or not self.sales_invoice:
+			return
+
+		invoice = frappe.db.get_value(
+			"Sales Invoice",
+			self.sales_invoice,
+			["name", "docstatus", "ra_bill"],
+			as_dict=True,
+		)
+		if not invoice or invoice.ra_bill != self.name:
+			return
+
+		if invoice.docstatus != 2:
+			frappe.throw(
+				_(
+					"Cannot delete cancelled RA Bill {0} while linked Sales Invoice {1} is not cancelled."
+				).format(self.name, self.sales_invoice)
+			)
+
+		frappe.db.set_value(
+			"Sales Invoice",
+			self.sales_invoice,
+			"ra_bill",
+			None,
+			update_modified=False,
+		)
 
 	def _delete_ra_bill_transactions(self):
 		_delete_ra_bill_transactions(self.name)
@@ -834,52 +939,81 @@ class RABill(Document):
 			return category_labels[category]
 
 		invoice_items = []
-		for row in self.items:
-			qty = flt(row.current_qty or 0)
-			rate = flt(row.boq_rate or 0)
-			amount = flt(row.current_amount or 0)
+		has_adjustment_rows = any(
+			(row.get("progress_type") or "Progress") == "Adjustment"
+			or flt(row.get("current_amount")) < 0
+			for row in self.items
+		)
 
-			if qty <= 0 or amount <= 0:
-				continue
-
-			calculated_amount = flt(qty * rate)
-
+		if has_adjustment_rows:
 			description_lines = [
-				f"Category: {get_category_label(row.category_name)}",
-				f"Sub Category: {get_category_label(row.sub_category)}",
-				f"Item: {row.item_name or ''}",
-				f"BOQ Qty: {flt(row.boq_qty)} {row.uom or ''}".strip(),
-				f"BOQ Rate: {rate}",
-				f"Work Completed: {flt(row.work_percent)}%",
-				f"Current Qty: {qty}",
-				f"Amount: {amount}",
+				f"RA Bill #{self.bill_no}",
+				f"Project: {self.project}",
+				f"BOQ: {self.boq}",
+				"Includes progress adjustments/corrections recorded in the RA Bill detail.",
 			]
-			if abs(calculated_amount - amount) > 0.01:
-				description_lines.append(
-					f"Amount Check: Qty x Rate = {calculated_amount}; RA Bill Current Amount = {amount}"
-				)
 			if period_str:
-				description_lines.append(f"Billing Period: {period_str}")
-			description_lines.extend(
-				[
-					f"RA Bill #{self.bill_no}",
-					f"Project: {self.project}",
-					f"BOQ: {self.boq}",
-				]
-			)
+				description_lines.insert(1, f"Billing Period: {period_str}")
 
 			invoice_items.append(
 				{
 					"item_code": "RA Bill Services",
-					"item_name": row.item_name or "RA Bill Services",
+					"item_name": f"RA Bill #{self.bill_no} Progress Payment",
 					"description": "\n".join(description_lines),
-					"qty": qty,
-					"rate": rate,
-					"uom": row.uom or "Nos",
+					"qty": 1,
+					"rate": flt(self.gross_amount),
+					"uom": "Nos",
 					"income_account": income_account,
 					"cost_center": project_cost_center,
 				}
 			)
+		else:
+			for row in self.items:
+				qty = flt(row.current_qty or 0)
+				rate = flt(row.boq_rate or 0)
+				amount = flt(row.current_amount or 0)
+
+				if qty <= 0 or amount <= 0:
+					continue
+
+				calculated_amount = flt(qty * rate)
+
+				description_lines = [
+					f"Category: {get_category_label(row.category_name)}",
+					f"Sub Category: {get_category_label(row.sub_category)}",
+					f"Item: {row.item_name or ''}",
+					f"BOQ Qty: {flt(row.boq_qty)} {row.uom or ''}".strip(),
+					f"BOQ Rate: {rate}",
+					f"Work Completed: {flt(row.work_percent)}%",
+					f"Current Qty: {qty}",
+					f"Amount: {amount}",
+				]
+				if abs(calculated_amount - amount) > 0.01:
+					description_lines.append(
+						f"Amount Check: Qty x Rate = {calculated_amount}; RA Bill Current Amount = {amount}"
+					)
+				if period_str:
+					description_lines.append(f"Billing Period: {period_str}")
+				description_lines.extend(
+					[
+						f"RA Bill #{self.bill_no}",
+						f"Project: {self.project}",
+						f"BOQ: {self.boq}",
+					]
+				)
+
+				invoice_items.append(
+					{
+						"item_code": "RA Bill Services",
+						"item_name": row.item_name or "RA Bill Services",
+						"description": "\n".join(description_lines),
+						"qty": qty,
+						"rate": rate,
+						"uom": row.uom or "Nos",
+						"income_account": income_account,
+						"cost_center": project_cost_center,
+					}
+				)
 
 		if not invoice_items:
 			frappe.throw("No RA Bill Items with a positive current amount were found to invoice.")
@@ -1633,6 +1767,7 @@ def _create_ra_bill_transaction(ra_bill, row, previous_qty=0):
 			"boq_qty": boq_qty,
 			"boq_rate": flt(row.boq_rate),
 			"uom": row.uom,
+			"progress_type": row.get("progress_type") or "Progress",
 			"work_percent": flt(row.work_percent),
 			"current_qty": current_qty,
 			"current_amount": current_amount,
@@ -1813,6 +1948,7 @@ def search_boq_items_for_ra_bill(doctype, txt, searchfield, start, page_len, fil
 	subcategory = filters.get("subcategory")
 	exclude_items = set(_coerce_list(filters.get("exclude_items")))
 	current_ra_bill = filters.get("current_ra_bill")
+	include_completed_for_adjustment = bool(cint(filters.get("include_completed_for_adjustment")))
 
 	if not boq:
 		return []
@@ -1868,7 +2004,10 @@ def search_boq_items_for_ra_bill(doctype, txt, searchfield, start, page_len, fil
 	available_items = []
 	for name, item_name, qty, unit_rate, uom in candidates:
 		previous_qty = _get_previous_billed_qty(boq, name, current_ra_bill)
-		if previous_qty >= flt(qty) - OVERBILLING_TOLERANCE:
+		if include_completed_for_adjustment:
+			if previous_qty <= OVERBILLING_TOLERANCE:
+				continue
+		elif previous_qty >= flt(qty) - OVERBILLING_TOLERANCE:
 			continue
 
 		available_items.append((name, item_name, qty, unit_rate, uom))
