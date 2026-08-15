@@ -854,11 +854,17 @@ async function setBoqItemDetails(frm, cdt, cdn) {
 	const previousWork = await fetchPreviousWorkSummary(frm, row);
 	const previousWorkValues = getPreviousWorkValues(previousWork, qty);
 	const boqItemKey = doc.boq_item_key || doc.component_key || row.boq_item;
+	const shouldUseAdjustment =
+		frm.doc.include_adjustment_items
+		&& previousWorkValues.previous_qty > 0.0001
+		&& previousWorkValues.remaining_qty <= 0.0001;
+	const progressType = shouldUseAdjustment ? "Adjustment" : (row.progress_type || "Progress");
 	const rowWithPreviousWork = {
 		...row,
 		boq_qty: qty,
 		boq_rate: rate,
 		boq_item_key: boqItemKey,
+		progress_type: progressType,
 		...previousWorkValues,
 	};
 	let workPercent = getCurrentWorkPercent(rowWithPreviousWork);
@@ -875,6 +881,7 @@ async function setBoqItemDetails(frm, cdt, cdn) {
 		boq_item_key: boqItemKey,
 		boq_revision: frm.doc.boq,
 		original_boq: (previousWork && previousWork.original_boq) || "",
+		progress_type: progressType,
 		sub_category: subCategory || row.sub_category || "",
 		category_name: parentCategory || row.category_name || "",
 		...previousWorkValues,
@@ -1046,6 +1053,7 @@ frappe.ui.form.on("RA Bill", {
 					subcategory: row.sub_category,
 					exclude_items: selected_items,
 					current_ra_bill: frm.doc.name,
+					include_adjustment_items: frm.doc.include_adjustment_items ? 1 : 0,
 				},
 			};
 		});
@@ -1361,6 +1369,10 @@ frappe.ui.form.on("RA Bill", {
 
 	advance_recovery_percent: function (frm) {
 		frm.trigger("recalculate_totals");
+	},
+
+	include_adjustment_items: function (frm) {
+		frm.refresh_field("items");
 	},
 
 	recalculate_totals: function (frm) {

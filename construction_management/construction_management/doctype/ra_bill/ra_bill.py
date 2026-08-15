@@ -1951,6 +1951,7 @@ def search_boq_items_for_ra_bill(doctype, txt, searchfield, start, page_len, fil
 		page_len,
 		filters,
 		include_adjustment_history=bool(cint(filters.get("include_completed_for_adjustment"))),
+		include_adjustment_items=bool(cint(filters.get("include_adjustment_items"))),
 	)
 
 
@@ -1975,6 +1976,7 @@ def _search_boq_items_for_ra_bill(
 	page_len,
 	filters,
 	include_adjustment_history=False,
+	include_adjustment_items=False,
 ):
 	boq = filters.get("boq")
 	subcategory = filters.get("subcategory")
@@ -1990,7 +1992,11 @@ def _search_boq_items_for_ra_bill(
 	prefix_txt = f"{txt}%"
 	start = int(start or 0)
 	page_len = int(page_len or 20)
-	candidate_limit = max(start + page_len + 50, page_len) if not include_adjustment_history else 0
+	candidate_limit = (
+		max(start + page_len + 50, page_len)
+		if not include_adjustment_history and not include_adjustment_items
+		else 0
+	)
 	limit_clause = "LIMIT %(candidate_limit)s" if candidate_limit else ""
 
 	conditions = [
@@ -2055,6 +2061,12 @@ def _search_boq_items_for_ra_bill(
 					remaining_percent,
 				)
 			)
+		elif include_adjustment_items:
+			is_pending = previous_qty < flt(qty) - OVERBILLING_TOLERANCE
+			is_previously_certified = previous_qty > OVERBILLING_TOLERANCE
+			if not is_pending and not is_previously_certified:
+				continue
+			available_items.append((name, item_name, qty, unit_rate, uom))
 		elif previous_qty >= flt(qty) - OVERBILLING_TOLERANCE:
 			continue
 		else:
