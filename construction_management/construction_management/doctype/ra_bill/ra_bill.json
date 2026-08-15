@@ -22,6 +22,7 @@
   "billing_period_to",
   "due_date",
   "ra_bill_items_section",
+  "include_adjustment_items",
   "items",
   "totals_section",
   "gross_amount",
@@ -214,6 +215,13 @@
    "fieldname": "ra_bill_items_section",
    "fieldtype": "Section Break",
    "label": "RA Bill Items"
+  },
+  {
+   "default": "0",
+   "description": "Include previously certified/completed BOQ items for progress correction.",
+   "fieldname": "include_adjustment_items",
+   "fieldtype": "Check",
+   "label": "Include Adjustment Items"
   },
   {
    "fieldname": "items",
