@@ -1374,14 +1374,14 @@ frappe.ui.form.on("RA Bill", {
 		const previouslyRecovered = getNumber(frm.doc.previously_recovered_advance);
 		const remainingBefore = Math.max(totalAdvanceReceived - previouslyRecovered, 0);
 		const recoveryPercent = getNumber(frm.doc.advance_recovery_percent);
-		const proposedRecovery = recoveryPercent
+		const proposedRecovery = gross > 0 && recoveryPercent
 			? (gross * recoveryPercent) / 100
-			: getNumber(frm.doc.proposed_advance_recovery);
-		const totalAdvance = recoveryPercent
-			? Math.min(proposedRecovery, remainingBefore)
-			: allocatedAdvance;
+			: 0;
+		const totalAdvance = gross > 0
+			? (recoveryPercent ? Math.min(proposedRecovery, remainingBefore) : allocatedAdvance)
+			: 0;
 
-		if (recoveryPercent) {
+		if (gross <= 0 || recoveryPercent) {
 			let remainingAllocation = totalAdvance;
 			(frm.doc.advances || []).forEach((row) => {
 				const available = getNumber(row.advance_amount) || getNumber(row.allocated_amount);

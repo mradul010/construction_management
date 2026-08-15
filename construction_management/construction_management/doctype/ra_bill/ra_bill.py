@@ -611,7 +611,8 @@ class RABill(Document):
 		for row in self.items:
 			current_qty = _get_row_current_qty(row)
 			current_amount = _get_row_current_amount(row)
-			if current_qty <= 0 or current_amount <= 0:
+			is_adjustment = self._is_adjustment_row(row)
+			if not is_adjustment and (current_qty <= 0 or current_amount <= 0):
 				continue
 
 			previous_qty = _get_previous_billed_qty(self.boq, row.boq_item, self.name)
