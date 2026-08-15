@@ -467,13 +467,18 @@ def update_ra_bill_advance_fields(ra_bill):
 	remaining_before = summary.remaining_advance_balance
 	proposed = 0
 	recovery_percent = flt(ra_bill.get("advance_recovery_percent"))
-	if recovery_percent > 0:
+	current_billable_amount = flt(ra_bill.get("gross_amount"))
+	if current_billable_amount <= ADVANCE_TOLERANCE:
+		actual = 0
+		sync_ra_bill_advance_rows(ra_bill, sales_order, 0, summary.total_advance_recovered)
+	elif recovery_percent > 0:
 		proposed = flt(ra_bill.get("gross_amount")) * recovery_percent / 100
-
-	allocated_from_rows = sum(flt(row.allocated_amount) for row in ra_bill.get("advances") or [])
-	actual = min(proposed, remaining_before) if recovery_percent > 0 else allocated_from_rows
-	if recovery_percent > 0:
+		actual = min(proposed, remaining_before)
 		sync_ra_bill_advance_rows(ra_bill, sales_order, actual, summary.total_advance_recovered)
+	else:
+		allocated_from_rows = sum(flt(row.allocated_amount) for row in ra_bill.get("advances") or [])
+		actual = allocated_from_rows
+
 	values = frappe._dict(
 		{
 			"sales_order": sales_order,
@@ -612,7 +617,7 @@ def validate_ra_bill_advance_recovery(ra_bill):
 			).format(values.sales_order)
 		)
 
-	if actual > flt(ra_bill.get("grand_total")) + ADVANCE_TOLERANCE:
+	if actual > ADVANCE_TOLERANCE and actual > flt(ra_bill.get("grand_total")) + ADVANCE_TOLERANCE:
 		frappe.throw(_("Advance recovered cannot exceed the RA Bill Grand Total."))
 
 

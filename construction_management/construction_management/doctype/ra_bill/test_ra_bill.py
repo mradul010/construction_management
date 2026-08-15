@@ -22,6 +22,7 @@ from construction_management.construction_management.ra_bill_dates import (
 from construction_management.construction_management.advance_management import (
 	get_ra_bill_advance_recovery_target,
 	update_ra_bill_advance_fields,
+	validate_ra_bill_advance_recovery,
 )
 
 
@@ -340,6 +341,92 @@ class IntegrationTestRABill(UnitTestCase):
 		self.assertEqual(values.remaining_advance_after_current_bill, 0)
 		self.assertEqual([row.allocated_amount for row in ra_bill.advances], [1000, 1000])
 
+	def test_negative_adjustment_ra_bill_does_not_recover_advance(self):
+		ra_bill = _fake_ra_bill(
+			name="RA-BILL-TEST",
+			sales_order="SO-TEST",
+			gross_amount=-13200,
+			grand_total=-13200,
+			advance_recovery_percent=20,
+			advances=[
+				_FakeRow({"idx": 1, "advance_amount": 2000, "allocated_amount": 1000}),
+				_FakeRow({"idx": 2, "advance_amount": 3000, "allocated_amount": 500}),
+			],
+		)
+
+		with (
+			patch(
+				"construction_management.construction_management.advance_management.get_ra_bill_sales_order",
+				return_value="SO-TEST",
+			),
+			patch(
+				"construction_management.construction_management.advance_management.get_sales_order_advance_summary",
+				return_value=frappe._dict(
+					{
+						"sales_order": "SO-TEST",
+						"total_advance_received": 50000,
+						"total_advance_recovered": 0,
+						"remaining_advance_balance": 50000,
+					}
+				),
+			),
+			patch(
+				"construction_management.construction_management.advance_management.get_sales_order_advance_reference_rows",
+				return_value=[
+					frappe._dict({"reference_type": "Journal Entry", "reference_name": "JE-1", "advance_amount": 2000}),
+					frappe._dict({"reference_type": "Journal Entry", "reference_name": "JE-2", "advance_amount": 3000}),
+				],
+			),
+		):
+			values = update_ra_bill_advance_fields(ra_bill)
+			validate_ra_bill_advance_recovery(ra_bill)
+
+		self.assertEqual(values.proposed_advance_recovery, 0)
+		self.assertEqual(values.actual_advance_recovered, 0)
+		self.assertEqual(values.remaining_advance_before_current_bill, 50000)
+		self.assertEqual(values.remaining_advance_after_current_bill, 50000)
+		self.assertEqual([row.allocated_amount for row in ra_bill.advances], [0, 0])
+
+	def test_mixed_positive_ra_bill_recovers_advance_from_net_current_gross(self):
+		ra_bill = _fake_ra_bill(
+			name="RA-BILL-TEST",
+			sales_order="SO-TEST",
+			gross_amount=40000,
+			grand_total=40000,
+			advance_recovery_percent=10,
+			advances=[],
+		)
+
+		with (
+			patch(
+				"construction_management.construction_management.advance_management.get_ra_bill_sales_order",
+				return_value="SO-TEST",
+			),
+			patch(
+				"construction_management.construction_management.advance_management.get_sales_order_advance_summary",
+				return_value=frappe._dict(
+					{
+						"sales_order": "SO-TEST",
+						"total_advance_received": 50000,
+						"total_advance_recovered": 0,
+						"remaining_advance_balance": 50000,
+					}
+				),
+			),
+			patch(
+				"construction_management.construction_management.advance_management.get_sales_order_advance_reference_rows",
+				return_value=[
+					frappe._dict({"reference_type": "Journal Entry", "reference_name": "JE-1", "advance_amount": 50000}),
+				],
+			),
+		):
+			values = update_ra_bill_advance_fields(ra_bill)
+
+		self.assertEqual(values.proposed_advance_recovery, 4000)
+		self.assertEqual(values.actual_advance_recovered, 4000)
+		self.assertEqual(values.remaining_advance_after_current_bill, 46000)
+		self.assertEqual([row.allocated_amount for row in ra_bill.advances], [4000])
+
 	def test_ra_bill_advance_recovery_percent_recovers_calculated_amount_when_advance_is_available(self):
 		ra_bill = _fake_ra_bill(
 			name="RA-BILL-TEST",
@@ -566,6 +653,258 @@ class IntegrationTestRABill(UnitTestCase):
 		self.assertEqual(ra_bill.taxes[2].total, 8400)
 		self.assertEqual(ra_bill.total_taxes_and_charges, -1600)
 		self.assertEqual(ra_bill.grand_total, 8400)
+
+	def test_adjustment_row_reduces_cumulative_progress(self):
+		ra_bill = frappe.get_doc(
+			{
+				"doctype": "RA Bill",
+				"boq": "BOQ-TEST",
+				"items": [
+					{
+						"boq_item": "BOQ-ITEM-TEST",
+						"item_name": "Site Management and Supervision",
+						"boq_qty": 100,
+						"boq_rate": 900,
+						"progress_type": "Adjustment",
+						"work_percent": -50,
+					}
+				],
+			}
+		)
+
+		with patch(
+			"construction_management.construction_management.doctype.ra_bill.ra_bill._get_boq_item_billing_summary",
+			return_value={
+				"previous_qty": 100,
+				"previous_percent": 100,
+				"remaining_qty": 0,
+				"remaining_percent": 0,
+			},
+		):
+			ra_bill.validate_item_values()
+			ra_bill._calculate_row_totals()
+			ra_bill._validate_not_overbilling()
+
+		row = ra_bill.items[0]
+		self.assertEqual(row.current_qty, -50)
+		self.assertEqual(row.current_amount, -45000)
+		self.assertEqual(row.cumulative_qty, 50)
+
+	def test_negative_adjustment_row_creates_transaction_for_cumulative_baseline(self):
+		ra_bill = frappe.get_doc(
+			{
+				"doctype": "RA Bill",
+				"name": "RA-BILL-TEST",
+				"docstatus": 1,
+				"boq": "BOQ-TEST",
+				"items": [
+					{
+						"boq_item": "BOQ-ITEM-TEST",
+						"item_name": "Site Management and Supervision",
+						"boq_qty": 4,
+						"boq_rate": 66000,
+						"progress_type": "Adjustment",
+						"work_percent": -5,
+						"current_qty": -0.2,
+						"current_amount": -13200,
+					}
+				],
+			}
+		)
+
+		with (
+			patch.object(ra_bill, "_delete_ra_bill_transactions"),
+			patch(
+				"construction_management.construction_management.doctype.ra_bill.ra_bill._get_previous_billed_qty",
+				return_value=0.9,
+			),
+			patch(
+				"construction_management.construction_management.doctype.ra_bill.ra_bill._create_ra_bill_transaction"
+			) as create_transaction,
+		):
+			ra_bill._create_ra_bill_transactions()
+
+		create_transaction.assert_called_once_with(ra_bill, ra_bill.items[0], 0.9)
+
+	def test_progress_after_adjustment_uses_corrected_baseline(self):
+		ra_bill = frappe.get_doc(
+			{
+				"doctype": "RA Bill",
+				"boq": "BOQ-TEST",
+				"items": [
+					{
+						"boq_item": "BOQ-ITEM-TEST",
+						"item_name": "Site Management and Supervision",
+						"boq_qty": 100,
+						"boq_rate": 900,
+						"progress_type": "Progress",
+						"work_percent": 10,
+					}
+				],
+			}
+		)
+
+		with patch(
+			"construction_management.construction_management.doctype.ra_bill.ra_bill._get_boq_item_billing_summary",
+			return_value={
+				"previous_qty": 50,
+				"previous_percent": 50,
+				"remaining_qty": 50,
+				"remaining_percent": 50,
+			},
+		):
+			ra_bill.validate_item_values()
+			ra_bill._calculate_row_totals()
+			ra_bill._validate_not_overbilling()
+
+		row = ra_bill.items[0]
+		self.assertEqual(row.current_qty, 10)
+		self.assertEqual(row.current_amount, 9000)
+		self.assertEqual(row.cumulative_qty, 60)
+
+	def test_adjustment_row_cannot_reduce_cumulative_below_zero(self):
+		ra_bill = frappe.get_doc(
+			{
+				"doctype": "RA Bill",
+				"boq": "BOQ-TEST",
+				"items": [
+					{
+						"boq_item": "BOQ-ITEM-TEST",
+						"item_name": "Site Management and Supervision",
+						"boq_qty": 100,
+						"boq_rate": 900,
+						"progress_type": "Adjustment",
+						"work_percent": -40,
+					}
+				],
+			}
+		)
+
+		with patch(
+			"construction_management.construction_management.doctype.ra_bill.ra_bill._get_boq_item_billing_summary",
+			return_value={
+				"previous_qty": 30,
+				"previous_percent": 30,
+				"remaining_qty": 70,
+				"remaining_percent": 70,
+			},
+		):
+			ra_bill.validate_item_values()
+			ra_bill._calculate_row_totals()
+			with self.assertRaises(frappe.ValidationError):
+				ra_bill._validate_not_overbilling()
+
+	def test_cancelled_ra_bill_delete_clears_cancelled_sales_invoice_back_reference(self):
+		ra_bill = frappe.get_doc(
+			{
+				"doctype": "RA Bill",
+				"name": "RA-BILL-CANCELLED",
+				"docstatus": 2,
+				"sales_invoice": "SI-CANCELLED",
+			}
+		)
+
+		with (
+			patch(
+				"frappe.db.get_value",
+				return_value=frappe._dict(
+					{
+						"name": "SI-CANCELLED",
+						"docstatus": 2,
+						"ra_bill": "RA-BILL-CANCELLED",
+					}
+				),
+			),
+			patch("frappe.db.set_value") as set_value,
+		):
+			ra_bill.on_trash()
+
+		set_value.assert_called_once_with(
+			"Sales Invoice",
+			"SI-CANCELLED",
+			"ra_bill",
+			None,
+			update_modified=False,
+		)
+
+	def test_cancelled_ra_bill_delete_blocks_active_sales_invoice_unlink(self):
+		ra_bill = frappe.get_doc(
+			{
+				"doctype": "RA Bill",
+				"name": "RA-BILL-CANCELLED",
+				"docstatus": 2,
+				"sales_invoice": "SI-SUBMITTED",
+			}
+		)
+
+		with patch(
+			"frappe.db.get_value",
+			return_value=frappe._dict(
+				{
+					"name": "SI-SUBMITTED",
+					"docstatus": 1,
+					"ra_bill": "RA-BILL-CANCELLED",
+				}
+			),
+		):
+			with self.assertRaises(frappe.ValidationError):
+				ra_bill.on_trash()
+
+	def test_cancelled_sales_invoice_delete_clears_cancelled_ra_bill_reference(self):
+		invoice = frappe.get_doc(
+			{
+				"doctype": "Sales Invoice",
+				"name": "SI-CANCELLED",
+				"docstatus": 2,
+				"ra_bill": "RA-BILL-CANCELLED",
+			}
+		)
+
+		with (
+			patch(
+				"frappe.db.get_value",
+				return_value=frappe._dict(
+					{
+						"name": "RA-BILL-CANCELLED",
+						"docstatus": 2,
+						"sales_invoice": "SI-CANCELLED",
+					}
+				),
+			),
+			patch("frappe.db.set_value") as set_value,
+		):
+			invoice.unlink_cancelled_ra_bill_for_delete()
+
+		set_value.assert_called_once_with(
+			"RA Bill",
+			"RA-BILL-CANCELLED",
+			"sales_invoice",
+			None,
+			update_modified=False,
+		)
+
+	def test_cancelled_sales_invoice_delete_blocks_active_ra_bill_unlink(self):
+		invoice = frappe.get_doc(
+			{
+				"doctype": "Sales Invoice",
+				"name": "SI-CANCELLED",
+				"docstatus": 2,
+				"ra_bill": "RA-BILL-SUBMITTED",
+			}
+		)
+
+		with patch(
+			"frappe.db.get_value",
+			return_value=frappe._dict(
+				{
+					"name": "RA-BILL-SUBMITTED",
+					"docstatus": 1,
+					"sales_invoice": "SI-CANCELLED",
+				}
+			),
+		):
+			with self.assertRaises(frappe.ValidationError):
+				invoice.unlink_cancelled_ra_bill_for_delete()
 
 	def test_ra_bill_invoice_date_defaults_use_billing_period_and_schedule(self):
 		ra_bill = _fake_ra_bill(

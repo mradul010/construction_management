@@ -56,6 +56,38 @@ class ConstructionSalesInvoice(SalesInvoice):
 				set(list(self.ignore_linked_doctypes or []) + ["Advance Payment Ledger Entry", "RA Bill"])
 			)
 
+	def on_trash(self):
+		self.unlink_cancelled_ra_bill_for_delete()
+		super().on_trash()
+
+	def unlink_cancelled_ra_bill_for_delete(self):
+		if not self.is_ra_bill_invoice() or self.docstatus != 2:
+			return
+
+		ra_bill = frappe.db.get_value(
+			"RA Bill",
+			self.ra_bill,
+			["name", "docstatus", "sales_invoice"],
+			as_dict=True,
+		)
+		if not ra_bill or ra_bill.sales_invoice != self.name:
+			return
+
+		if ra_bill.docstatus != 2:
+			frappe.throw(
+				_(
+					"Cannot delete cancelled Sales Invoice {0} while linked RA Bill {1} is not cancelled."
+				).format(self.name, self.ra_bill)
+			)
+
+		frappe.db.set_value(
+			"RA Bill",
+			self.ra_bill,
+			"sales_invoice",
+			None,
+			update_modified=False,
+		)
+
 	def make_customer_gl_entry(self, gl_entries):
 		super().make_customer_gl_entry(gl_entries)
 

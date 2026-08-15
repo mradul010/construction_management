@@ -18,6 +18,7 @@
   "boq_qty",
   "boq_rate",
   "uom",
+  "progress_type",
   "work_percent",
   "current_qty",
   "current_amount",
@@ -115,6 +116,13 @@
    "fieldtype": "Link",
    "label": "UOM",
    "options": "UOM"
+  },
+  {
+   "default": "Progress",
+   "fieldname": "progress_type",
+   "fieldtype": "Select",
+   "label": "Progress Type",
+   "options": "Progress\nAdjustment"
   },
   {
    "fieldname": "work_percent",
