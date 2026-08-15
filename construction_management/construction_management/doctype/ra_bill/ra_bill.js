@@ -917,15 +917,23 @@ function addAdjustmentItems(frm) {
 			item_name: null,
 			boq_category: null,
 		},
-		columns: ["name", "item_name", "qty", "unit_rate", "uom"],
+		columns: [
+			"name",
+			"item_name",
+			"qty",
+			"unit_rate",
+			"uom",
+			"previous_percent",
+			"previous_qty",
+			"remaining_percent",
+		],
 		primary_action_label: __("Add Adjustment"),
 		get_query: function () {
 			return {
-				query: `${RA_BILL_METHOD}.search_boq_items_for_ra_bill`,
+				query: `${RA_BILL_METHOD}.search_boq_adjustment_items_for_ra_bill`,
 				filters: {
 					boq: frm.doc.boq,
 					current_ra_bill: frm.doc.name,
-					include_completed_for_adjustment: 1,
 					exclude_items: selectedItems(),
 				},
 			};

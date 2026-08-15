@@ -1945,11 +1945,41 @@ def search_boq_items_for_ra_bill(doctype, txt, searchfield, start, page_len, fil
 	if isinstance(filters, str):
 		filters = frappe.parse_json(filters)
 	filters = filters or {}
+	return _search_boq_items_for_ra_bill(
+		txt,
+		start,
+		page_len,
+		filters,
+		include_adjustment_history=bool(cint(filters.get("include_completed_for_adjustment"))),
+	)
+
+
+@frappe.whitelist()
+@frappe.validate_and_sanitize_search_inputs
+def search_boq_adjustment_items_for_ra_bill(doctype, txt, searchfield, start, page_len, filters, **kwargs):
+	if isinstance(filters, str):
+		filters = frappe.parse_json(filters)
+	filters = filters or {}
+	return _search_boq_items_for_ra_bill(
+		txt,
+		start,
+		page_len,
+		filters,
+		include_adjustment_history=True,
+	)
+
+
+def _search_boq_items_for_ra_bill(
+	txt,
+	start,
+	page_len,
+	filters,
+	include_adjustment_history=False,
+):
 	boq = filters.get("boq")
 	subcategory = filters.get("subcategory")
 	exclude_items = set(_coerce_list(filters.get("exclude_items")))
 	current_ra_bill = filters.get("current_ra_bill")
-	include_completed_for_adjustment = bool(cint(filters.get("include_completed_for_adjustment")))
 
 	if not boq:
 		return []
@@ -1960,7 +1990,8 @@ def search_boq_items_for_ra_bill(doctype, txt, searchfield, start, page_len, fil
 	prefix_txt = f"{txt}%"
 	start = int(start or 0)
 	page_len = int(page_len or 20)
-	candidate_limit = max(start + page_len + 50, page_len)
+	candidate_limit = max(start + page_len + 50, page_len) if not include_adjustment_history else 0
+	limit_clause = "LIMIT %(candidate_limit)s" if candidate_limit else ""
 
 	conditions = [
 		"parent = %(boq)s",
@@ -1974,8 +2005,9 @@ def search_boq_items_for_ra_bill(doctype, txt, searchfield, start, page_len, fil
 		"txt": txt,
 		"like_txt": like_txt,
 		"prefix_txt": prefix_txt,
-		"candidate_limit": candidate_limit,
 	}
+	if candidate_limit:
+		params["candidate_limit"] = candidate_limit
 	if subcategory:
 		conditions.append("boq_category = %(subcategory)s")
 		params["subcategory"] = subcategory
@@ -1997,20 +2029,35 @@ def search_boq_items_for_ra_bill(doctype, txt, searchfield, start, page_len, fil
 		    ELSE 3
 		END,
 		  item_name ASC
-		LIMIT %(candidate_limit)s
+		{limit_clause}
 		""",
 		params,
 	)
 
 	available_items = []
 	for name, item_name, qty, unit_rate, uom in candidates:
-		previous_qty = _get_previous_billed_qty(boq, name, current_ra_bill)
-		if include_completed_for_adjustment:
+		summary = _get_boq_item_billing_summary(boq, name, current_ra_bill)
+		previous_qty = flt(summary.get("previous_qty"))
+		if include_adjustment_history:
 			if previous_qty <= OVERBILLING_TOLERANCE:
 				continue
+			previous_percent = flt(summary.get("previous_percent"))
+			remaining_percent = flt(summary.get("remaining_percent"))
+			available_items.append(
+				(
+					name,
+					item_name,
+					qty,
+					unit_rate,
+					uom,
+					previous_percent,
+					previous_qty,
+					remaining_percent,
+				)
+			)
 		elif previous_qty >= flt(qty) - OVERBILLING_TOLERANCE:
 			continue
-
-		available_items.append((name, item_name, qty, unit_rate, uom))
+		else:
+			available_items.append((name, item_name, qty, unit_rate, uom))
 
 	return available_items[start : start + page_len]
