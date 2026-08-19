@@ -709,13 +709,26 @@ class RABill(Document):
 			frappe.throw("Gross amount must be greater than 0 to create a Sales Invoice.")
 
 		from construction_management.construction_management.setup import ensure_ra_bill_items
+		from construction_management.construction_management.regional import (
+			get_default_construction_service_item,
+			get_default_construction_uom,
+			validate_construction_service_item_can_be_created,
+		)
 
-		ensure_ra_bill_items()
-
-		company = frappe.defaults.get_user_default("Company") or frappe.defaults.get_global_default("company")
+		company = self.company or frappe.defaults.get_user_default("Company") or frappe.defaults.get_global_default("company")
 		if not company:
 			frappe.throw("Please set default Company before creating Sales Invoice.")
 
+		ensure_ra_bill_items(company=company)
+		service_item = get_default_construction_service_item(company)
+		service_uom = get_default_construction_uom(company)
+		if not frappe.db.exists("Item", service_item):
+			validate_construction_service_item_can_be_created(company)
+			frappe.throw(
+				_("Please create construction service Item {0} before creating the Sales Invoice.").format(
+					frappe.bold(service_item)
+				)
+			)
 		company_currency = frappe.get_cached_value("Company", company, "default_currency")
 		income_account = get_construction_account(
 			company,
@@ -958,12 +971,12 @@ class RABill(Document):
 
 			invoice_items.append(
 				{
-					"item_code": "RA Bill Services",
+					"item_code": service_item,
 					"item_name": f"RA Bill #{self.bill_no} Progress Payment",
 					"description": "\n".join(description_lines),
 					"qty": 1,
 					"rate": flt(self.gross_amount),
-					"uom": "Nos",
+					"uom": service_uom,
 					"income_account": income_account,
 					"cost_center": project_cost_center,
 				}
@@ -1005,12 +1018,12 @@ class RABill(Document):
 
 				invoice_items.append(
 					{
-						"item_code": "RA Bill Services",
-						"item_name": row.item_name or "RA Bill Services",
+						"item_code": service_item,
+						"item_name": row.item_name or service_item,
 						"description": "\n".join(description_lines),
 						"qty": qty,
 						"rate": rate,
-						"uom": row.uom or "Nos",
+						"uom": row.uom or service_uom,
 						"income_account": income_account,
 						"cost_center": project_cost_center,
 					}

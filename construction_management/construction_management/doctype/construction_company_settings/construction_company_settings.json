@@ -1,0 +1,235 @@
+{
+ "actions": [],
+ "autoname": "field:company",
+ "creation": "2026-08-19 00:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "company_section",
+  "company",
+  "country",
+  "enable_ra_billing",
+  "enable_retention",
+  "enable_advance_recovery",
+  "accounts_section",
+  "retention_receivable_account",
+  "retention_payable_account",
+  "customer_advance_account",
+  "supplier_advance_account",
+  "accounting_column",
+  "ra_bill_receivable_account",
+  "ra_bill_income_account",
+  "construction_receipt_account",
+  "subcontractor_payable_account",
+  "subcontract_expense_account",
+  "defaults_section",
+  "default_cost_center",
+  "default_sales_taxes_and_charges_template",
+  "default_purchase_taxes_and_charges_template",
+  "default_construction_service_item",
+  "default_construction_item_group",
+  "default_uom",
+  "india_section",
+  "default_service_hsn_sac"
+ ],
+ "fields": [
+  {
+   "fieldname": "company_section",
+   "fieldtype": "Section Break",
+   "label": "Company"
+  },
+  {
+   "fieldname": "company",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Company",
+   "options": "Company",
+   "reqd": 1,
+   "unique": 1
+  },
+  {
+   "fetch_from": "company.country",
+   "fieldname": "country",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Country",
+   "options": "Country",
+   "read_only": 1
+  },
+  {
+   "default": "1",
+   "fieldname": "enable_ra_billing",
+   "fieldtype": "Check",
+   "label": "Enable RA Billing"
+  },
+  {
+   "default": "1",
+   "fieldname": "enable_retention",
+   "fieldtype": "Check",
+   "label": "Enable Retention"
+  },
+  {
+   "default": "1",
+   "fieldname": "enable_advance_recovery",
+   "fieldtype": "Check",
+   "label": "Enable Advance Recovery"
+  },
+  {
+   "fieldname": "accounts_section",
+   "fieldtype": "Section Break",
+   "label": "Construction Accounts"
+  },
+  {
+   "fieldname": "retention_receivable_account",
+   "fieldtype": "Link",
+   "label": "Retention Receivable Account",
+   "options": "Account"
+  },
+  {
+   "fieldname": "retention_payable_account",
+   "fieldtype": "Link",
+   "label": "Retention Payable Account",
+   "options": "Account"
+  },
+  {
+   "fieldname": "customer_advance_account",
+   "fieldtype": "Link",
+   "label": "Customer Advance Account",
+   "options": "Account"
+  },
+  {
+   "fieldname": "supplier_advance_account",
+   "fieldtype": "Link",
+   "label": "Supplier Advance Account",
+   "options": "Account"
+  },
+  {
+   "fieldname": "accounting_column",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "ra_bill_receivable_account",
+   "fieldtype": "Link",
+   "label": "RA Bill Receivable Account",
+   "options": "Account"
+  },
+  {
+   "fieldname": "ra_bill_income_account",
+   "fieldtype": "Link",
+   "label": "RA Bill Income Account",
+   "options": "Account"
+  },
+  {
+   "fieldname": "construction_receipt_account",
+   "fieldtype": "Link",
+   "label": "Construction Receipt Account",
+   "options": "Account"
+  },
+  {
+   "fieldname": "subcontractor_payable_account",
+   "fieldtype": "Link",
+   "label": "Subcontractor Payable Account",
+   "options": "Account"
+  },
+  {
+   "fieldname": "subcontract_expense_account",
+   "fieldtype": "Link",
+   "label": "Subcontract Expense Account",
+   "options": "Account"
+  },
+  {
+   "fieldname": "defaults_section",
+   "fieldtype": "Section Break",
+   "label": "Defaults"
+  },
+  {
+   "fieldname": "default_cost_center",
+   "fieldtype": "Link",
+   "label": "Default Cost Center",
+   "options": "Cost Center"
+  },
+  {
+   "fieldname": "default_sales_taxes_and_charges_template",
+   "fieldtype": "Link",
+   "label": "Default Sales Taxes and Charges Template",
+   "options": "Sales Taxes and Charges Template"
+  },
+  {
+   "fieldname": "default_purchase_taxes_and_charges_template",
+   "fieldtype": "Link",
+   "label": "Default Purchase Taxes and Charges Template",
+   "options": "Purchase Taxes and Charges Template"
+  },
+  {
+   "fieldname": "default_construction_service_item",
+   "fieldtype": "Link",
+   "label": "Default Construction Service Item",
+   "options": "Item"
+  },
+  {
+   "default": "Services",
+   "fieldname": "default_construction_item_group",
+   "fieldtype": "Link",
+   "label": "Default Construction Item Group",
+   "options": "Item Group"
+  },
+  {
+   "default": "Nos",
+   "fieldname": "default_uom",
+   "fieldtype": "Link",
+   "label": "Default UOM",
+   "options": "UOM"
+  },
+  {
+   "collapsible": 1,
+   "fieldname": "india_section",
+   "fieldtype": "Section Break",
+   "label": "India"
+  },
+  {
+   "description": "Required when India Compliance validates construction service Items.",
+   "fieldname": "default_service_hsn_sac",
+   "fieldtype": "Data",
+   "label": "Default Service HSN/SAC"
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2026-08-19 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Construction Management",
+ "name": "Construction Company Settings",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "delete": 0,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Construction Manager",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "title_field": "company",
+ "track_changes": 1
+}

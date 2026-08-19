@@ -10,6 +10,7 @@ def after_install():
 	ensure_construction_desktop_icons()
 	ensure_design_management_setup()
 	ensure_company_construction_accounting_fields()
+	ensure_construction_company_settings()
 	ensure_project_current_boq_field()
 	ensure_sales_invoice_ra_bill_field()
 	ensure_sales_invoice_retention_records_field()
@@ -30,6 +31,7 @@ def after_migrate():
 	ensure_construction_desktop_icons()
 	ensure_design_management_setup()
 	ensure_company_construction_accounting_fields()
+	ensure_construction_company_settings()
 	ensure_project_current_boq_field()
 	ensure_sales_invoice_ra_bill_field()
 	ensure_sales_invoice_retention_records_field()
@@ -538,6 +540,93 @@ def ensure_company_construction_accounting_fields():
 	if created_fields:
 		frappe.db.commit()
 		print(f"Company construction accounting fields created: {', '.join(created_fields)}")
+
+
+def ensure_construction_company_settings():
+	from construction_management.construction_management.regional import (
+		CONSTRUCTION_COMPANY_SETTINGS_DOCTYPE,
+		DEFAULT_CONSTRUCTION_ITEM_GROUP,
+		DEFAULT_CONSTRUCTION_SERVICE_ITEM,
+		DEFAULT_CONSTRUCTION_UOM,
+	)
+
+	if not frappe.db.exists("DocType", CONSTRUCTION_COMPANY_SETTINGS_DOCTYPE):
+		return
+
+	company_meta = frappe.get_meta("Company")
+	field_map = {
+		"ra_bill_receivable_account": "default_ra_bill_receivable_account",
+		"ra_bill_income_account": "default_ra_bill_income_account",
+		"retention_receivable_account": "default_retention_receivable_account",
+		"customer_advance_account": "default_customer_advance_account",
+		"construction_receipt_account": "default_construction_receipt_account",
+		"subcontractor_payable_account": "default_subcontractor_payable_account",
+		"retention_payable_account": "default_subcontractor_retention_payable_account",
+		"supplier_advance_account": "default_subcontractor_advance_account",
+		"subcontract_expense_account": "default_subcontract_expense_account",
+		"default_cost_center": "default_project_cost_center",
+	}
+	company_fields = [
+		fieldname
+		for fieldname in set(field_map.values())
+		if company_meta.has_field(fieldname)
+	]
+	created = 0
+	updated = 0
+
+	for company in frappe.get_all("Company", fields=["name", "country"]):
+		name = (
+			frappe.db.exists(CONSTRUCTION_COMPANY_SETTINGS_DOCTYPE, {"company": company.name})
+			or frappe.db.exists(CONSTRUCTION_COMPANY_SETTINGS_DOCTYPE, company.name)
+		)
+		company_values = (
+			frappe.db.get_value("Company", company.name, company_fields, as_dict=True)
+			if company_fields
+			else {}
+		) or {}
+		values = {
+			"company": company.name,
+			"country": company.country,
+			"enable_ra_billing": 1,
+			"enable_retention": 1,
+			"enable_advance_recovery": 1,
+			"default_construction_item_group": DEFAULT_CONSTRUCTION_ITEM_GROUP,
+			"default_uom": DEFAULT_CONSTRUCTION_UOM,
+		}
+		if frappe.db.exists("Item", DEFAULT_CONSTRUCTION_SERVICE_ITEM):
+			values["default_construction_service_item"] = DEFAULT_CONSTRUCTION_SERVICE_ITEM
+		for settings_field, company_field in field_map.items():
+			if company_values.get(company_field):
+				values[settings_field] = company_values.get(company_field)
+
+		if not name:
+			frappe.get_doc({"doctype": CONSTRUCTION_COMPANY_SETTINGS_DOCTYPE, **values}).insert(
+				ignore_permissions=True
+			)
+			created += 1
+			continue
+
+		settings = frappe.get_doc(CONSTRUCTION_COMPANY_SETTINGS_DOCTYPE, name)
+		changed = False
+		for fieldname, value in values.items():
+			if fieldname == "company":
+				continue
+			if value and not settings.get(fieldname):
+				settings.set(fieldname, value)
+				changed = True
+			elif fieldname == "country" and settings.get(fieldname) != value:
+				settings.set(fieldname, value)
+				changed = True
+		if changed:
+			settings.save(ignore_permissions=True)
+			updated += 1
+
+	if created or updated:
+		frappe.db.commit()
+		frappe.clear_cache(doctype=CONSTRUCTION_COMPANY_SETTINGS_DOCTYPE)
+		print(
+			f"Construction Company Settings ready: created {created}, updated {updated}"
+		)
 
 
 def ensure_project_construction_accounting_fields():
@@ -1606,14 +1695,22 @@ def get_or_create_ra_bill_receivable_account(company, currency, project=None):
 	return get_account(company, currency, project=project)
 
 
-def ensure_ra_bill_items():
+def ensure_ra_bill_items(company=None):
 	"""
 	Ensure the service item used in RA Bill Sales Invoices exists.
 	Safe to run multiple times - skips if already exists.
 	"""
 	import frappe
+	from construction_management.construction_management.regional import (
+		apply_regional_item_defaults,
+		get_default_construction_item_group,
+		get_default_construction_service_item,
+		get_default_construction_uom,
+		get_default_service_hsn_sac,
+		item_requires_hsn_sac,
+	)
 
-	company = frappe.defaults.get_user_default("Company") or frappe.defaults.get_global_default("company")
+	company = company or frappe.defaults.get_user_default("Company") or frappe.defaults.get_global_default("company")
 	if company:
 		from construction_management.construction_management.utils.accounting import get_construction_account
 
@@ -1624,13 +1721,24 @@ def ensure_ra_bill_items():
 	else:
 		income_account = None
 
+	if item_requires_hsn_sac(company) and not get_default_service_hsn_sac(company):
+		print(
+			"Skipped RA Bill service Item setup because Default Service HSN/SAC is not "
+			f"configured for Company {company}. Configure Construction Company Settings "
+			"before creating construction service Items."
+		)
+		return
+
+	item_code = get_default_construction_service_item(company)
+	item_group = get_default_construction_item_group(company)
+	stock_uom = get_default_construction_uom(company)
 	items = [
 		{
-			"item_code": "RA Bill Services",
-			"item_name": "RA Bill Services",
+			"item_code": item_code,
+			"item_name": item_code,
 			"description": "Construction progress billing services",
-			"item_group": "Services",
-			"stock_uom": "Nos",
+			"item_group": item_group,
+			"stock_uom": stock_uom,
 			"is_stock_item": 0,
 			"is_purchase_item": 0,
 			"is_sales_item": 1,
@@ -1640,6 +1748,7 @@ def ensure_ra_bill_items():
 	for item_data in items:
 		if not frappe.db.exists("Item", item_data["item_code"]):
 			doc = frappe.get_doc({"doctype": "Item", **item_data})
+			apply_regional_item_defaults(doc, company)
 			if company:
 				doc.append(
 					"item_defaults",
@@ -1653,6 +1762,10 @@ def ensure_ra_bill_items():
 		else:
 			doc = frappe.get_doc("Item", item_data["item_code"])
 			changed = False
+			current_hsn_sac = doc.get("gst_hsn_code") if doc.meta.has_field("gst_hsn_code") else None
+			apply_regional_item_defaults(doc, company)
+			if doc.meta.has_field("gst_hsn_code") and doc.get("gst_hsn_code") != current_hsn_sac:
+				changed = True
 			for field, value in item_data.items():
 				if doc.get(field) != value:
 					doc.set(field, value)

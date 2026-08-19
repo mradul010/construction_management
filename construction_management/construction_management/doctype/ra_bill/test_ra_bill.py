@@ -16,6 +16,8 @@ from construction_management.construction_management.doctype.ra_bill.ra_bill imp
 	search_boq_adjustment_items_for_ra_bill,
 	search_boq_items_for_ra_bill,
 )
+from construction_management.construction_management.regional import item_requires_hsn_sac
+from construction_management.construction_management.setup import ensure_ra_bill_items
 from construction_management.construction_management.ra_bill_dates import (
 	apply_ra_bill_dates_to_sales_invoice,
 	set_default_ra_bill_invoice_dates,
@@ -193,6 +195,45 @@ class IntegrationTestRABill(UnitTestCase):
 		validate_links.assert_called_once()
 		self.assertIsNone(ra_bill.sales_invoice)
 		self.assertEqual(ra_bill.status, "Draft")
+
+	def test_hsn_guard_applies_when_india_compliance_site_has_india_company(self):
+		class ItemMeta:
+			def has_field(self, fieldname):
+				return fieldname == "gst_hsn_code"
+
+		with (
+			patch(
+				"construction_management.construction_management.regional.is_india_compliance_installed",
+				return_value=True,
+			),
+			patch("frappe.get_meta", return_value=ItemMeta()),
+			patch(
+				"construction_management.construction_management.regional.is_india_company",
+				return_value=False,
+			),
+			patch("frappe.db.exists", return_value=True),
+		):
+			self.assertTrue(item_requires_hsn_sac("UAE-COMPANY"))
+
+	def test_ensure_ra_bill_items_skips_creation_when_hsn_required_without_setting(self):
+		with (
+			patch(
+				"construction_management.construction_management.regional.item_requires_hsn_sac",
+				return_value=True,
+			),
+			patch(
+				"construction_management.construction_management.regional.get_default_service_hsn_sac",
+				return_value=None,
+			),
+			patch(
+				"construction_management.construction_management.utils.accounting.get_construction_account",
+				return_value="Sales - TEST",
+			),
+			patch("frappe.get_doc") as get_doc,
+		):
+			ensure_ra_bill_items(company="INDIA-COMPANY")
+
+		get_doc.assert_not_called()
 
 	def test_ra_bill_invoice_deduction_tax_rows_are_ordered_before_vat(self):
 		si = _fake_sales_invoice()

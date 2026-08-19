@@ -1,47 +1,61 @@
 import frappe
 from frappe import _
 
+from construction_management.construction_management.regional import (
+	get_construction_company_settings as get_company_settings_record,
+)
+
 
 CONSTRUCTION_ACCOUNT_FIELDS = {
 	"ra_bill_receivable": {
 		"company_field": "default_ra_bill_receivable_account",
+		"settings_field": "ra_bill_receivable_account",
 		"account_type": "Receivable",
 	},
 	"ra_bill_income": {
 		"company_field": "default_ra_bill_income_account",
+		"settings_field": "ra_bill_income_account",
 		"root_type": "Income",
 	},
 	"retention_receivable": {
 		"company_field": "default_retention_receivable_account",
+		"settings_field": "retention_receivable_account",
 		"root_type": "Asset",
 		"account_type": "",
 	},
 	"customer_advance": {
 		"company_field": "default_customer_advance_account",
+		"settings_field": "customer_advance_account",
 		"account_type": "Receivable",
 	},
 	"advance_recovery": {
 		"company_field": "default_advance_recovery_account",
+		"settings_field": "customer_advance_account",
 		"account_type": "Receivable",
 	},
 	"construction_receipt": {
 		"company_field": "default_construction_receipt_account",
+		"settings_field": "construction_receipt_account",
 		"root_type": "Asset",
 	},
 	"subcontractor_payable": {
 		"company_field": "default_subcontractor_payable_account",
+		"settings_field": "subcontractor_payable_account",
 		"account_type": "Payable",
 	},
 	"subcontractor_retention_payable": {
 		"company_field": "default_subcontractor_retention_payable_account",
+		"settings_field": "retention_payable_account",
 		"account_type": "Payable",
 	},
 	"subcontractor_advance": {
 		"company_field": "default_subcontractor_advance_account",
+		"settings_field": "supplier_advance_account",
 		"account_type": "Payable",
 	},
 	"subcontract_expense": {
 		"company_field": "default_subcontract_expense_account",
+		"settings_field": "subcontract_expense_account",
 		"root_type": "Expense",
 	},
 }
@@ -82,18 +96,27 @@ def get_default_construction_account(company, account_key):
 
 	company_doc = get_construction_company_settings(company)
 	company_field = config.get("company_field")
-	if not company_doc.meta.has_field(company_field):
+	settings = get_company_settings_record(company)
+	settings_field = config.get("settings_field")
+	account = settings.get(settings_field) if settings_field else None
+
+	if not account and not company_doc.meta.has_field(company_field):
 		frappe.throw(
 			_("Company is missing Construction Accounting Settings field {0}.").format(
 				frappe.bold(company_field)
 			)
 		)
 
-	account = company_doc.get(company_field)
+	if not account:
+		account = company_doc.get(company_field)
 	if not account:
 		frappe.throw(
-			_("Please set {0} in Company {1} Construction Accounting Settings.").format(
-				frappe.bold(company_doc.meta.get_label(company_field) or company_field),
+			_("Please set {0} for Company {1} in Construction Company Settings.").format(
+				frappe.bold(
+					settings.meta.get_label(settings_field)
+					if getattr(settings, "meta", None) and settings_field
+					else company_doc.meta.get_label(company_field) or company_field
+				),
 				frappe.bold(company),
 			)
 		)
