@@ -7,6 +7,7 @@ from frappe.utils import flt
 
 def after_install():
 	create_boq_client_script()
+	create_purchase_invoice_client_script()
 	ensure_construction_desktop_icons()
 	ensure_design_management_setup()
 	ensure_company_construction_accounting_fields()
@@ -17,6 +18,7 @@ def after_install():
 	ensure_purchase_invoice_sc_bill_fields()
 	ensure_purchase_invoice_payment_breakdown_field()
 	ensure_purchase_invoice_site_material_consumption_fields()
+	ensure_purchase_invoice_accounting_only_return_fields()
 	ensure_purchase_order_subcontract_fields()
 	ensure_payment_entry_retention_record_field()
 	backfill_payment_entry_subcontract_links()
@@ -27,6 +29,7 @@ def after_install():
 
 def after_migrate():
 	create_boq_client_script()
+	create_purchase_invoice_client_script()
 	ensure_construction_desktop_icons()
 	ensure_design_management_setup()
 	ensure_company_construction_accounting_fields()
@@ -37,6 +40,7 @@ def after_migrate():
 	ensure_purchase_invoice_sc_bill_fields()
 	ensure_purchase_invoice_payment_breakdown_field()
 	ensure_purchase_invoice_site_material_consumption_fields()
+	ensure_purchase_invoice_accounting_only_return_fields()
 	ensure_purchase_order_subcontract_fields()
 	ensure_payment_entry_retention_record_field()
 	backfill_payment_entry_subcontract_links()
@@ -71,6 +75,34 @@ def create_boq_client_script():
 		doc.insert()
 	frappe.db.commit()
 	print("BOQ client script created/updated successfully")
+
+
+def create_purchase_invoice_client_script():
+	script_path = os.path.join(
+		os.path.dirname(__file__),
+		"client_script",
+		"purchase_invoice_client_script.js"
+	)
+	with open(script_path, "r") as f:
+		script_content = f.read()
+
+	if frappe.db.exists("Client Script", "Purchase Invoice-construction-management"):
+		doc = frappe.get_doc("Client Script", "Purchase Invoice-construction-management")
+		doc.script = script_content
+		doc.enabled = 1
+		doc.save()
+	else:
+		doc = frappe.get_doc({
+			"doctype": "Client Script",
+			"name": "Purchase Invoice-construction-management",
+			"dt": "Purchase Invoice",
+			"script": script_content,
+			"enabled": 1,
+			"view": "Form"
+		})
+		doc.insert()
+	frappe.db.commit()
+	print("Purchase Invoice client script created/updated successfully")
 
 
 def ensure_construction_desktop_icons():
@@ -928,6 +960,43 @@ def ensure_purchase_invoice_site_material_consumption_fields():
 	frappe.clear_cache(doctype="Purchase Invoice")
 	frappe.db.commit()
 	print("Purchase Invoice site material consumption fields are ready")
+
+
+def ensure_purchase_invoice_accounting_only_return_fields():
+	"""
+	Allow a Purchase Return / Debit Note to reverse construction expense without stock movement.
+	"""
+	ensure_custom_field(
+		"Purchase Invoice",
+		"accounting_only_return",
+		{
+			"label": "Accounting Only Return",
+			"fieldtype": "Check",
+			"default": "0",
+			"insert_after": "is_return",
+			"description": "Use this for a debit note against already consumed site material. No stock ledger entry will be created.",
+			"depends_on": "eval:doc.is_return",
+			"module": "Construction Management",
+		},
+	)
+	ensure_custom_field(
+		"Purchase Invoice Item",
+		"original_consumption_account",
+		{
+			"label": "Original Consumption Account",
+			"fieldtype": "Link",
+			"options": "Account",
+			"insert_after": "expense_account",
+			"read_only": 1,
+			"no_copy": 1,
+			"module": "Construction Management",
+		},
+	)
+
+	frappe.clear_cache(doctype="Purchase Invoice")
+	frappe.clear_cache(doctype="Purchase Invoice Item")
+	frappe.db.commit()
+	print("Purchase Invoice accounting-only return fields are ready")
 
 
 def ensure_purchase_order_subcontract_fields():
