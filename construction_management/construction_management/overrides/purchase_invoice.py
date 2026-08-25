@@ -13,7 +13,9 @@ AMOUNT_TOLERANCE = 0.0001
 
 class ConstructionPurchaseInvoice(PurchaseInvoice):
 	def validate(self):
+		self.prepare_accounting_only_return_before_validate()
 		super().validate()
+		self.apply_accounting_only_return_accounts()
 		self.validate_retention_account_for_submit()
 		self.validate_site_material_consumption_on_submit()
 		self.set_payment_breakdown()
@@ -25,6 +27,169 @@ class ConstructionPurchaseInvoice(PurchaseInvoice):
 	def on_cancel(self):
 		self.cancel_site_material_consumption()
 		super().on_cancel()
+
+	def set_expense_account(self, for_validate=False):
+		if self.is_accounting_only_return():
+			self.apply_accounting_only_return_accounts()
+			return
+
+		super().set_expense_account(for_validate=for_validate)
+
+	def is_accounting_only_return(self):
+		return bool(
+			self.meta.has_field("accounting_only_return")
+			and self.get("accounting_only_return")
+			and self.is_return
+		)
+
+	def prepare_accounting_only_return_before_validate(self):
+		if not self.meta.has_field("accounting_only_return"):
+			return
+
+		if self.get("accounting_only_return") and not self.is_return:
+			frappe.throw(_("Accounting Only Return can be used only on a Purchase Return / Debit Note."))
+
+		if not self.is_accounting_only_return():
+			return
+
+		if not self.return_against:
+			frappe.throw(_("Return Against is required for an Accounting Only Purchase Return."))
+
+		self.update_stock = 0
+		if self.meta.has_field("consume_site_materials_on_submit"):
+			self.consume_site_materials_on_submit = 0
+
+	def apply_accounting_only_return_accounts(self):
+		if not self.is_accounting_only_return():
+			return
+
+		self.update_stock = 0
+		for item in self.get("items") or []:
+			if not item.item_code or flt(item.qty) >= 0:
+				continue
+
+			account = self.get_original_consumption_account_for_return_item(item)
+			item.expense_account = account
+			if item.meta.has_field("original_consumption_account"):
+				item.original_consumption_account = account
+
+		self.set_against_expense_account(force=True)
+
+	def get_original_consumption_account_for_return_item(self, item):
+		original_item = item.get("purchase_invoice_item") or self.get_original_purchase_invoice_item_by_row(item)
+		if not original_item:
+			frappe.throw(
+				_(
+					"Row #{0}: Original Purchase Invoice Item is required for Accounting Only Return. "
+					"Create the return from the original Purchase Invoice, or set Purchase Invoice Item on the row."
+				).format(item.idx)
+			)
+
+		account = self.get_purchase_invoice_item_original_consumption_account(original_item)
+		if account:
+			return self.validate_accounting_only_return_expense_account(account, item)
+
+		account = self.get_site_material_consumption_account_for_original_item(original_item)
+		if account:
+			return self.validate_accounting_only_return_expense_account(account, item)
+
+		frappe.throw(
+			_(
+				"Row #{0}: Could not determine the original material consumption account for item {1}. "
+				"Please ensure the original Purchase Invoice was consumed through Site Material Consumption."
+			).format(item.idx, frappe.bold(item.item_code))
+		)
+
+	def get_original_purchase_invoice_item_by_row(self, item):
+		if not self.return_against:
+			return None
+
+		filters = {
+			"parent": self.return_against,
+			"idx": item.idx,
+		}
+		if item.item_code:
+			filters["item_code"] = item.item_code
+
+		matches = frappe.get_all("Purchase Invoice Item", filters=filters, pluck="name", limit=2)
+		return matches[0] if len(matches) == 1 else None
+
+	def get_purchase_invoice_item_original_consumption_account(self, original_item):
+		if not frappe.get_meta("Purchase Invoice Item").has_field("original_consumption_account"):
+			return None
+
+		return frappe.db.get_value("Purchase Invoice Item", original_item, "original_consumption_account")
+
+	def get_site_material_consumption_account_for_original_item(self, original_item):
+		if not self.return_against or not frappe.get_meta("Purchase Invoice").has_field("site_material_consumption"):
+			return None
+
+		consumption = frappe.db.get_value("Purchase Invoice", self.return_against, "site_material_consumption")
+		if not consumption or not frappe.db.exists("Site Material Consumption", consumption):
+			return None
+
+		meta = frappe.get_meta("Site Material Consumption Item")
+		if meta.has_field("purchase_invoice_item"):
+			rows = frappe.get_all(
+				"Site Material Consumption Item",
+				filters={
+					"parent": consumption,
+					"purchase_invoice_item": original_item,
+				},
+				fields=["expense_account"],
+				limit=2,
+			)
+			if len(rows) == 1 and rows[0].expense_account:
+				return rows[0].expense_account
+
+		original_values = frappe.db.get_value(
+			"Purchase Invoice Item",
+			original_item,
+			["idx", "item_code"],
+			as_dict=True,
+		)
+		if not original_values:
+			return None
+
+		rows = frappe.get_all(
+			"Site Material Consumption Item",
+			filters={
+				"parent": consumption,
+				"idx": original_values.idx,
+				"item_code": original_values.item_code,
+			},
+			fields=["expense_account"],
+			limit=2,
+		)
+		if len(rows) == 1 and rows[0].expense_account:
+			return rows[0].expense_account
+		return None
+
+	def validate_accounting_only_return_expense_account(self, account, item):
+		account_values = frappe.db.get_value(
+			"Account",
+			account,
+			["company", "is_group", "account_type"],
+			as_dict=True,
+		)
+		if not account_values:
+			frappe.throw(_("Row #{0}: Account {1} does not exist.").format(item.idx, frappe.bold(account)))
+		if account_values.company != self.company:
+			frappe.throw(
+				_("Row #{0}: Account {1} does not belong to company {2}.").format(
+					item.idx, frappe.bold(account), frappe.bold(self.company)
+				)
+			)
+		if account_values.is_group:
+			frappe.throw(_("Row #{0}: Account {1} must be a ledger account.").format(item.idx, frappe.bold(account)))
+		if account_values.account_type == "Stock":
+			frappe.throw(
+				_(
+					"Row #{0}: Original material consumption account {1} is a Stock account. "
+					"Use an expense account such as Cost of Construction or Cost of Other Jobs."
+				).format(item.idx, frappe.bold(account))
+			)
+		return account
 
 	def make_supplier_gl_entry(self, gl_entries):
 		retention_context = self.get_retention_payable_accounting_context()
@@ -138,6 +303,7 @@ class ConstructionPurchaseInvoice(PurchaseInvoice):
 						"project": row.project or self.project,
 						"cost_center": row.cost_center or self.cost_center,
 						"expense_account": self.get_site_material_consumption_expense_account(row.item_code),
+						"purchase_invoice_item": row.name,
 					}
 				)
 			)
@@ -192,6 +358,7 @@ class ConstructionPurchaseInvoice(PurchaseInvoice):
 					"stock_uom": row.stock_uom,
 					"conversion_factor": row.conversion_factor,
 					"expense_account": row.expense_account,
+					"purchase_invoice_item": row.purchase_invoice_item,
 					"project": row.project,
 					"cost_center": row.cost_center,
 				},
@@ -200,7 +367,23 @@ class ConstructionPurchaseInvoice(PurchaseInvoice):
 		consumption.flags.ignore_permissions = True
 		consumption.insert(ignore_permissions=True)
 		consumption.submit()
+		self.set_original_consumption_accounts_on_purchase_invoice(rows)
 		self.db_set("site_material_consumption", consumption.name, update_modified=False)
+
+	def set_original_consumption_accounts_on_purchase_invoice(self, rows):
+		if not frappe.get_meta("Purchase Invoice Item").has_field("original_consumption_account"):
+			return
+
+		for row in rows:
+			if not row.purchase_invoice_item or not row.expense_account:
+				continue
+			frappe.db.set_value(
+				"Purchase Invoice Item",
+				row.purchase_invoice_item,
+				"original_consumption_account",
+				row.expense_account,
+				update_modified=False,
+			)
 
 	def cancel_site_material_consumption(self):
 		if not self.meta.has_field("site_material_consumption") or not self.get("site_material_consumption"):
