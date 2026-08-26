@@ -4,6 +4,7 @@
 from unittest.mock import patch
 
 import frappe
+from frappe.utils import flt
 from frappe.tests import UnitTestCase
 
 from construction_management.construction_management.overrides.sales_invoice import (
@@ -13,6 +14,8 @@ from construction_management.construction_management.overrides.sales_invoice imp
 )
 from construction_management.construction_management.doctype.ra_bill.ra_bill import (
 	calculate_ra_bill_taxes,
+	get_ra_bill_sales_invoice_item_total,
+	get_ra_bill_sales_invoice_item_values,
 	search_boq_adjustment_items_for_ra_bill,
 	search_boq_items_for_ra_bill,
 )
@@ -281,6 +284,90 @@ class IntegrationTestRABill(UnitTestCase):
 			),
 		):
 			self.assertIsNone(get_ra_bill_vat_config(si, ra_bill))
+
+	def test_ra_bill_invoice_exact_division_preserves_qty_rate(self):
+		values = get_ra_bill_sales_invoice_item_values(
+			3,
+			300,
+			900,
+			qty_precision=3,
+			rate_precision=2,
+			amount_precision=2,
+		)
+
+		self.assertTrue(values.preserved_qty_rate)
+		self.assertEqual(values.qty, 3)
+		self.assertEqual(values.rate, 300)
+		self.assertEqual(values.amount, 900)
+
+	def test_ra_bill_invoice_repeating_decimal_rate_uses_certified_amount(self):
+		values = get_ra_bill_sales_invoice_item_values(
+			3,
+			333.333333333,
+			1000,
+			qty_precision=3,
+			rate_precision=2,
+			amount_precision=2,
+		)
+
+		self.assertFalse(values.preserved_qty_rate)
+		self.assertEqual(values.recomputed_amount, 999.99)
+		self.assertEqual(values.qty, 1)
+		self.assertEqual(values.rate, 1000)
+		self.assertEqual(values.amount, 1000)
+
+	def test_ra_bill_invoice_decimal_quantity_preserves_when_amount_recomputes(self):
+		values = get_ra_bill_sales_invoice_item_values(
+			3.333,
+			315.75,
+			1052.39,
+			qty_precision=3,
+			rate_precision=2,
+			amount_precision=2,
+		)
+
+		self.assertTrue(values.preserved_qty_rate)
+		self.assertEqual(values.qty, 3.333)
+		self.assertEqual(values.rate, 315.75)
+		self.assertEqual(values.amount, 1052.39)
+
+	def test_ra_bill_invoice_multiple_items_total_uses_approved_amounts(self):
+		items = [
+			get_ra_bill_sales_invoice_item_values(
+				3,
+				333.333333333,
+				1000,
+				qty_precision=3,
+				rate_precision=2,
+				amount_precision=2,
+			),
+			get_ra_bill_sales_invoice_item_values(
+				3.333,
+				315.75,
+				1052.39,
+				qty_precision=3,
+				rate_precision=2,
+				amount_precision=2,
+			),
+		]
+
+		self.assertEqual(flt(get_ra_bill_sales_invoice_item_total(items), 2), 2052.39)
+
+	def test_ra_bill_invoice_taxable_base_uses_certified_amount_after_rate_drift(self):
+		items = [
+			get_ra_bill_sales_invoice_item_values(
+				3,
+				333.333333333,
+				1000,
+				qty_precision=3,
+				rate_precision=2,
+				amount_precision=2,
+			)
+		]
+		taxable_amount = get_ra_bill_sales_invoice_item_total(items)
+
+		self.assertEqual(taxable_amount, 1000)
+		self.assertEqual(flt(taxable_amount * 5 / 100, 2), 50)
 
 	def test_ra_bill_advance_recovery_validates_against_remaining_sales_order_balance(self):
 		si = _fake_sales_invoice()

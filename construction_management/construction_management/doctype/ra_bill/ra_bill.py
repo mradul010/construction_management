@@ -947,6 +947,10 @@ class RABill(Document):
 		)
 
 		if has_adjustment_rows:
+			gross_amount = flt(
+				self.gross_amount,
+				get_ra_bill_sales_invoice_item_precision("amount", currency=invoice_currency),
+			)
 			description_lines = [
 				f"RA Bill #{self.bill_no}",
 				f"Project: {self.project}",
@@ -962,7 +966,9 @@ class RABill(Document):
 					"item_name": f"RA Bill #{self.bill_no} Progress Payment",
 					"description": "\n".join(description_lines),
 					"qty": 1,
-					"rate": flt(self.gross_amount),
+					"rate": gross_amount,
+					"amount": gross_amount,
+					"net_amount": gross_amount,
 					"uom": "Nos",
 					"income_account": income_account,
 					"cost_center": project_cost_center,
@@ -971,27 +977,33 @@ class RABill(Document):
 		else:
 			for row in self.items:
 				qty = flt(row.current_qty or 0)
-				rate = flt(row.boq_rate or 0)
+				boq_rate = flt(row.boq_rate or 0)
 				amount = flt(row.current_amount or 0)
 
 				if qty <= 0 or amount <= 0:
 					continue
 
-				calculated_amount = flt(qty * rate)
+				invoice_item_values = get_ra_bill_sales_invoice_item_values(
+					qty,
+					boq_rate,
+					amount,
+					currency=invoice_currency,
+				)
+				calculated_amount = invoice_item_values.recomputed_amount
 
 				description_lines = [
 					f"Category: {get_category_label(row.category_name)}",
 					f"Sub Category: {get_category_label(row.sub_category)}",
 					f"Item: {row.item_name or ''}",
 					f"BOQ Qty: {flt(row.boq_qty)} {row.uom or ''}".strip(),
-					f"BOQ Rate: {rate}",
+					f"BOQ Rate: {boq_rate}",
 					f"Work Completed: {flt(row.work_percent)}%",
 					f"Current Qty: {qty}",
 					f"Amount: {amount}",
 				]
-				if abs(calculated_amount - amount) > 0.01:
+				if abs(calculated_amount - invoice_item_values.amount) > 0.01:
 					description_lines.append(
-						f"Amount Check: Qty x Rate = {calculated_amount}; RA Bill Current Amount = {amount}"
+						f"Amount Check: Qty x Rate = {calculated_amount}; RA Bill Current Amount = {invoice_item_values.amount}"
 					)
 				if period_str:
 					description_lines.append(f"Billing Period: {period_str}")
@@ -1008,8 +1020,10 @@ class RABill(Document):
 						"item_code": "RA Bill Services",
 						"item_name": row.item_name or "RA Bill Services",
 						"description": "\n".join(description_lines),
-						"qty": qty,
-						"rate": rate,
+						"qty": invoice_item_values.qty,
+						"rate": invoice_item_values.rate,
+						"amount": invoice_item_values.amount,
+						"net_amount": invoice_item_values.amount,
 						"uom": row.uom or "Nos",
 						"income_account": income_account,
 						"cost_center": project_cost_center,
@@ -1022,9 +1036,7 @@ class RABill(Document):
 		validate_ra_bill_advance_recovery(self)
 		set_item_sales_order(invoice_items, source_sales_order)
 
-		invoice_gross = sum(
-			flt(item.get("qty")) * flt(item.get("rate")) for item in invoice_items
-		)
+		invoice_gross = get_ra_bill_sales_invoice_item_total(invoice_items)
 		if flt(invoice_gross, 2) != flt(self.gross_amount, 2):
 			frappe.throw(
 				"Detailed RA Bill Item total does not match the RA Bill gross amount. "
@@ -1032,9 +1044,7 @@ class RABill(Document):
 				f"Gross amount: {frappe.format(self.gross_amount, {'fieldtype': 'Currency'})}."
 			)
 
-		invoice_certified_total = sum(
-			flt(item.get("qty")) * flt(item.get("rate")) for item in invoice_items
-		)
+		invoice_certified_total = get_ra_bill_sales_invoice_item_total(invoice_items)
 		if flt(invoice_certified_total, 2) != flt(self.gross_amount, 2):
 			frappe.throw(
 				"Sales Invoice item total does not match the RA Bill certified amount. "
@@ -1312,6 +1322,76 @@ def get_previous_ra_bill_tax_row(row, previous_rows):
 		)
 
 	return previous_rows[row_id - 1]
+
+
+def get_ra_bill_sales_invoice_item_precision(fieldname, currency=None, fallback=2):
+	try:
+		return frappe.get_precision("Sales Invoice Item", fieldname, currency=currency)
+	except Exception:
+		return fallback
+
+
+def get_ra_bill_sales_invoice_item_values(
+	qty,
+	rate,
+	amount,
+	currency=None,
+	qty_precision=None,
+	rate_precision=None,
+	amount_precision=None,
+):
+	amount_precision = (
+		get_ra_bill_sales_invoice_item_precision("amount", currency=currency)
+		if amount_precision is None
+		else amount_precision
+	)
+	rate_precision = (
+		get_ra_bill_sales_invoice_item_precision("rate", currency=currency)
+		if rate_precision is None
+		else rate_precision
+	)
+	qty_precision = (
+		get_ra_bill_sales_invoice_item_precision("qty", currency=currency, fallback=3)
+		if qty_precision is None
+		else qty_precision
+	)
+
+	certified_amount = flt(amount, amount_precision)
+	invoice_qty = flt(qty, qty_precision)
+	invoice_rate = flt(rate, rate_precision)
+	recomputed_amount = flt(invoice_qty * invoice_rate, amount_precision)
+
+	if invoice_qty > 0 and invoice_rate > 0 and recomputed_amount == certified_amount:
+		return frappe._dict(
+			{
+				"qty": invoice_qty,
+				"rate": invoice_rate,
+				"amount": certified_amount,
+				"recomputed_amount": recomputed_amount,
+				"preserved_qty_rate": True,
+			}
+		)
+
+	return frappe._dict(
+		{
+			"qty": 1,
+			"rate": certified_amount,
+			"amount": certified_amount,
+			"recomputed_amount": recomputed_amount,
+			"preserved_qty_rate": False,
+		}
+	)
+
+
+def get_ra_bill_sales_invoice_item_amount(item):
+	if item.get("amount") is not None:
+		return flt(item.get("amount"))
+
+	return flt(item.get("qty")) * flt(item.get("rate"))
+
+
+def get_ra_bill_sales_invoice_item_total(items):
+	return sum(get_ra_bill_sales_invoice_item_amount(item) for item in items)
 
 
 @frappe.whitelist()
