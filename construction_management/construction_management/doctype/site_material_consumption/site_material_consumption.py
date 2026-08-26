@@ -117,11 +117,12 @@ class SiteMaterialConsumption(Document):
 			if not row.item_code:
 				continue
 
+			project = row.project or self.project
 			details = get_consumption_item_details(
 				row.item_code,
 				self.source_warehouse,
 				self.company,
-				self.project,
+				project,
 				self.posting_date,
 				self.posting_time,
 				row.uom,
@@ -132,9 +133,9 @@ class SiteMaterialConsumption(Document):
 				elif not row.get(fieldname) and value:
 					row.set(fieldname, value)
 
-			row.project = row.project or self.project
+			row.project = project
 			row.cost_center = row.cost_center or self.cost_center or get_default_cost_center(
-				row.item_code, self.company, self.project
+				row.item_code, self.company, project
 			)
 			row.expense_account = row.expense_account or get_default_expense_account(row.item_code, self.company)
 			row.amount = flt(row.qty) * flt(row.conversion_factor or 1) * flt(row.valuation_rate)

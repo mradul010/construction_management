@@ -246,25 +246,15 @@ class ConstructionPurchaseInvoice(PurchaseInvoice):
 		if not rows:
 			frappe.throw(_("No stock item rows are available to consume."))
 
-		projects = {row.project for row in rows if row.project}
 		warehouses = {row.warehouse for row in rows if row.warehouse}
-		missing_project_rows = [row.idx for row in rows if not row.project]
 		missing_warehouse_rows = [row.idx for row in rows if not row.warehouse]
 
-		if missing_project_rows:
-			frappe.throw(
-				_("Project is required on Purchase Invoice item rows before site material consumption. Missing rows: {0}").format(
-					", ".join(str(idx) for idx in missing_project_rows)
-				)
-			)
 		if missing_warehouse_rows:
 			frappe.throw(
 				_("Warehouse is required on Purchase Invoice item rows before site material consumption. Missing rows: {0}").format(
 					", ".join(str(idx) for idx in missing_warehouse_rows)
 				)
 			)
-		if len(projects) > 1:
-			frappe.throw(_("Auto site material consumption supports one Project per Purchase Invoice."))
 		if len(warehouses) > 1:
 			frappe.throw(_("Auto site material consumption supports one Site Warehouse per Purchase Invoice."))
 
@@ -288,6 +278,7 @@ class ConstructionPurchaseInvoice(PurchaseInvoice):
 			if not item_values or not item_values.is_stock_item or item_values.disabled:
 				continue
 
+			project = row.project or self.project
 			rows.append(
 				frappe._dict(
 					{
@@ -300,9 +291,9 @@ class ConstructionPurchaseInvoice(PurchaseInvoice):
 						"stock_uom": row.stock_uom,
 						"conversion_factor": row.conversion_factor or 1,
 						"warehouse": row.warehouse,
-						"project": row.project or self.project,
+						"project": project,
 						"cost_center": row.cost_center or self.cost_center,
-						"expense_account": self.get_site_material_consumption_expense_account(row.item_code),
+						"expense_account": self.get_site_material_consumption_expense_account(row, project),
 						"purchase_invoice_item": row.name,
 					}
 				)
@@ -328,9 +319,9 @@ class ConstructionPurchaseInvoice(PurchaseInvoice):
 			)
 
 		rows = self.get_site_material_consumption_rows()
-		project = rows[0].project
+		project = self.get_common_site_material_consumption_value(rows, "project")
 		warehouse = rows[0].warehouse
-		cost_center = rows[0].cost_center
+		cost_center = self.get_common_site_material_consumption_value(rows, "cost_center")
 
 		consumption = frappe.new_doc("Site Material Consumption")
 		consumption.update(
@@ -385,6 +376,11 @@ class ConstructionPurchaseInvoice(PurchaseInvoice):
 				update_modified=False,
 			)
 
+	def get_common_site_material_consumption_value(self, rows, fieldname):
+		values = [row.get(fieldname) for row in rows]
+		non_empty_values = {value for value in values if value}
+		return non_empty_values.pop() if len(non_empty_values) == 1 and all(values) else None
+
 	def cancel_site_material_consumption(self):
 		if not self.meta.has_field("site_material_consumption") or not self.get("site_material_consumption"):
 			return
@@ -398,12 +394,25 @@ class ConstructionPurchaseInvoice(PurchaseInvoice):
 		consumption.flags.ignore_permissions = True
 		consumption.cancel()
 
-	def get_site_material_consumption_expense_account(self, item_code):
+	def get_site_material_consumption_expense_account(self, row, project=None):
 		from construction_management.construction_management.doctype.site_material_consumption.site_material_consumption import (
 			get_default_expense_account,
+			validate_expense_account,
 		)
 
-		return get_default_expense_account(item_code, self.company)
+		consumption_account = row.get("consumption_account") if row.meta.has_field("consumption_account") else None
+		if consumption_account:
+			validate_expense_account(consumption_account, self.company, row.idx)
+			return consumption_account
+
+		if not project:
+			frappe.throw(
+				_(
+					"Consumption Account is required for item {0} because no Project is selected."
+				).format(frappe.bold(row.item_code))
+			)
+
+		return get_default_expense_account(row.item_code, self.company)
 
 	def get_retention_payable_accounting_context(self, validate_account=True):
 		if self.is_internal_transfer() or self.is_return:

@@ -956,8 +956,22 @@ def ensure_purchase_invoice_site_material_consumption_fields():
 			"module": "Construction Management",
 		},
 	)
+	ensure_custom_field(
+		"Purchase Invoice Item",
+		"consumption_account",
+		{
+			"label": "Consumption Account",
+			"fieldtype": "Link",
+			"options": "Account",
+			"insert_after": "expense_account",
+			"description": "P&L account used when this stock item row is consumed as site material.",
+			"depends_on": "eval:parent.consume_site_materials_on_submit",
+			"module": "Construction Management",
+		},
+	)
 
 	frappe.clear_cache(doctype="Purchase Invoice")
+	frappe.clear_cache(doctype="Purchase Invoice Item")
 	frappe.db.commit()
 	print("Purchase Invoice site material consumption fields are ready")
 

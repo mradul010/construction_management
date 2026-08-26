@@ -11,6 +11,14 @@ function setAccountingOnlyReturnState(frm) {
 }
 
 frappe.ui.form.on("Purchase Invoice", {
+	setup(frm) {
+		frm.set_query("consumption_account", "items", function () {
+			const filters = { is_group: 0, root_type: "Expense" };
+			if (frm.doc.company) filters.company = frm.doc.company;
+			return { filters };
+		});
+	},
+
 	refresh(frm) {
 		setAccountingOnlyReturnState(frm);
 	},
