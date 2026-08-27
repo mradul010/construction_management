@@ -245,9 +245,6 @@ def apply_construction_accounts_to_purchase_invoice(invoice, method=None):
 
 	for row in invoice.get("items") or []:
 		_set_if_empty(row, "expense_account", expense_account)
-		_set_if_empty(row, "cost_center", cost_center)
-		if row.meta.has_field("project") and project and not row.get("project"):
-			row.project = project
 
 
 def apply_construction_accounts_to_payment_entry(payment_entry, method=None):

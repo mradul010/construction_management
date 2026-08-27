@@ -85,11 +85,32 @@ class ConstructionPurchaseInvoice(PurchaseInvoice):
 				).format(item.idx)
 			)
 
-		account = self.get_purchase_invoice_item_original_consumption_account(original_item)
+		original_values = self.get_original_purchase_invoice_item_values(original_item)
+		if not original_values:
+			frappe.throw(
+				_("Row #{0}: Original Purchase Invoice Item {1} was not found.").format(
+					item.idx, frappe.bold(original_item)
+				)
+			)
+
+		if not self.is_stock_item(original_values.item_code):
+			if original_values.expense_account:
+				return self.validate_accounting_only_return_expense_account(
+					original_values.expense_account, item
+				)
+			frappe.throw(
+				_("Row #{0}: Original non-stock item {1} does not have an expense account.").format(
+					item.idx, frappe.bold(original_values.item_code)
+				)
+			)
+
+		account = original_values.get("original_consumption_account")
 		if account:
 			return self.validate_accounting_only_return_expense_account(account, item)
 
-		account = self.get_site_material_consumption_account_for_original_item(original_item)
+		account = self.get_site_material_consumption_account_for_original_item(
+			original_item, original_values=original_values
+		)
 		if account:
 			return self.validate_accounting_only_return_expense_account(account, item)
 
@@ -114,13 +135,41 @@ class ConstructionPurchaseInvoice(PurchaseInvoice):
 		matches = frappe.get_all("Purchase Invoice Item", filters=filters, pluck="name", limit=2)
 		return matches[0] if len(matches) == 1 else None
 
-	def get_purchase_invoice_item_original_consumption_account(self, original_item):
-		if not frappe.get_meta("Purchase Invoice Item").has_field("original_consumption_account"):
-			return None
+	def get_original_purchase_invoice_item_values(self, original_item):
+		fields = [
+			"name",
+			"parent",
+			"idx",
+			"item_code",
+			"expense_account",
+			"project",
+			"cost_center",
+			"warehouse",
+			"qty",
+			"uom",
+			"stock_uom",
+			"conversion_factor",
+		]
+		if frappe.get_meta("Purchase Invoice Item").has_field("original_consumption_account"):
+			fields.append("original_consumption_account")
 
-		return frappe.db.get_value("Purchase Invoice Item", original_item, "original_consumption_account")
+		return frappe.db.get_value(
+			"Purchase Invoice Item",
+			original_item,
+			fields,
+			as_dict=True,
+		)
 
-	def get_site_material_consumption_account_for_original_item(self, original_item):
+	def is_stock_item(self, item_code):
+		return bool(item_code and frappe.db.get_value("Item", item_code, "is_stock_item"))
+
+	def get_site_material_consumption_account_for_original_item(self, original_item, original_values=None):
+		row = self.get_site_material_consumption_item_for_original_item(
+			original_item, original_values=original_values
+		)
+		return row.expense_account if row and row.expense_account else None
+
+	def get_site_material_consumption_item_for_original_item(self, original_item, original_values=None):
 		if not self.return_against or not frappe.get_meta("Purchase Invoice").has_field("site_material_consumption"):
 			return None
 
@@ -129,6 +178,19 @@ class ConstructionPurchaseInvoice(PurchaseInvoice):
 			return None
 
 		meta = frappe.get_meta("Site Material Consumption Item")
+		fields = [
+			"name",
+			"idx",
+			"item_code",
+			"qty",
+			"uom",
+			"stock_uom",
+			"conversion_factor",
+			"expense_account",
+			"project",
+			"cost_center",
+		]
+
 		if meta.has_field("purchase_invoice_item"):
 			rows = frappe.get_all(
 				"Site Material Consumption Item",
@@ -136,18 +198,17 @@ class ConstructionPurchaseInvoice(PurchaseInvoice):
 					"parent": consumption,
 					"purchase_invoice_item": original_item,
 				},
-				fields=["expense_account"],
+				fields=fields,
 				limit=2,
 			)
-			if len(rows) == 1 and rows[0].expense_account:
-				return rows[0].expense_account
+			if rows:
+				return self.get_unique_site_material_consumption_match(
+					rows,
+					original_item,
+					match_context=_("Purchase Invoice Item reference"),
+				)
 
-		original_values = frappe.db.get_value(
-			"Purchase Invoice Item",
-			original_item,
-			["idx", "item_code"],
-			as_dict=True,
-		)
+		original_values = original_values or self.get_original_purchase_invoice_item_values(original_item)
 		if not original_values:
 			return None
 
@@ -155,14 +216,62 @@ class ConstructionPurchaseInvoice(PurchaseInvoice):
 			"Site Material Consumption Item",
 			filters={
 				"parent": consumption,
-				"idx": original_values.idx,
 				"item_code": original_values.item_code,
 			},
-			fields=["expense_account"],
-			limit=2,
+			fields=fields,
+			order_by="idx asc",
 		)
-		if len(rows) == 1 and rows[0].expense_account:
-			return rows[0].expense_account
+		if not rows:
+			return None
+
+		# SMC excludes non-stock PI rows, so PI Item idx and SMC Item idx can diverge.
+		rows = self.filter_site_material_consumption_candidates(rows, original_values)
+		return self.get_unique_site_material_consumption_match(
+			rows,
+			original_item,
+			match_context=_("item/project/cost center/quantity fallback"),
+		)
+
+	def filter_site_material_consumption_candidates(self, rows, original_values):
+		candidates = list(rows)
+		for fieldname in ("project", "cost_center", "uom", "stock_uom"):
+			value = original_values.get(fieldname)
+			if not value:
+				continue
+
+			matches = [row for row in candidates if row.get(fieldname) == value]
+			if matches:
+				candidates = matches
+
+		original_qty = abs(flt(original_values.get("qty")))
+		if original_qty:
+			matches = [
+				row
+				for row in candidates
+				if abs(abs(flt(row.get("qty"))) - original_qty) <= AMOUNT_TOLERANCE
+			]
+			if matches:
+				candidates = matches
+
+		return candidates
+
+	def get_unique_site_material_consumption_match(self, rows, original_item, match_context=None):
+		rows = [row for row in rows if row.get("expense_account")]
+		if len(rows) == 1:
+			return rows[0]
+
+		if len(rows) > 1:
+			frappe.throw(
+				_(
+					"Could not uniquely determine the Site Material Consumption row for Purchase Invoice Item {0} "
+					"using {1}. Matching SMC rows: {2}."
+				).format(
+					frappe.bold(original_item),
+					match_context or _("available references"),
+					", ".join(str(row.get("idx")) for row in rows),
+				)
+			)
+
 		return None
 
 	def validate_accounting_only_return_expense_account(self, account, item):
@@ -278,7 +387,7 @@ class ConstructionPurchaseInvoice(PurchaseInvoice):
 			if not item_values or not item_values.is_stock_item or item_values.disabled:
 				continue
 
-			project = row.project or self.project
+			project = row.project
 			rows.append(
 				frappe._dict(
 					{
@@ -292,8 +401,9 @@ class ConstructionPurchaseInvoice(PurchaseInvoice):
 						"conversion_factor": row.conversion_factor or 1,
 						"warehouse": row.warehouse,
 						"project": project,
-						"cost_center": row.cost_center or self.cost_center,
+						"cost_center": row.cost_center,
 						"expense_account": self.get_site_material_consumption_expense_account(row, project),
+						"purchase_invoice": self.name,
 						"purchase_invoice_item": row.name,
 					}
 				)
@@ -349,6 +459,7 @@ class ConstructionPurchaseInvoice(PurchaseInvoice):
 					"stock_uom": row.stock_uom,
 					"conversion_factor": row.conversion_factor,
 					"expense_account": row.expense_account,
+					"purchase_invoice": row.purchase_invoice,
 					"purchase_invoice_item": row.purchase_invoice_item,
 					"project": row.project,
 					"cost_center": row.cost_center,
