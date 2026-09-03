@@ -51,7 +51,6 @@
    "in_list_view": 1,
    "label": "Category",
    "options": "BOQ Category",
-   "reqd": 1,
    "search_index": 1
   },
   {

@@ -226,8 +226,7 @@
    "fieldname": "original_boq",
    "fieldtype": "Link",
    "label": "Original BOQ",
-   "options": "BOQ",
-   "read_only": 1
+   "options": "BOQ"
   },
   {
    "fieldname": "parent_boq",

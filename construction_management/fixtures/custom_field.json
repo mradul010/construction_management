@@ -10786,5 +10786,61 @@
   "translatable": 0,
   "unique": 0,
   "width": null
- }
+ },
+  {
+    "doctype": "Custom Field",
+    "name": "BOQ-ref_no",
+    "dt": "BOQ",
+    "fieldname": "ref_no",
+    "label": "Ref. No.",
+    "fieldtype": "Data",
+    "insert_after": "bua_uom"
+  },
+  {
+    "doctype": "Custom Field",
+    "name": "RA Bill-ref_no",
+    "dt": "RA Bill",
+    "fieldname": "ref_no",
+    "label": "Ref. No.",
+    "fieldtype": "Data",
+    "insert_after": "customer"
+  },
+  {
+    "doctype": "Custom Field",
+    "name": "BOQ-ref_date",
+    "dt": "BOQ",
+    "fieldname": "ref_date",
+    "label": "Ref. Date",
+    "fieldtype": "Date",
+    "insert_after": "ref_no"
+  },
+  {
+    "doctype": "Custom Field",
+    "name": "RA Bill-ref_date",
+    "dt": "RA Bill",
+    "fieldname": "ref_date",
+    "label": "Ref. Date",
+    "fieldtype": "Date",
+    "insert_after": "ref_no"
+  },
+  {
+    "doctype": "Custom Field",
+    "name": "BOQ-branch",
+    "dt": "BOQ",
+    "fieldname": "branch",
+    "label": "Branch",
+    "fieldtype": "Link",
+    "options": "Branch",
+    "insert_after": "ref_no"
+  },
+  {
+    "doctype": "Custom Field",
+    "name": "RA Bill-branch",
+    "dt": "RA Bill",
+    "fieldname": "branch",
+    "label": "Branch",
+    "fieldtype": "Link",
+    "options": "Branch",
+    "insert_after": "ref_no"
+  }
 ]

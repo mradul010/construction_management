@@ -13,8 +13,10 @@ from construction_management.construction_management.overrides.sales_invoice imp
 )
 from construction_management.construction_management.doctype.ra_bill.ra_bill import (
 	calculate_ra_bill_taxes,
+	get_boq_item_details_for_ra_bill,
 	search_boq_adjustment_items_for_ra_bill,
 	search_boq_items_for_ra_bill,
+	search_ra_bill_subcategories,
 )
 from construction_management.construction_management.regional import item_requires_hsn_sac
 from construction_management.construction_management.setup import ensure_ra_bill_items
@@ -732,6 +734,60 @@ class IntegrationTestRABill(UnitTestCase):
 		self.assertEqual(row.current_qty, -50)
 		self.assertEqual(row.current_amount, -45000)
 		self.assertEqual(row.cumulative_qty, 50)
+		self.assertEqual(row.remaining_qty, 50)
+
+	def test_remaining_qty_is_after_current_bill_qty(self):
+		scenarios = [
+			(100, 0, 20, 20, 80),
+			(100, 20, 70, 90, 10),
+			(100, 90, 10, 100, 0),
+			(250, 100, 75, 175, 75),
+			(100, 20, 0, 20, 80),
+		]
+
+		for boq_qty, previous_qty, current_qty, cumulative_qty, remaining_qty in scenarios:
+			with self.subTest(
+				boq_qty=boq_qty,
+				previous_qty=previous_qty,
+				current_qty=current_qty,
+			):
+				ra_bill = frappe.get_doc(
+					{
+						"doctype": "RA Bill",
+						"boq": "BOQ-TEST",
+						"items": [
+							{
+								"boq_item": "BOQ-ITEM-TEST",
+								"item_name": "Site Management and Supervision",
+								"boq_qty": boq_qty,
+								"boq_rate": 900,
+								"progress_type": "Progress",
+								"work_percent": (current_qty / boq_qty) * 100 if boq_qty else 0,
+							}
+						],
+					}
+				)
+
+				with patch(
+					"construction_management.construction_management.doctype.ra_bill.ra_bill._get_boq_item_billing_summary",
+					return_value={
+						"previous_qty": previous_qty,
+						"previous_percent": (previous_qty / boq_qty) * 100 if boq_qty else 0,
+						"remaining_qty": boq_qty - previous_qty,
+						"remaining_percent": ((boq_qty - previous_qty) / boq_qty) * 100
+						if boq_qty
+						else 0,
+					},
+				):
+					if current_qty:
+						ra_bill.validate_item_values()
+					ra_bill._calculate_row_totals()
+					ra_bill._validate_not_overbilling()
+
+				row = ra_bill.items[0]
+				self.assertAlmostEqual(row.current_qty, current_qty)
+				self.assertAlmostEqual(row.cumulative_qty, cumulative_qty)
+				self.assertAlmostEqual(row.remaining_qty, remaining_qty)
 
 	def test_negative_adjustment_row_creates_transaction_for_cumulative_baseline(self):
 		ra_bill = frappe.get_doc(
@@ -894,6 +950,151 @@ class IntegrationTestRABill(UnitTestCase):
 		self.assertEqual([row[0] for row in checkbox_off], ["BOQ-ITEM-50", "BOQ-ITEM-0"])
 		self.assertEqual([row[0] for row in checkbox_on], ["BOQ-ITEM-100", "BOQ-ITEM-50", "BOQ-ITEM-0"])
 
+	def test_boq_item_details_maps_flexible_hierarchy(self):
+		boq_doc = _FakeDoc(
+			{
+				"name": "BOQ-TEST",
+				"items": [
+					_FakeRow(
+						{
+							"name": "BOQ-ROOT",
+							"item_name": "Root Item",
+							"qty": 100,
+							"unit_rate": 10,
+							"uom": "Nos",
+						}
+					),
+					_FakeRow(
+						{
+							"name": "BOQ-DIRECT-CAT",
+							"item_name": "Direct Category Item",
+							"qty": 100,
+							"unit_rate": 10,
+							"uom": "Nos",
+							"boq_category": "CAT-A",
+						}
+					),
+					_FakeRow(
+						{
+							"name": "BOQ-SUB-CAT",
+							"item_name": "Sub Category Item",
+							"qty": 100,
+							"unit_rate": 10,
+							"uom": "Nos",
+							"boq_category": "SUB-A1",
+						}
+					),
+				],
+			}
+		)
+
+		def get_value(doctype, name, fields, as_dict=False):
+			values = {
+				"CAT-A": frappe._dict(
+					{"name": "CAT-A", "category_name": "Category A", "parent_node": None}
+				),
+				"SUB-A1": frappe._dict(
+					{"name": "SUB-A1", "category_name": "Sub A1", "parent_node": "CAT-A"}
+				),
+			}
+			if doctype == "BOQ Category" and fields == "category_name":
+				return "Category A"
+			return values.get(name)
+
+		with (
+			patch(
+				"construction_management.construction_management.doctype.ra_bill.ra_bill._get_permission_checked_boq",
+				return_value=boq_doc,
+			),
+			patch("frappe.db.get_value", side_effect=get_value),
+		):
+			root = get_boq_item_details_for_ra_bill("BOQ-TEST", "BOQ-ROOT")
+			direct = get_boq_item_details_for_ra_bill("BOQ-TEST", "BOQ-DIRECT-CAT")
+			sub = get_boq_item_details_for_ra_bill("BOQ-TEST", "BOQ-SUB-CAT")
+
+		self.assertEqual(root["category_name"], "")
+		self.assertEqual(root["sub_category"], "")
+		self.assertEqual(direct["category_name"], "CAT-A")
+		self.assertEqual(direct["sub_category"], "")
+		self.assertEqual(sub["category_name"], "CAT-A")
+		self.assertEqual(sub["sub_category"], "SUB-A1")
+
+	def test_boq_item_picker_filters_root_category_and_subcategory_items(self):
+		candidates = [("BOQ-ITEM-1", "Item A", 100, 900, "Nos")]
+
+		with (
+			patch(
+				"construction_management.construction_management.doctype.ra_bill.ra_bill._get_permission_checked_boq",
+				return_value=frappe._dict({"name": "BOQ-TEST"}),
+			),
+			patch("frappe.db.sql", return_value=candidates) as db_sql,
+			patch(
+				"construction_management.construction_management.doctype.ra_bill.ra_bill._get_boq_item_billing_summary",
+				return_value={
+					"previous_qty": 0,
+					"previous_percent": 0,
+					"remaining_qty": 100,
+					"remaining_percent": 100,
+				},
+			),
+		):
+			search_boq_items_for_ra_bill(
+				"BOQ Item",
+				"",
+				"name",
+				0,
+				20,
+				{"boq": "BOQ-TEST"},
+			)
+			root_query = db_sql.call_args[0][0]
+
+			search_boq_items_for_ra_bill(
+				"BOQ Item",
+				"",
+				"name",
+				0,
+				20,
+				{"boq": "BOQ-TEST", "category": "CAT-A"},
+			)
+			category_query, category_params = db_sql.call_args[0]
+
+			search_boq_items_for_ra_bill(
+				"BOQ Item",
+				"",
+				"name",
+				0,
+				20,
+				{"boq": "BOQ-TEST", "category": "CAT-A", "subcategory": "SUB-A1"},
+			)
+			subcategory_query, subcategory_params = db_sql.call_args[0]
+
+		self.assertIn("(boq_category IS NULL OR boq_category = '')", root_query)
+		self.assertIn("boq_category = %(category)s", category_query)
+		self.assertEqual(category_params["category"], "CAT-A")
+		self.assertIn("boq_category = %(subcategory)s", subcategory_query)
+		self.assertEqual(subcategory_params["subcategory"], "SUB-A1")
+
+	def test_subcategory_picker_excludes_direct_category_self_option(self):
+		with (
+			patch(
+				"construction_management.construction_management.doctype.ra_bill.ra_bill._get_permission_checked_boq",
+				return_value=frappe._dict({"name": "BOQ-TEST"}),
+			),
+			patch("frappe.db.sql", return_value=[]) as db_sql,
+		):
+			search_ra_bill_subcategories(
+				"BOQ Category",
+				"",
+				"name",
+				0,
+				20,
+				{"boq": "BOQ-TEST", "category": "CAT-A"},
+			)
+
+		query = db_sql.call_args[0][0]
+		self.assertIn("sub_cat.parent_node = %(category)s", query)
+		self.assertNotIn("sub_cat.name = %(category)s", query)
+
 	def test_progress_after_adjustment_uses_corrected_baseline(self):
 		ra_bill = frappe.get_doc(
 			{
@@ -929,6 +1130,7 @@ class IntegrationTestRABill(UnitTestCase):
 		self.assertEqual(row.current_qty, 10)
 		self.assertEqual(row.current_amount, 9000)
 		self.assertEqual(row.cumulative_qty, 60)
+		self.assertEqual(row.remaining_qty, 40)
 
 	def test_adjustment_row_cannot_reduce_cumulative_below_zero(self):
 		ra_bill = frappe.get_doc(

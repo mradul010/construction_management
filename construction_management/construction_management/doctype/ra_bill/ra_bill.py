@@ -73,6 +73,7 @@ class RABill(Document):
 		validate_ra_bill_invoice_dates(self)
 		self._set_bill_no()
 		self._fetch_boq_item_details()
+		self._validate_item_hierarchy()
 		self._fill_previous_work_summary()
 		self.validate_item_values()
 		self._calculate_row_totals()
@@ -281,7 +282,7 @@ class RABill(Document):
 	def _fetch_boq_item_details(self):
 		"""
 		For each RA Bill Item row, fetch item_name, boq_qty,
-		boq_rate, and uom from the linked BOQ Item.
+		boq_rate, uom, and hierarchy from the linked BOQ Item.
 		"""
 		for row in self.items:
 			if not row.boq_item:
@@ -302,6 +303,21 @@ class RABill(Document):
 				as_dict=True,
 			)
 			if boq_item:
+				hierarchy = _get_boq_item_hierarchy(boq_item.boq_category)
+				item = boq_item.item_name or row.boq_item
+				if row.category_name and row.category_name != hierarchy.category_name:
+					frappe.throw(
+						_(
+							"Category for RA Bill Item {0} must match the linked BOQ Item."
+						).format(item)
+					)
+				if row.sub_category and row.sub_category != hierarchy.sub_category:
+					frappe.throw(
+						_(
+							"Sub Category for RA Bill Item {0} must match the linked BOQ Item."
+						).format(item)
+					)
+
 				row.item_name = boq_item.item_name
 				row.boq_qty = boq_item.qty
 				row.boq_rate = boq_item.unit_rate
@@ -311,15 +327,42 @@ class RABill(Document):
 				)
 				row.boq_revision = self.boq
 				row.original_boq = _get_original_boq(self.boq)
-				if not row.sub_category and boq_item.boq_category:
-					row.sub_category = boq_item.boq_category
-				if not row.category_name and boq_item.boq_category:
-					row.category_name = (
-						frappe.db.get_value(
-							"BOQ Category", boq_item.boq_category, "parent_node"
-						)
-						or boq_item.boq_category
+				row.category_name = hierarchy.category_name
+				row.sub_category = hierarchy.sub_category
+
+	def _validate_item_hierarchy(self):
+		for row in self.items:
+			if not row.boq_item:
+				continue
+
+			boq_item = frappe.db.get_value(
+				"BOQ Item",
+				row.boq_item,
+				["parent", "boq_category"],
+				as_dict=True,
+			)
+			if not boq_item:
+				frappe.throw(_("BOQ Item {0} does not exist.").format(row.boq_item))
+			if boq_item.parent != self.boq:
+				frappe.throw(
+					_("BOQ Item {0} does not belong to BOQ {1}.").format(
+						row.boq_item, self.boq
 					)
+				)
+
+			expected = _get_boq_item_hierarchy(boq_item.boq_category)
+			if (row.category_name or "") != (expected.category_name or ""):
+				frappe.throw(
+					_(
+						"Category for RA Bill Item {0} must match the linked BOQ Item."
+					).format(row.item_name or row.boq_item)
+				)
+			if (row.sub_category or "") != (expected.sub_category or ""):
+				frappe.throw(
+					_(
+						"Sub Category for RA Bill Item {0} must match the linked BOQ Item."
+					).format(row.item_name or row.boq_item)
+				)
 
 	def _fill_previous_work_summary(self):
 		"""
@@ -356,6 +399,10 @@ class RABill(Document):
 			row.current_qty = flt(row.boq_qty) * (row.work_percent / 100)
 			row.current_amount = flt(row.current_qty) * flt(row.boq_rate)
 			row.cumulative_qty = flt(row.prev_cumulative_qty) + flt(row.current_qty)
+			row.remaining_qty = flt(row.boq_qty) - flt(row.cumulative_qty)
+			row.remaining_percent = (
+				_qty_to_percent(row.remaining_qty, row.boq_qty) if flt(row.boq_qty) > 0 else 0
+			)
 
 	def _validate_no_duplicate_items(self):
 		seen_items = set()
@@ -384,16 +431,18 @@ class RABill(Document):
 			current_qty = flt(row.current_qty)
 			summary = _get_boq_item_billing_summary(self.boq, row.boq_item, self.name)
 			previous_qty = summary["previous_qty"]
-			remaining_qty = summary["remaining_qty"]
+			available_qty = summary["remaining_qty"]
 			previous_pct = summary["previous_percent"]
-			remaining_pct = summary["remaining_percent"]
+			available_pct = summary["remaining_percent"]
 
 			row.previous_qty = previous_qty
 			row.previous_percent = previous_pct
-			row.remaining_qty = remaining_qty
-			row.remaining_percent = remaining_pct
 			row.prev_cumulative_qty = previous_qty
 			row.cumulative_qty = previous_qty + current_qty
+			row.remaining_qty = boq_qty - row.cumulative_qty
+			row.remaining_percent = (
+				_qty_to_percent(row.remaining_qty, boq_qty) if boq_qty > 0 else 0
+			)
 
 			if self._is_adjustment_row(row):
 				if previous_qty <= OVERBILLING_TOLERANCE:
@@ -434,15 +483,15 @@ class RABill(Document):
 					)
 				continue
 
-			if current_qty > remaining_qty + OVERBILLING_TOLERANCE:
+			if current_qty > available_qty + OVERBILLING_TOLERANCE:
 				frappe.throw(
 					_(
 						"Item: {item}<br>"
 						"BOQ Qty: {boq_qty}<br>"
 						"Previously Billed Qty: {previous_qty}<br>"
 						"Previously Billed %: {previous_pct}<br>"
-						"Remaining Qty: {remaining_qty}<br>"
-						"Remaining %: {remaining_pct}<br>"
+						"Available Qty Before Current Bill: {remaining_qty}<br>"
+						"Available % Before Current Bill: {remaining_pct}<br>"
 						"You Entered Qty: {current_qty}<br>"
 						"You Entered %: {work_percent}<br><br>"
 						"Please reduce Work % / Current Qty."
@@ -451,8 +500,8 @@ class RABill(Document):
 						boq_qty=flt(boq_qty, 4),
 						previous_qty=flt(previous_qty, 4),
 						previous_pct=flt(previous_pct, 4),
-						remaining_qty=flt(remaining_qty, 4),
-						remaining_pct=flt(remaining_pct, 4),
+						remaining_qty=flt(available_qty, 4),
+						remaining_pct=flt(available_pct, 4),
 						current_qty=flt(current_qty, 4),
 						work_percent=flt(row.work_percent, 4),
 					),
@@ -1192,17 +1241,62 @@ def _get_boq_category_label_map(category_names):
 	return label_map, categories
 
 
+def _get_boq_item_hierarchy(boq_category):
+	if not boq_category:
+		return frappe._dict(
+			{
+				"category_name": "",
+				"sub_category": "",
+				"category_label": "",
+				"sub_category_label": "",
+			}
+		)
+
+	category = frappe.db.get_value(
+		"BOQ Category",
+		boq_category,
+		["name", "category_name", "parent_node"],
+		as_dict=True,
+	)
+	if not category:
+		return frappe._dict(
+			{
+				"category_name": boq_category,
+				"sub_category": "",
+				"category_label": boq_category,
+				"sub_category_label": "",
+			}
+		)
+
+	if category.parent_node:
+		parent_label = (
+			frappe.db.get_value("BOQ Category", category.parent_node, "category_name")
+			or category.parent_node
+		)
+		return frappe._dict(
+			{
+				"category_name": category.parent_node,
+				"sub_category": category.name,
+				"category_label": parent_label,
+				"sub_category_label": category.category_name or category.name,
+			}
+		)
+
+	return frappe._dict(
+		{
+			"category_name": category.name,
+			"sub_category": "",
+			"category_label": category.category_name or category.name,
+			"sub_category_label": "",
+		}
+	)
+
+
 @frappe.whitelist()
 def get_boq_item_details_for_ra_bill(boq, boq_item):
 	boq_doc = _get_permission_checked_boq(boq)
 	row = _get_boq_child_item_row(boq_doc, boq_item)
-	label_map, categories = _get_boq_category_label_map([row.boq_category])
-	category = next((category for category in categories if category.name == row.boq_category), None)
-	parent_category = (
-		(category.parent_node if category else None)
-		or row.get("boq_parent_category")
-		or ""
-	)
+	hierarchy = _get_boq_item_hierarchy(row.get("boq_category"))
 
 	return {
 		"name": row.name,
@@ -1215,9 +1309,11 @@ def get_boq_item_details_for_ra_bill(boq, boq_item):
 		"uom": row.get("uom"),
 		"boq_category": row.get("boq_category"),
 		"boq_parent_category": row.get("boq_parent_category"),
-		"parent_category": parent_category,
-		"category_label": label_map.get(row.get("boq_category")) or row.get("boq_category"),
-		"parent_category_label": label_map.get(parent_category) or parent_category,
+		"category_name": hierarchy.category_name,
+		"sub_category": hierarchy.sub_category,
+		"parent_category": hierarchy.category_name,
+		"category_label": hierarchy.sub_category_label or hierarchy.category_label,
+		"parent_category_label": hierarchy.category_label,
 		"boq_item_key": row.get("boq_item_key"),
 		"component_key": row.get("component_key"),
 		"is_deleted_in_revision": row.get("is_deleted_in_revision"),
@@ -1926,7 +2022,7 @@ def search_ra_bill_subcategories(doctype, txt, searchfield, start, page_len, fil
 		  AND item.parenttype = 'BOQ'
 		  AND item.parentfield = 'items'
 		  AND COALESCE(item.is_deleted_in_revision, 0) = 0
-		  AND (sub_cat.parent_node = %(category)s OR sub_cat.name = %(category)s)
+		  AND sub_cat.parent_node = %(category)s
 		  AND (%(txt)s = ''
 		    OR sub_cat.category_name LIKE %(like_txt)s
 		    OR sub_cat.name LIKE %(like_txt)s)
@@ -1992,6 +2088,7 @@ def _search_boq_items_for_ra_bill(
 	include_adjustment_items=False,
 ):
 	boq = filters.get("boq")
+	category = filters.get("category")
 	subcategory = filters.get("subcategory")
 	exclude_items = set(_coerce_list(filters.get("exclude_items")))
 	current_ra_bill = filters.get("current_ra_bill")
@@ -2030,6 +2127,11 @@ def _search_boq_items_for_ra_bill(
 	if subcategory:
 		conditions.append("boq_category = %(subcategory)s")
 		params["subcategory"] = subcategory
+	elif category:
+		conditions.append("boq_category = %(category)s")
+		params["category"] = category
+	else:
+		conditions.append("(boq_category IS NULL OR boq_category = '')")
 
 	if exclude_items:
 		conditions.append("name NOT IN %(exclude_items)s")

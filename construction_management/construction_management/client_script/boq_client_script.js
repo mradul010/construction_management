@@ -1573,19 +1573,25 @@ frappe.ui.form.on("BOQ", {
 			const CUR = frm.doc.currency || frappe.defaults.get_default("currency") || "";
 			const isDraft = frm.boq_is_draft();
 
-			// Empty state — no items and no registered (pending) categories
+			// Empty state - no items and no registered (pending) categories
 			if (!items.length && !frm._boq_registered.length) {
 				container.html(`
                     <div style="border:1px solid var(--border-color);border-radius:var(--border-radius);overflow:hidden">
                         <div style="padding:12px 16px;text-align:center;color:var(--text-muted);font-size:13px">
-                            No items yet. Click below to add a category.
+                            No items yet. Add an item directly or start with a category.
                         </div>
                         <div style="padding:10px 16px;border-top:1px solid var(--border-color)">
+                            <button class="btn btn-xs btn-default boq-add-root-item-btn" style="width:100%;margin-bottom:8px" ${isDraft ? "" : "disabled"}>
+                                <i class="fa fa-plus"></i> Add Item
+                            </button>
                             <button class="btn btn-xs btn-default boq-add-cat-btn" style="width:100%" ${isDraft ? "" : "disabled"}>
                                 <i class="fa fa-plus"></i> Add Category
                             </button>
                         </div>
                     </div>`);
+				container
+					.find(".boq-add-root-item-btn")
+					.on("click", () => frm.boq_add_item_dialog("", __("BOQ")));
 				container.find(".boq-add-cat-btn").on("click", () => frm._boq_show_add_cat());
 				return;
 			}
@@ -1605,15 +1611,16 @@ frappe.ui.form.on("BOQ", {
 						catMap[c.name] = c;
 					});
 
-					// ── Build two-level structure ──────────────────────────
+					// ── Build flexible structure ──────────────────────────
 					// parentOrder: insertion-ordered array of parent doc keys
-					// structure[pKey] = { name, subcats: { subKey: { name, items[] } } }
+					// structure[pKey] = { name, directItems[], subcats: { subKey: { name, items[] } } }
 					const parentOrder = [];
+					const rootItems = [];
 					const structure = {};
 
 					function ensureParent(pKey, pName) {
 						if (!structure[pKey]) {
-							structure[pKey] = { name: pName, subcats: {} };
+							structure[pKey] = { name: pName, directItems: [], subcats: {} };
 							parentOrder.push(pKey);
 						}
 					}
@@ -1634,20 +1641,30 @@ frappe.ui.form.on("BOQ", {
 						}
 					});
 
-					// 2. Actual saved items (FIX: translate boq_category doc name → human name)
+					// 2. Actual saved items
 					items.forEach((row) => {
-						if (!row.boq_category) return;
-						const info = catMap[row.boq_category] || {};
-						const subName = info.category_name || row.boq_category;
-						const parentDoc = info.parent_node || null;
-						const parentName =
-							row.boq_parent_category ||
-							(parentDoc && catMap[parentDoc] && catMap[parentDoc].category_name) ||
-							subName;
-						const pKey = parentDoc || row.boq_category;
+						if (!row.boq_category) {
+							rootItems.push(row);
+							return;
+						}
 
-						ensureSub(pKey, parentName, row.boq_category, subName);
-						structure[pKey].subcats[row.boq_category].items.push(row);
+						const info = catMap[row.boq_category] || {};
+						const categoryName = info.category_name || row.boq_category;
+						const parentDoc = info.parent_node || null;
+
+						if (parentDoc) {
+							const parentName =
+								row.boq_parent_category ||
+								(parentDoc && catMap[parentDoc] && catMap[parentDoc].category_name) ||
+								parentDoc;
+
+							ensureSub(parentDoc, parentName, row.boq_category, categoryName);
+							structure[parentDoc].subcats[row.boq_category].items.push(row);
+							return;
+						}
+
+						ensureParent(row.boq_category, categoryName);
+						structure[row.boq_category].directItems.push(row);
 					});
 
 					// ── Formatters ─────────────────────────────────────────
@@ -1736,57 +1753,10 @@ frappe.ui.form.on("BOQ", {
 						calculateBoqRowAmounts(row);
 					}
 
-					// ── Build HTML ──────────────────────────────────────────
-					let html = `<div style="border:1px solid var(--border-color);border-radius:var(--border-radius);overflow:hidden;font-family:var(--font-stack);font-size:12px">`;
+					function renderItemsTable(rows, indentPadding) {
+						if (!rows.length) return "";
 
-					parentOrder.forEach((pKey) => {
-						const cat = structure[pKey];
-						const subKeys = Object.keys(cat.subcats);
-						const catTotal = subKeys.reduce(
-							(a, s) =>
-								a +
-								cat.subcats[s].items.reduce(
-									(b, r) => b + getBoqAmountAfterMargin(r),
-									0,
-								),
-							0,
-						);
-						const catOpen = frm._boq_cat_state[pKey] !== false;
-
-						html += `
-                    <div class="boq-cat-hd" data-pkey="${pKey}"
-                         style="display:flex;align-items:center;gap:8px;padding:10px 14px;background:#0F1E38;cursor:pointer;border-bottom:1px solid #1a3057">
-                        <i class="fa fa-chevron-down"
-                           style="color:#a0b0c8;font-size:11px;transition:transform .2s;${catOpen ? "" : "transform:rotate(-90deg)"}"></i>
-                        <span style="font-weight:600;color:#fff;font-size:12px;flex:1">${cat.name.toUpperCase()}</span>
-                        <span style="font-weight:600;color:#c9a520;font-size:12px">${CUR} ${fmt0(catTotal)}</span>
-                    </div>`;
-
-						if (catOpen) {
-							subKeys.forEach((subKey) => {
-								const sub = cat.subcats[subKey];
-								const subTotal = sub.items.reduce(
-									(a, r) => a + getBoqAmountAfterMargin(r),
-									0,
-								);
-								const subCost = sub.items.reduce(
-									(a, r) => a + (r.unit_cost || 0) * (r.qty || 0),
-									0,
-								);
-								const subOpen = frm._boq_sub_state[subKey] !== false;
-
-								html += `
-                            <div class="boq-sub-hd" data-subkey="${subKey}"
-                                 style="display:flex;align-items:center;gap:8px;padding:8px 14px 8px 28px;background:#1a2d48;cursor:pointer;border-bottom:1px solid #1e3356">
-                                <i class="fa fa-chevron-down"
-                                   style="color:#5b7fa6;font-size:10px;transition:transform .2s;${subOpen ? "" : "transform:rotate(-90deg)"}"></i>
-                                <span style="font-weight:600;color:#c8d8ec;font-size:11px;flex:1">${sub.name}</span>
-                                <span style="color:#7090b8;font-size:11px">${CUR} ${fmt0(subTotal)}</span>
-                            </div>`;
-
-								if (subOpen) {
-									// Column header
-									html += `
+						let tableHtml = `
 <table style="
     width:100%;
     border-collapse:collapse;
@@ -1838,14 +1808,8 @@ frappe.ui.form.on("BOQ", {
 <tbody>
 `;
 
-									// Item rows
-									sub.items.forEach((row, idx) => {
-										const rowBg =
-											idx % 2 === 0
-												? "var(--bg-color)"
-												: "var(--control-bg)";
-
-										html += `
+						rows.forEach((row, idx) => {
+							tableHtml += `
 <tr style="
     border-bottom:1px solid var(--border-color);
     height:42px;
@@ -1855,7 +1819,7 @@ frappe.ui.form.on("BOQ", {
     ${idx + 1}
 </td>
 
-<td style="text-align:left;padding:6px 8px;word-break:break-word;">
+<td style="text-align:left;padding:6px 8px 6px ${indentPadding}px;word-break:break-word;">
     ${row.item_name || row.item || ""}
     ${row.notes ? `<div style="font-size:10px;color:var(--text-muted)">${row.notes}</div>` : ""}
 </td>
@@ -1939,18 +1903,21 @@ title="${buildCostTooltip(row).replace(/"/g, "&quot;")}">
 
 </tr>
 `;
-									});
-									html += `
+						});
+
+						tableHtml += `
 </tbody>
 </table>
 `;
+						return tableHtml;
+					}
 
-									// Subtotal row
-									html += `
+					function renderSubtotal(label, amount, padding) {
+						return `
 <div style="
     display:grid;
     grid-template-columns:28px 1fr 160px 28px;
-    padding:8px 14px 8px 28px;
+    padding:8px 14px 8px ${padding}px;
     background:#162d52;
     border-top:2px solid #c9a520;
     border-bottom:1px solid #1e3356;
@@ -1966,7 +1933,7 @@ title="${buildCostTooltip(row).replace(/"/g, "&quot;")}">
         letter-spacing:.4px;
         text-transform:uppercase;
     ">
-        SUBTOTAL — ${sub.name.toUpperCase()}
+        SUBTOTAL - ${label.toUpperCase()}
     </span>
 
     <div style="
@@ -1980,12 +1947,105 @@ title="${buildCostTooltip(row).replace(/"/g, "&quot;")}">
         white-space:nowrap;
         font-variant-numeric: tabular-nums;
     ">
-        ${CUR} ${fmt0(subTotal)}
+        ${CUR} ${fmt0(amount)}
     </div>
 
     <span></span>
 
 </div>`;
+					}
+
+					// ── Build HTML ──────────────────────────────────────────
+					let html = `<div style="border:1px solid var(--border-color);border-radius:var(--border-radius);overflow:hidden;font-family:var(--font-stack);font-size:12px">`;
+
+					if (rootItems.length) {
+						const rootTotal = rootItems.reduce(
+							(a, r) => a + getBoqAmountAfterMargin(r),
+							0,
+						);
+						html += `
+                    <div style="display:flex;align-items:center;gap:8px;padding:9px 14px;background:#f8fafc;border-bottom:1px solid var(--border-color)">
+                        <span style="font-weight:600;color:var(--text-color);font-size:12px;flex:1">BOQ Items</span>
+                        <span style="font-weight:600;color:#c9a520;font-size:12px">${CUR} ${fmt0(rootTotal)}</span>
+                    </div>`;
+						html += renderItemsTable(rootItems, 8);
+					}
+
+					html += `
+                <div style="padding:8px 14px;background:var(--control-bg);border-bottom:1px solid var(--border-color)">
+                    <button class="boq-add-item-btn"
+                            data-subdoc=""
+                            data-subname="${encodeURIComponent(__("BOQ"))}"
+                            ${isDraft ? "" : "disabled"}
+                            style="display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:500;color:var(--text-muted);background:none;border:none;cursor:pointer;padding:3px 6px;border-radius:4px">
+                        <i class="fa fa-plus"></i> Add item
+                    </button>
+                </div>`;
+
+					parentOrder.forEach((pKey) => {
+						const cat = structure[pKey];
+						const subKeys = Object.keys(cat.subcats);
+						const directTotal = cat.directItems.reduce(
+							(a, r) => a + getBoqAmountAfterMargin(r),
+							0,
+						);
+						const subTotal = subKeys.reduce(
+							(a, s) =>
+								a +
+								cat.subcats[s].items.reduce(
+									(b, r) => b + getBoqAmountAfterMargin(r),
+									0,
+								),
+							0,
+						);
+						const catTotal = directTotal + subTotal;
+						const catOpen = frm._boq_cat_state[pKey] !== false;
+
+						html += `
+                    <div class="boq-cat-hd" data-pkey="${pKey}"
+                         style="display:flex;align-items:center;gap:8px;padding:10px 14px;background:#0F1E38;cursor:pointer;border-bottom:1px solid #1a3057">
+                        <i class="fa fa-chevron-down"
+                           style="color:#a0b0c8;font-size:11px;transition:transform .2s;${catOpen ? "" : "transform:rotate(-90deg)"}"></i>
+                        <span style="font-weight:600;color:#fff;font-size:12px;flex:1">${cat.name.toUpperCase()}</span>
+                        <span style="font-weight:600;color:#c9a520;font-size:12px">${CUR} ${fmt0(catTotal)}</span>
+                    </div>`;
+
+						if (catOpen) {
+							if (cat.directItems.length) {
+								html += renderItemsTable(cat.directItems, 16);
+							}
+
+							html += `
+                        <div style="padding:8px 14px 8px 28px;background:var(--control-bg);border-bottom:1px solid var(--border-color)">
+                            <button class="boq-add-item-btn"
+                                    data-subdoc="${encodeURIComponent(pKey)}"
+                                    data-subname="${encodeURIComponent(cat.name)}"
+                                    ${isDraft ? "" : "disabled"}
+                                    style="display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:500;color:var(--text-muted);background:none;border:none;cursor:pointer;padding:3px 6px;border-radius:4px">
+                                <i class="fa fa-plus"></i> Add item
+                            </button>
+                        </div>`;
+
+							subKeys.forEach((subKey) => {
+								const sub = cat.subcats[subKey];
+								const currentSubTotal = sub.items.reduce(
+									(a, r) => a + getBoqAmountAfterMargin(r),
+									0,
+								);
+								const subOpen = frm._boq_sub_state[subKey] !== false;
+
+								html += `
+                            <div class="boq-sub-hd" data-subkey="${subKey}"
+                                 style="display:flex;align-items:center;gap:8px;padding:8px 14px 8px 28px;background:#1a2d48;cursor:pointer;border-bottom:1px solid #1e3356">
+	                                <i class="fa fa-chevron-down"
+	                                   style="color:#5b7fa6;font-size:10px;transition:transform .2s;${subOpen ? "" : "transform:rotate(-90deg)"}"></i>
+	                                <span style="font-weight:600;color:#c8d8ec;font-size:11px;flex:1">${sub.name}</span>
+	                                <span style="color:#7090b8;font-size:11px">${CUR} ${fmt0(currentSubTotal)}</span>
+	                            </div>`;
+
+								if (subOpen) {
+									html += renderItemsTable(sub.items, 28);
+									html += renderSubtotal(sub.name, currentSubTotal, 28);
 
 									// Add item button
 									html += `
@@ -1996,10 +2056,14 @@ title="${buildCostTooltip(row).replace(/"/g, "&quot;")}">
                                             ${isDraft ? "" : "disabled"}
                                             style="display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:500;color:var(--text-muted);background:none;border:none;cursor:pointer;padding:3px 6px;border-radius:4px">
                                         <i class="fa fa-plus"></i> Add item
-                                    </button>
-                                </div>`;
+	                                    </button>
+	                                </div>`;
 								}
 							});
+
+							if (cat.directItems.length || subKeys.length) {
+								html += renderSubtotal(cat.name, catTotal, 28);
+							}
 
 							// Add sub-category button
 							html += `
@@ -2011,14 +2075,14 @@ title="${buildCostTooltip(row).replace(/"/g, "&quot;")}">
                                     style="display:inline-flex;align-items:center;gap:4px;color:#3730A3;background:none;border:none;cursor:pointer;font-size:11px;font-weight:500;padding:3px 6px;border-radius:4px">
                                 <i class="fa fa-plus"></i> Add sub-category to ${cat.name}
                             </button>
-                        </div>`;
+	                        </div>`;
 						}
 					});
 
 					// Add category button
 					html += `
-                <div style="padding:10px 16px">
-                    <button class="boq-add-cat-btn" ${isDraft ? "" : "disabled"}
+	                <div style="padding:10px 16px">
+	                    <button class="boq-add-cat-btn" ${isDraft ? "" : "disabled"}
                             style="width:100%;display:flex;align-items:center;justify-content:center;gap:6px;padding:8px;border:1.5px dashed var(--border-color);border-radius:var(--border-radius);background:transparent;color:var(--text-muted);font-size:12px;font-weight:500;cursor:${isDraft ? "pointer" : "not-allowed"};opacity:${isDraft ? "1" : ".55"}">
                         <i class="fa fa-plus"></i> Add Category
                     </button>

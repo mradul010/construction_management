@@ -12,18 +12,18 @@
   "boq_revision",
   "original_boq",
   "boq_qty",
+  "previous_qty",
+  "current_qty",
+  "cumulative_qty",
+  "remaining_qty",
   "boq_rate",
   "uom",
   "progress_type",
   "work_percent",
   "current_amount",
-  "current_qty",
-  "previous_qty",
   "previous_percent",
-  "remaining_qty",
   "remaining_percent",
-  "prev_cumulative_qty",
-  "cumulative_qty"
+  "prev_cumulative_qty"
  ],
  "fields": [
   {
@@ -117,7 +117,7 @@
    "fieldname": "remaining_qty",
    "fieldtype": "Float",
    "in_list_view": 1,
-   "label": "Remaining Qty",
+   "label": "Remaining Quantity",
    "read_only": 1
   },
   {
@@ -164,8 +164,8 @@
    "default": "0",
    "fieldname": "cumulative_qty",
    "fieldtype": "Float",
-   "hidden": 1,
-   "label": "Cumulative Qty",
+   "in_list_view": 1,
+   "label": "Cumulative Quantity",
    "read_only": 1
   },
   {

@@ -79,8 +79,9 @@
 						<th>Current Work %</th>
 						<th>Current Qty</th>
 						<th>Current Amount</th>
+						<th>Cumulative Quantity</th>
+						<th>Remaining Quantity</th>
 						<th>Remaining %</th>
-						<th>Cumulative Qty</th>
 					</tr>
 				</thead>
 				<tbody>
@@ -96,11 +97,12 @@
 						<td>{{ row.work_percent or 0 }}</td>
 						<td>{{ row.current_qty or 0 }}</td>
 						<td>{{ row.current_amount or 0 }}</td>
-						<td>{{ row.remaining_percent or 0 }}</td>
 						<td>{{ row.cumulative_qty or 0 }}</td>
+						<td>{{ row.remaining_qty or 0 }}</td>
+						<td>{{ row.remaining_percent or 0 }}</td>
 					</tr>
 					{% else %}
-						{% set columns = 12 %}
+						{% set columns = 13 %}
 						{% set message = "No RA Bill items found." %}
 						{% include "construction_management/templates/includes/construction_portal/table_empty.html" %}
 					{% endfor %}

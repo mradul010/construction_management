@@ -38,8 +38,13 @@ def get_columns(filters=None):
 		{"label": _("BOQ Qty"), "fieldname": "boq_qty", "fieldtype": "Float", "width": 100},
 		{"label": _("Previous Qty"), "fieldname": "previous_qty", "fieldtype": "Float", "width": 110},
 		{"label": _("Current Qty"), "fieldname": "current_qty", "fieldtype": "Float", "width": 110},
-		{"label": _("Cumulative Qty"), "fieldname": "cumulative_qty", "fieldtype": "Float", "width": 125},
-		{"label": _("Remaining Qty"), "fieldname": "remaining_qty", "fieldtype": "Float", "width": 120},
+		{
+			"label": _("Cumulative Quantity"),
+			"fieldname": "cumulative_qty",
+			"fieldtype": "Float",
+			"width": 145,
+		},
+		{"label": _("Remaining Quantity"), "fieldname": "remaining_qty", "fieldtype": "Float", "width": 145},
 		{"label": _("Current Work %"), "fieldname": "current_work_percent", "fieldtype": "Percent", "width": 125},
 		{
 			"label": _("Current Amount"),

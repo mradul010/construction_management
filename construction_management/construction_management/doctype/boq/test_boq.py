@@ -47,6 +47,81 @@ class IntegrationTestBOQ(UnitTestCase):
 		self.assertAlmostEqual(boq.margin_percent, 20)
 		self.assertAlmostEqual(boq.rate_per_bua, 25)
 
+	def test_boq_item_category_is_optional_for_totals(self):
+		boq = frappe.get_doc({
+			"doctype": "BOQ",
+			"currency": "AED",
+			"items": [
+				{
+					"doctype": "BOQ Item",
+					"item_name": "Root Item",
+					"qty": 2,
+					"unit_cost": 100,
+					"margin_percent": 10,
+				},
+				{
+					"doctype": "BOQ Item",
+					"item_name": "Category Item",
+					"boq_category": "BOQ-CAT-TEST",
+					"qty": 3,
+					"unit_cost": 50,
+					"margin_percent": 20,
+				},
+			],
+		})
+
+		boq._calculate_totals()
+
+		self.assertAlmostEqual(boq.total_cost, 350)
+		self.assertAlmostEqual(boq.grand_total, 400)
+
+	@patch("frappe.db.get_value")
+	def test_parent_category_is_cleared_for_root_items(self, get_value):
+		boq = frappe.get_doc({
+			"doctype": "BOQ",
+			"items": [
+				{
+					"doctype": "BOQ Item",
+					"item_name": "Root Item",
+					"boq_parent_category": "Old Category",
+					"qty": 1,
+					"unit_cost": 100,
+				},
+			],
+		})
+
+		boq._fill_parent_categories()
+
+		get_value.assert_not_called()
+		self.assertEqual(boq.items[0].boq_parent_category, "")
+
+	@patch("frappe.db.get_value")
+	def test_parent_category_supports_direct_category_items(self, get_value):
+		def category_value(doctype, name, fieldname):
+			values = {
+				("BOQ-CAT-TEST", "parent_node"): None,
+				("BOQ-CAT-TEST", "category_name"): "Civil Work",
+			}
+			return values.get((name, fieldname))
+
+		get_value.side_effect = category_value
+		boq = frappe.get_doc({
+			"doctype": "BOQ",
+			"items": [
+				{
+					"doctype": "BOQ Item",
+					"item_name": "Category Item",
+					"boq_category": "BOQ-CAT-TEST",
+					"qty": 1,
+					"unit_cost": 100,
+				},
+			],
+		})
+
+		boq._fill_parent_categories()
+
+		self.assertEqual(boq.items[0].boq_parent_category, "Civil Work")
+
 	def test_cost_breakdown_matches_amount(self):
 		boq = self._make_boq_with_cost_breakdown(1000)
 

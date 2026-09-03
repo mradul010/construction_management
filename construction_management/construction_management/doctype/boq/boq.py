@@ -148,18 +148,21 @@ class BOQ(Document):
 
 	def _fill_parent_categories(self):
 		for row in self.items:
-			if row.boq_category:
-				parent = frappe.db.get_value(
-					"BOQ Category", row.boq_category, "parent_node"
-				)
-				if parent:
-					row.boq_parent_category = frappe.db.get_value(
-						"BOQ Category", parent, "category_name"
-					) or parent
-				else:
-					row.boq_parent_category = frappe.db.get_value(
-						"BOQ Category", row.boq_category, "category_name"
-					) or row.boq_category
+			if not row.boq_category:
+				row.boq_parent_category = ""
+				continue
+
+			parent = frappe.db.get_value(
+				"BOQ Category", row.boq_category, "parent_node"
+			)
+			if parent:
+				row.boq_parent_category = frappe.db.get_value(
+					"BOQ Category", parent, "category_name"
+				) or parent
+			else:
+				row.boq_parent_category = frappe.db.get_value(
+					"BOQ Category", row.boq_category, "category_name"
+				) or row.boq_category
 
 	def validate_item_values(self):
 		if flt(self.global_margin_percent) < 0:
