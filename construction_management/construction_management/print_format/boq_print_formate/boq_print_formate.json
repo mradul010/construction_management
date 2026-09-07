@@ -28,6 +28,5 @@
  "print_format_for": "DocType",
  "print_format_type": "Jinja",
  "raw_printing": 0,
- "show_section_headings": 0,
- "standard": "Yes"
+ "show_section_headings": 0
 }
