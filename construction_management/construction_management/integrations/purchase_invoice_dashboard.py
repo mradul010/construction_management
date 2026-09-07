@@ -14,7 +14,6 @@ def get_data(data):
 	data.setdefault("internal_links", {}).update(
 		{
 			"Drawing Register": "drawing",
-			"BOQ": "boq",
 			"SC Work Order": "sc_work_order",
 			"SC Bill": "sc_bill",
 			"Project": "project",
@@ -23,7 +22,7 @@ def get_data(data):
 	)
 
 	transactions = data.setdefault("transactions", [])
-	_add_items(transactions, _("Design"), ["Project", "Drawing Register", "BOQ"])
+	_add_items(transactions, _("Design"), ["Project", "Drawing Register"])
 	_add_items(transactions, _("Subcontract Management"), ["SC Work Order", "SC Bill", "Retention Payable", "Project"])
 	return data
 

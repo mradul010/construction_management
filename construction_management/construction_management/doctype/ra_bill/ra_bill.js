@@ -36,6 +36,14 @@ function formatNumber(value, digits = 2) {
 	});
 }
 
+function getRaBillCurrency(frm) {
+	return frm.doc.currency || frappe.defaults.get_default("currency") || "";
+}
+
+function formatRaBillCurrency(value, currency) {
+	return format_currency(getNumber(value), currency || frappe.defaults.get_default("currency") || "");
+}
+
 function showStandardItemsGrid(frm) {
 	$(frm.wrapper).find("#ra-bill-custom-items-grid").remove();
 	if (frm.fields_dict.items && frm.fields_dict.items.$wrapper) {
@@ -1155,25 +1163,25 @@ frappe.ui.form.on("RA Bill", {
 			frm.add_custom_button(
 				"Create Sales Invoice",
 				function () {
-					const currency = frm.doc.currency || frappe.defaults.get_default("currency") || "";
-					const gross = formatNumber(frm.doc.gross_amount);
-					const retention = formatNumber(frm.doc.retention_amount);
-					const net = formatNumber(frm.doc.net_payable);
+					const currency = getRaBillCurrency(frm);
+					const gross = formatRaBillCurrency(frm.doc.gross_amount, currency);
+					const retention = formatRaBillCurrency(-getNumber(frm.doc.retention_amount), currency);
+					const net = formatRaBillCurrency(frm.doc.net_payable, currency);
 					const retPct = frm.doc.retention_percent || 0;
 
 					const msg = `
 						<table style="width:100%;font-size:13px;border-collapse:collapse">
 							<tr>
 								<td style="padding:6px 0;color:#6b7280">Gross Amount</td>
-								<td style="padding:6px 0;text-align:right;font-weight:500">${currency} ${gross}</td>
+								<td style="padding:6px 0;text-align:right;font-weight:500">${gross}</td>
 							</tr>
 							<tr>
 								<td style="padding:6px 0;color:#6b7280">Retention (${retPct}%)</td>
-								<td style="padding:6px 0;text-align:right;color:#dc2626">- ${currency} ${retention}</td>
+								<td style="padding:6px 0;text-align:right;color:#dc2626">${retention}</td>
 							</tr>
 							<tr style="border-top:1px solid #e5e7eb">
 								<td style="padding:8px 0;font-weight:600">Net Payable</td>
-								<td style="padding:8px 0;text-align:right;font-weight:600;color:#185FA5">${currency} ${net}</td>
+								<td style="padding:8px 0;text-align:right;font-weight:600;color:#185FA5">${net}</td>
 							</tr>
 						</table>
 						<p style="margin-top:10px;font-size:12px;color:#6b7280">

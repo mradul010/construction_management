@@ -15,7 +15,12 @@ REVISION_MANAGER_ROLES = {
 
 class BOQ(Document):
 
+	def _validate_links(self):
+		self._sanitize_standard_duplicate_references()
+		super()._validate_links()
+
 	def validate(self):
+		self._sanitize_standard_duplicate_references()
 		self._set_revision_defaults()
 		self._sync_and_validate_sales_order()
 		self._validate_design_references()
@@ -26,6 +31,21 @@ class BOQ(Document):
 		self._calculate_totals()
 		self._calculate_revision_comparison()
 		self.validate_cost_breakdown_matches_amount()
+
+	def _sanitize_standard_duplicate_references(self):
+		if not self.is_new() or self.flags.get("from_boq_revision"):
+			return
+
+		self.original_boq = None
+		self.parent_boq = None
+		self.superseded_by = None
+		self.is_revision = 0
+		self.is_active_revision = 0
+		self.revision_no = 0
+		self.revision_status = "Draft"
+		self.status = "Draft"
+		self.active_from_date = None
+		self.active_to_date = None
 
 	def _sync_and_validate_sales_order(self):
 		"""Populate empty contract fields and keep the BOQ revision chain consistent."""
@@ -334,6 +354,7 @@ class BOQ(Document):
 			self.db_set("revision_status", "Submitted")
 
 	def on_cancel(self):
+		unlink_non_revision_duplicate_boqs(self.name)
 		was_active_revision = self.is_active_revision
 		self.db_set("status", "Cancelled")
 		self.db_set("revision_status", "Cancelled")
@@ -349,6 +370,7 @@ class BOQ(Document):
 				),
 				title=_("Linked RA Bills Found"),
 			)
+		unlink_non_revision_duplicate_boqs(self.name)
 
 	def on_amend(self):
 		self.revision_no = (self.revision_no or 1) + 1
@@ -477,8 +499,42 @@ def set_project_current_boq(project, boq):
 			project,
 			"current_boq",
 			boq,
+		update_modified=False,
+	)
+
+
+def unlink_non_revision_duplicate_boqs(source_boq):
+	if not source_boq:
+		return
+
+	duplicates = frappe.db.sql(
+		"""
+		SELECT name
+		FROM `tabBOQ`
+		WHERE original_boq = %(source_boq)s
+		  AND name != %(source_boq)s
+		  AND COALESCE(is_revision, 0) = 0
+		  AND (parent_boq IS NULL OR parent_boq = '')
+		""",
+		{"source_boq": source_boq},
+		pluck=True,
+	)
+	for duplicate in duplicates:
+		frappe.db.set_value(
+			"BOQ",
+			duplicate,
+			{
+				"original_boq": duplicate,
+				"parent_boq": None,
+				"superseded_by": None,
+				"is_revision": 0,
+				"is_active_revision": 0,
+			},
 			update_modified=False,
 		)
+
+	if duplicates:
+		frappe.clear_cache(doctype="BOQ")
 
 
 def _get_source_reference_map(source_doc, revision_doc):
@@ -560,6 +616,7 @@ def create_revision(boq, revision_reason):
 			"remarks": revision_reason,
 		},
 	)
+	revision_doc.flags.from_boq_revision = True
 	revision_doc.insert(ignore_permissions=True)
 	return revision_doc.name
 

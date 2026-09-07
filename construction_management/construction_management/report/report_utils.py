@@ -264,6 +264,7 @@ def get_ra_bill_rows(filters, fields=None, project_names=None, submitted_only=Fa
 	fields = fields or [
 		"name",
 		"bill_no",
+		"ra_bill_no",
 		"project",
 		"boq",
 		"sales_order",
@@ -794,6 +795,7 @@ def get_ra_bill_item_rows(ra_bill_rows, filters):
 		f"""
 		SELECT
 			rb.`name` AS ra_bill,
+			rb.`ra_bill_no` AS ra_bill_no,
 			rb.`project` AS project,
 			rb.`boq` AS boq,
 			rb.`currency` AS currency,

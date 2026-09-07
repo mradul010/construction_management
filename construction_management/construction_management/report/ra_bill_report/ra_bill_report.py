@@ -23,7 +23,7 @@ def execute(filters=None):
 def get_columns(filters=None):
 	return [
 		{"label": _("RA Bill"), "fieldname": "ra_bill", "fieldtype": "Link", "options": "RA Bill", "width": 160},
-		{"label": _("Bill No"), "fieldname": "bill_no", "fieldtype": "Int", "width": 90},
+		{"label": _("RA Bill No."), "fieldname": "ra_bill_no", "fieldtype": "Data", "width": 110},
 		{"label": _("Project"), "fieldname": "project", "fieldtype": "Link", "options": "Project", "width": 160},
 		{"label": _("BOQ"), "fieldname": "boq", "fieldtype": "Link", "options": "BOQ", "width": 160},
 		{"label": _("Sales Order"), "fieldname": "sales_order", "fieldtype": "Link", "options": "Sales Order", "width": 160},
@@ -78,6 +78,7 @@ def get_data(filters):
 			{
 				"ra_bill": row.name,
 				"bill_no": row.get("bill_no"),
+				"ra_bill_no": row.get("ra_bill_no"),
 				"project": row.get("project"),
 				"boq": row.get("boq"),
 				"sales_order": row.get("sales_order"),

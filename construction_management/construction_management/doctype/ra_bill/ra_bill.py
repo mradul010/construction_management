@@ -1,7 +1,11 @@
+import hashlib
+import re
+
 import frappe
 from frappe import _
+from frappe.model.naming import getseries
 from frappe.model.document import Document
-from frappe.utils import cint, flt, getdate, today
+from frappe.utils import cint, flt, fmt_money, getdate, today
 from erpnext.controllers.accounts_controller import get_taxes_and_charges
 
 from construction_management.construction_management.advance_management import (
@@ -57,8 +61,103 @@ RA_BILL_TEMPLATE_TAX_FIELDS = (
 	"rate",
 )
 
+RA_BILL_VISIBLE_PREFIX = "RAB-"
+RA_BILL_VISIBLE_DIGITS = 3
+
+
+def format_ra_bill_no(sequence):
+	return f"{RA_BILL_VISIBLE_PREFIX}{cint(sequence):0{RA_BILL_VISIBLE_DIGITS}d}"
+
+
+def get_ra_bill_project_key(project):
+	project_key = re.sub(r"[^A-Za-z0-9_-]+", "-", str(project or "")).strip("-")
+	return project_key or hashlib.sha1(str(project or "").encode()).hexdigest()[:10]
+
+
+def get_ra_bill_project_series_key(project):
+	project_hash = hashlib.sha1(str(project or "").encode()).hexdigest()[:12]
+	return f"RA-BILL-{project_hash}-"
+
+
+def get_max_project_ra_bill_sequence(project, exclude_name=None):
+	conditions = ["project = %s", "COALESCE(bill_no, 0) > 0"]
+	values = [project]
+	if exclude_name:
+		conditions.append("name != %s")
+		values.append(exclude_name)
+
+	return cint(
+		frappe.db.sql(
+			f"""
+			SELECT MAX(COALESCE(bill_no, 0))
+			FROM `tabRA Bill`
+			WHERE {" AND ".join(conditions)}
+			""",
+			values,
+		)[0][0]
+	)
+
+
+def get_next_project_ra_bill_sequence(project, exclude_name=None):
+	series_key = get_ra_bill_project_series_key(project)
+	max_existing = get_max_project_ra_bill_sequence(project, exclude_name=exclude_name)
+	frappe.db.sql(
+		"""
+		INSERT INTO `tabSeries` (`name`, `current`)
+		VALUES (%s, %s)
+		ON DUPLICATE KEY UPDATE `current` = GREATEST(`current`, VALUES(`current`))
+		""",
+		(series_key, max_existing),
+	)
+	return cint(getseries(series_key, RA_BILL_VISIBLE_DIGITS))
+
+
+def resolve_ra_bill_company(ra_bill):
+	project = ra_bill.get("project")
+	if not project:
+		frappe.throw(_("Please set the Project on this RA Bill."))
+
+	project_company = frappe.db.get_value("Project", project, "company")
+	if not project_company and not frappe.db.exists("Project", project):
+		frappe.throw(_("Project {0} does not exist.").format(frappe.bold(project)))
+
+	company = (
+		project_company
+		or ra_bill.get("company")
+		or frappe.defaults.get_user_default("Company")
+		or frappe.defaults.get_global_default("company")
+	)
+	if not company:
+		frappe.throw(
+			_(
+				"Unable to determine Company for RA Bill {0}. Please configure Company in the Project or system defaults."
+			).format(ra_bill.name)
+		)
+
+	if project_company and company != project_company:
+		frappe.throw(
+			_("RA Bill Project {0} belongs to Company {1}, but resolved Company is {2}.").format(
+				frappe.bold(project),
+				frappe.bold(project_company),
+				frappe.bold(company),
+			)
+		)
+
+	return company
+
 
 class RABill(Document):
+	def before_insert(self):
+		if self.amended_from:
+			self.bill_no = None
+			self.ra_bill_no = None
+		self._set_project_wise_bill_identity()
+
+	def autoname(self):
+		if not self.bill_no or not self.ra_bill_no:
+			self._set_project_wise_bill_identity()
+		self.name = self._get_project_wise_internal_name()
+
 	def _validate_links(self):
 		self._reset_generated_fields_for_amendment()
 		super()._validate_links()
@@ -72,6 +171,7 @@ class RABill(Document):
 		self._set_default_invoice_dates()
 		validate_ra_bill_invoice_dates(self)
 		self._set_bill_no()
+		self._validate_project_ra_bill_no_unique()
 		self._fetch_boq_item_details()
 		self._validate_item_hierarchy()
 		self._fill_previous_work_summary()
@@ -170,24 +270,67 @@ class RABill(Document):
 
 	def _set_bill_no(self):
 		"""
-		Auto-increment bill_no per project+BOQ combination.
-		Bill 1, Bill 2, Bill 3 ... independently per BOQ.
+		Auto-increment bill_no per project.
+		User-facing RA Bill No. is RAB-001, RAB-002 ... independently per Project.
 		"""
+		if not self.bill_no:
+			self._set_project_wise_bill_identity()
+		if not self.ra_bill_no and self.bill_no:
+			self.ra_bill_no = format_ra_bill_no(self.bill_no)
+
+	def _set_project_wise_bill_identity(self):
+		self._ensure_project_for_numbering()
 		if self.bill_no:
+			self.ra_bill_no = self.ra_bill_no or format_ra_bill_no(self.bill_no)
 			return
 
-		existing = frappe.db.get_all(
+		self.bill_no = get_next_project_ra_bill_sequence(self.project, exclude_name=self.name)
+		self.ra_bill_no = format_ra_bill_no(self.bill_no)
+
+	def _ensure_project_for_numbering(self):
+		if not self.project and self.boq:
+			self.project = frappe.db.get_value("BOQ", self.boq, "project")
+		if not self.project:
+			frappe.throw(_("Project is required before RA Bill number can be generated."))
+
+	def _get_project_wise_internal_name(self):
+		project_key = get_ra_bill_project_key(self.project)
+		base = f"{project_key}-{self.ra_bill_no}"
+		if len(base) > 140:
+			project_key = project_key[: max(1, 139 - len(self.ra_bill_no))]
+			base = f"{project_key}-{self.ra_bill_no}"
+
+		if not frappe.db.exists("RA Bill", base):
+			return base
+
+		project_hash = hashlib.sha1((self.project or "").encode()).hexdigest()[:8]
+		base = f"{project_key[: max(1, 130 - len(self.ra_bill_no))]}-{project_hash}-{self.ra_bill_no}"
+		if not frappe.db.exists("RA Bill", base):
+			return base
+
+		return f"{base[:133]}-{frappe.generate_hash(length=6)}"
+
+	def _validate_project_ra_bill_no_unique(self):
+		if not self.project or not self.ra_bill_no:
+			return
+
+		duplicate = frappe.db.get_value(
 			"RA Bill",
-			filters={
+			{
 				"project": self.project,
-				"boq": self.boq,
-				"name": ["!=", self.name],
+				"ra_bill_no": self.ra_bill_no,
+				"name": ["!=", self.name or ""],
 			},
-			fields=["bill_no"],
-			order_by="bill_no desc",
-			limit=1,
+			"name",
 		)
-		self.bill_no = (existing[0].bill_no + 1) if existing else 1
+		if duplicate:
+			frappe.throw(
+				_("RA Bill No. {0} already exists for Project {1} in {2}.").format(
+					frappe.bold(self.ra_bill_no),
+					frappe.bold(self.project),
+					frappe.bold(duplicate),
+				)
+			)
 
 	def _set_active_boq_for_project(self):
 		if self.boq or not self.project:
@@ -697,14 +840,7 @@ class RABill(Document):
 		if not self.customer:
 			frappe.throw(_("Please set the Customer before fetching advances."))
 
-		company = (
-			self.company
-			if self.meta.has_field("company") and self.get("company")
-			else frappe.defaults.get_user_default("Company")
-			or frappe.defaults.get_global_default("company")
-		)
-		if not company:
-			frappe.throw(_("Please set default Company before fetching advances."))
+		company = resolve_ra_bill_company(self)
 
 		self.calculate_taxes_and_grand_total()
 		advance_values = update_ra_bill_advance_fields(self)
@@ -751,6 +887,9 @@ class RABill(Document):
 		if not self.customer:
 			frappe.throw("Please set the Customer on this RA Bill before creating a Sales Invoice.")
 
+		if not self.project:
+			frappe.throw("Please set the Project on this RA Bill before creating a Sales Invoice.")
+
 		if not frappe.db.exists("Customer", self.customer):
 			frappe.throw(f"Customer {self.customer} does not exist.")
 
@@ -764,9 +903,7 @@ class RABill(Document):
 			validate_construction_service_item_can_be_created,
 		)
 
-		company = self.company or frappe.defaults.get_user_default("Company") or frappe.defaults.get_global_default("company")
-		if not company:
-			frappe.throw("Please set default Company before creating Sales Invoice.")
+		company = resolve_ra_bill_company(self)
 
 		ensure_ra_bill_items(company=company)
 		service_item = get_default_construction_service_item(company)
@@ -786,6 +923,10 @@ class RABill(Document):
 			transaction=self,
 		)
 		invoice_currency = self.currency or company_currency or frappe.defaults.get_global_default("currency")
+
+		def format_invoice_currency(value):
+			return fmt_money(flt(value), currency=invoice_currency)
+
 		conversion_rate = 1.0
 		receivable_account = get_ra_bill_sales_invoice_receivable_account(
 			self.customer,
@@ -1009,8 +1150,9 @@ class RABill(Document):
 		)
 
 		if has_adjustment_rows:
+			ra_bill_no = self.ra_bill_no or format_ra_bill_no(self.bill_no)
 			description_lines = [
-				f"RA Bill #{self.bill_no}",
+				f"RA Bill: {ra_bill_no}",
 				f"Project: {self.project}",
 				f"BOQ: {self.boq}",
 				"Includes progress adjustments/corrections recorded in the RA Bill detail.",
@@ -1021,7 +1163,7 @@ class RABill(Document):
 			invoice_items.append(
 				{
 					"item_code": service_item,
-					"item_name": f"RA Bill #{self.bill_no} Progress Payment",
+					"item_name": f"{ra_bill_no} Progress Payment",
 					"description": "\n".join(description_lines),
 					"qty": 1,
 					"rate": flt(self.gross_amount),
@@ -1031,6 +1173,7 @@ class RABill(Document):
 				}
 			)
 		else:
+			ra_bill_no = self.ra_bill_no or format_ra_bill_no(self.bill_no)
 			for row in self.items:
 				qty = flt(row.current_qty or 0)
 				rate = flt(row.boq_rate or 0)
@@ -1059,7 +1202,7 @@ class RABill(Document):
 					description_lines.append(f"Billing Period: {period_str}")
 				description_lines.extend(
 					[
-						f"RA Bill #{self.bill_no}",
+						f"RA Bill: {ra_bill_no}",
 						f"Project: {self.project}",
 						f"BOQ: {self.boq}",
 					]
@@ -1090,8 +1233,8 @@ class RABill(Document):
 		if flt(invoice_gross, 2) != flt(self.gross_amount, 2):
 			frappe.throw(
 				"Detailed RA Bill Item total does not match the RA Bill gross amount. "
-				f"Item total: {frappe.format(invoice_gross, {'fieldtype': 'Currency'})}, "
-				f"Gross amount: {frappe.format(self.gross_amount, {'fieldtype': 'Currency'})}."
+				f"Item total: {format_invoice_currency(invoice_gross)}, "
+				f"Gross amount: {format_invoice_currency(self.gross_amount)}."
 			)
 
 		invoice_certified_total = sum(
@@ -1100,8 +1243,8 @@ class RABill(Document):
 		if flt(invoice_certified_total, 2) != flt(self.gross_amount, 2):
 			frappe.throw(
 				"Sales Invoice item total does not match the RA Bill certified amount. "
-				f"Invoice total: {frappe.format(invoice_certified_total, {'fieldtype': 'Currency'})}, "
-				f"Certified amount: {frappe.format(self.gross_amount, {'fieldtype': 'Currency'})}."
+				f"Invoice total: {format_invoice_currency(invoice_certified_total)}, "
+				f"Certified amount: {format_invoice_currency(self.gross_amount)}."
 			)
 
 		si = make_sales_invoice(invoice_items)
@@ -1126,7 +1269,7 @@ class RABill(Document):
 
 		frappe.msgprint(
 			f"Draft Sales Invoice <b>{si.name}</b> created successfully. "
-			f"Certified amount: {frappe.format(self.gross_amount, {'fieldtype': 'Currency'})}. "
+			f"Certified amount: {format_invoice_currency(self.gross_amount)}. "
 			f"Please review and submit from the Accounts module.",
 			title="Sales Invoice Created",
 			indicator="green",

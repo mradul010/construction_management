@@ -487,6 +487,7 @@ def _get_ra_bill_rows(project, filters):
 		SELECT
 			rb.`name`,
 			rb.`bill_no`,
+			rb.`ra_bill_no`,
 			rb.`boq`,
 			rb.`billing_period_from`,
 			rb.`billing_period_to`,

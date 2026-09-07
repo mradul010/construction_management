@@ -13,7 +13,10 @@ from construction_management.construction_management.overrides.sales_invoice imp
 )
 from construction_management.construction_management.doctype.ra_bill.ra_bill import (
 	calculate_ra_bill_taxes,
+	format_ra_bill_no,
 	get_boq_item_details_for_ra_bill,
+	get_ra_bill_project_series_key,
+	resolve_ra_bill_company,
 	search_boq_adjustment_items_for_ra_bill,
 	search_boq_items_for_ra_bill,
 	search_ra_bill_subcategories,
@@ -65,6 +68,74 @@ class _FakeDoc(frappe._dict):
 		row.idx = len(self.setdefault(fieldname, [])) + 1
 		self[fieldname].append(row)
 		return row
+
+
+class TestRABillNaming(UnitTestCase):
+	def test_format_ra_bill_no_uses_visible_rab_series(self):
+		self.assertEqual(format_ra_bill_no(1), "RAB-001")
+		self.assertEqual(format_ra_bill_no(12), "RAB-012")
+		self.assertEqual(format_ra_bill_no(123), "RAB-123")
+
+	def test_project_series_key_is_project_specific(self):
+		self.assertEqual(get_ra_bill_project_series_key("PROJECT-A"), get_ra_bill_project_series_key("PROJECT-A"))
+		self.assertNotEqual(get_ra_bill_project_series_key("PROJECT-A"), get_ra_bill_project_series_key("PROJECT-B"))
+
+	def test_validate_project_ra_bill_no_unique_rejects_same_project_duplicate(self):
+		ra_bill = frappe.get_doc(
+			{
+				"doctype": "RA Bill",
+				"name": "PROJECT-A-RAB-002",
+				"project": "PROJECT-A",
+				"ra_bill_no": "RAB-002",
+			}
+		)
+
+		with patch("frappe.db.get_value", return_value="PROJECT-A-RAB-002-OLD"):
+			with self.assertRaises(frappe.ValidationError):
+				ra_bill._validate_project_ra_bill_no_unique()
+
+	def test_validate_project_ra_bill_no_unique_allows_no_duplicate(self):
+		ra_bill = frappe.get_doc(
+			{
+				"doctype": "RA Bill",
+				"name": "PROJECT-A-RAB-002",
+				"project": "PROJECT-A",
+				"ra_bill_no": "RAB-002",
+			}
+		)
+
+		with patch("frappe.db.get_value", return_value=None):
+			ra_bill._validate_project_ra_bill_no_unique()
+
+
+class TestRABillCompanyResolution(UnitTestCase):
+	def test_resolve_ra_bill_company_prefers_project_company_without_ra_bill_company_field(self):
+		ra_bill = frappe._dict(
+			{
+				"name": "PROJ-0003-RAB-001",
+				"project": "PROJ-0003",
+			}
+		)
+
+		with patch("frappe.db.get_value", return_value="VIVIRA INFRA PROJECTS"):
+			company = resolve_ra_bill_company(ra_bill)
+
+		self.assertEqual(company, "VIVIRA INFRA PROJECTS")
+
+	def test_resolve_ra_bill_company_falls_back_to_optional_document_company(self):
+		ra_bill = frappe._dict(
+			{
+				"name": "PROJ-0003-RAB-001",
+				"project": "PROJ-0003",
+				"company": "Optional Company",
+			}
+		)
+
+		with patch("frappe.db.get_value", return_value=None):
+			with patch("frappe.db.exists", return_value=True):
+				company = resolve_ra_bill_company(ra_bill)
+
+		self.assertEqual(company, "Optional Company")
 
 
 def _fake_sales_invoice():

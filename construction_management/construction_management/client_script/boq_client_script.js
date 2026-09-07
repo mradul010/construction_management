@@ -3,6 +3,16 @@ function boqNumber(value) {
 	return isNaN(parsed) ? 0 : parsed;
 }
 
+function getBoqCurrency(frm) {
+	return frm && frm.doc
+		? frm.doc.currency || frappe.defaults.get_default("currency") || ""
+		: frappe.defaults.get_default("currency") || "";
+}
+
+function formatBoqCurrency(value, currency) {
+	return format_currency(boqNumber(value), currency || frappe.defaults.get_default("currency") || "");
+}
+
 const BOQ_COST_BREAKDOWN_TOLERANCE = 0.01;
 const BOQ_METHOD =
 	"construction_management.construction_management.doctype.boq.boq";
@@ -82,7 +92,7 @@ function getBoqItemAmount(row) {
 }
 
 
-function getCostBreakdownValidationHTML(amount, breakdownTotal) {
+function getCostBreakdownValidationHTML(amount, breakdownTotal, currency) {
 	const difference = boqNumber(amount) - boqNumber(breakdownTotal);
 
 	if (Math.abs(difference) <= BOQ_COST_BREAKDOWN_TOLERANCE) {
@@ -97,18 +107,18 @@ function getCostBreakdownValidationHTML(amount, breakdownTotal) {
 		<div class="cost-breakdown-status error">
 			<b>Amount Mismatch</b><br>
 			Amount:
-			<b>${format_currency(amount)}</b>
+			<b>${formatBoqCurrency(amount, currency)}</b>
 			&nbsp;&nbsp;|&nbsp;&nbsp;
 			Your Total:
-			<b>${format_currency(breakdownTotal)}</b>
+			<b>${formatBoqCurrency(breakdownTotal, currency)}</b>
 			&nbsp;&nbsp;|&nbsp;&nbsp;
 			Difference:
-			<b>${format_currency(Math.abs(difference))}</b>
+			<b>${formatBoqCurrency(Math.abs(difference), currency)}</b>
 		</div>
 	`;
 }
 
-function getCostBreakdownMismatchLine(amount, breakdownTotal) {
+function getCostBreakdownMismatchLine(amount, breakdownTotal, currency) {
 	const difference = boqNumber(amount) - boqNumber(breakdownTotal);
 
 	if (Math.abs(difference) <= BOQ_COST_BREAKDOWN_TOLERANCE) {
@@ -130,7 +140,7 @@ function getCostBreakdownMismatchLine(amount, breakdownTotal) {
 					color: #dc2626;
 				}
 			</style>
-			Cost Breakdown not matched with Amount. Amount: <b>${format_currency(amount)}</b>, Your Total: <b>${format_currency(breakdownTotal)}</b>, Difference: <b>${format_currency(Math.abs(difference))}</b>
+			Cost Breakdown not matched with Amount. Amount: <b>${formatBoqCurrency(amount, currency)}</b>, Your Total: <b>${formatBoqCurrency(breakdownTotal, currency)}</b>, Difference: <b>${formatBoqCurrency(Math.abs(difference), currency)}</b>
 		</div>
 	`;
 }
@@ -557,7 +567,7 @@ function renderBoqRevisionHistory(rows) {
 		</div>`;
 }
 
-function renderBoqRevisionComparison(rows) {
+function renderBoqRevisionComparison(rows, currency) {
 	const body = (rows || [])
 		.map(
 			(row) => `
@@ -567,10 +577,10 @@ function renderBoqRevisionComparison(rows) {
 					<td style="text-align:right">${boqNumber(row.previous_qty).toFixed(2)}</td>
 					<td style="text-align:right">${boqNumber(row.current_qty).toFixed(2)}</td>
 					<td style="text-align:right">${boqNumber(row.qty_difference).toFixed(2)}</td>
-					<td style="text-align:right">${format_currency(row.previous_rate || 0)}</td>
-					<td style="text-align:right">${format_currency(row.current_rate || 0)}</td>
-					<td style="text-align:right">${format_currency(row.rate_difference || 0)}</td>
-					<td style="text-align:right">${format_currency(row.amount_difference || 0)}</td>
+					<td style="text-align:right">${formatBoqCurrency(row.previous_rate || 0, currency)}</td>
+					<td style="text-align:right">${formatBoqCurrency(row.current_rate || 0, currency)}</td>
+					<td style="text-align:right">${formatBoqCurrency(row.rate_difference || 0, currency)}</td>
+					<td style="text-align:right">${formatBoqCurrency(row.amount_difference || 0, currency)}</td>
 				</tr>`,
 		)
 		.join("");
@@ -701,7 +711,7 @@ function addBoqRevisionButtons(frm) {
 						frappe.msgprint({
 							title: __("Revision Comparison"),
 							indicator: "blue",
-							message: renderBoqRevisionComparison(r.message || []),
+							message: renderBoqRevisionComparison(r.message || [], getBoqCurrency(frm)),
 							wide: true,
 						});
 					},
@@ -1290,10 +1300,14 @@ frappe.ui.form.on("BOQ", {
 				);
 				wrapper
 					.find(".comp-total-value")
-					.html(frappe.format(total, { fieldtype: "Currency" }));
+					.html(formatBoqCurrency(total, getBoqCurrency(frm)));
 				
 				// Update mismatch line
-				const mismatchLineHtml = getCostBreakdownMismatchLine(getBoqItemAmount(row), total);
+				const mismatchLineHtml = getCostBreakdownMismatchLine(
+					getBoqItemAmount(row),
+					total,
+					getBoqCurrency(frm),
+				);
 				const existingMismatchLine = wrapper.find(".boq-cost-breakdown-mismatch-line");
 				if (mismatchLineHtml) {
 					if (existingMismatchLine.length) {
@@ -1544,10 +1558,10 @@ frappe.ui.form.on("BOQ", {
 	            ">
 	                <span style="font-size:12px;color:var(--text-muted)">Total Amount</span>
 	                <span class="comp-total-value" style="font-size:16px;font-weight:600;color:var(--text-color)">
-	                    ${frappe.format(total, { fieldtype: "Currency" })}
+	                    ${formatBoqCurrency(total, getBoqCurrency(frm))}
 	                </span>
 	            </div>
-	            ${getCostBreakdownMismatchLine(getBoqItemAmount(row), total)}
+	            ${getCostBreakdownMismatchLine(getBoqItemAmount(row), total, getBoqCurrency(frm))}
 	        </div>
 	    `);
 				setTimeout(() => bindComponentEvents(), 0);
@@ -1570,7 +1584,7 @@ frappe.ui.form.on("BOQ", {
 			}
 
 			const items = frm.doc.items || [];
-			const CUR = frm.doc.currency || frappe.defaults.get_default("currency") || "";
+			const CUR = getBoqCurrency(frm);
 			const isDraft = frm.boq_is_draft();
 
 			// Empty state - no items and no registered (pending) categories
@@ -1668,8 +1682,6 @@ frappe.ui.form.on("BOQ", {
 					});
 
 					// ── Formatters ─────────────────────────────────────────
-					const fmt0 = (n) =>
-						parseFloat(n || 0).toLocaleString("en-AE", { maximumFractionDigits: 0 });
 					const fmt2 = (n) =>
 						parseFloat(n || 0).toLocaleString("en-AE", {
 							minimumFractionDigits: 2,
@@ -1685,14 +1697,14 @@ frappe.ui.form.on("BOQ", {
 						}
 						const lines = components.map(
 							(c) =>
-								`${c.component_type}: ${c.description} = ${parseFloat(c.amount || 0).toLocaleString()}`,
+								`${c.component_type}: ${c.description} = ${formatBoqCurrency(c.amount || 0, CUR)}`,
 						);
 						const total = components.reduce(
 							(sum, c) => sum + (parseFloat(c.amount) || 0),
 							0,
 						);
 						lines.push("---");
-						lines.push(`Total: ${total.toLocaleString()}`);
+						lines.push(`Total: ${formatBoqCurrency(total, CUR)}`);
 						return lines.join("\n");
 					}
 
@@ -1725,7 +1737,7 @@ frappe.ui.form.on("BOQ", {
 
 					function renderUnitCost(row) {
 						if (!isDraft) {
-							return fmt2(row.unit_cost);
+							return formatBoqCurrency(row.unit_cost, CUR);
 						}
 
 						return renderInlineNumber(row, "boq-unit-cost", row.unit_cost);
@@ -1865,7 +1877,7 @@ title="${buildCostTooltip(row).replace(/"/g, "&quot;")}">
         align-items:center;
         gap:6px;
     ">
-        <span>${CUR} ${fmt0(getBoqItemAmount(row))}</span>
+        <span>${formatBoqCurrency(getBoqItemAmount(row), CUR)}</span>
 	        ${
 				frm.boq_has_cost_breakdown(row)
 					? `<i class="fa fa-list-ul" style="font-size:10px;color:#3b82f6"></i>`
@@ -1880,7 +1892,7 @@ title="${buildCostTooltip(row).replace(/"/g, "&quot;")}">
     font-weight:600;
     color:var(--primary);
 ">
-    ${CUR} ${fmt0(getBoqAmountAfterMargin(row))}
+    ${formatBoqCurrency(getBoqAmountAfterMargin(row), CUR)}
 </td>
 
 <td style="text-align:center;white-space:nowrap;">
@@ -1947,7 +1959,7 @@ title="${buildCostTooltip(row).replace(/"/g, "&quot;")}">
         white-space:nowrap;
         font-variant-numeric: tabular-nums;
     ">
-        ${CUR} ${fmt0(amount)}
+        ${formatBoqCurrency(amount, CUR)}
     </div>
 
     <span></span>
@@ -1966,7 +1978,7 @@ title="${buildCostTooltip(row).replace(/"/g, "&quot;")}">
 						html += `
                     <div style="display:flex;align-items:center;gap:8px;padding:9px 14px;background:#f8fafc;border-bottom:1px solid var(--border-color)">
                         <span style="font-weight:600;color:var(--text-color);font-size:12px;flex:1">BOQ Items</span>
-                        <span style="font-weight:600;color:#c9a520;font-size:12px">${CUR} ${fmt0(rootTotal)}</span>
+                        <span style="font-weight:600;color:#c9a520;font-size:12px">${formatBoqCurrency(rootTotal, CUR)}</span>
                     </div>`;
 						html += renderItemsTable(rootItems, 8);
 					}
@@ -2007,7 +2019,7 @@ title="${buildCostTooltip(row).replace(/"/g, "&quot;")}">
                         <i class="fa fa-chevron-down"
                            style="color:#a0b0c8;font-size:11px;transition:transform .2s;${catOpen ? "" : "transform:rotate(-90deg)"}"></i>
                         <span style="font-weight:600;color:#fff;font-size:12px;flex:1">${cat.name.toUpperCase()}</span>
-                        <span style="font-weight:600;color:#c9a520;font-size:12px">${CUR} ${fmt0(catTotal)}</span>
+                        <span style="font-weight:600;color:#c9a520;font-size:12px">${formatBoqCurrency(catTotal, CUR)}</span>
                     </div>`;
 
 						if (catOpen) {
@@ -2040,7 +2052,7 @@ title="${buildCostTooltip(row).replace(/"/g, "&quot;")}">
 	                                <i class="fa fa-chevron-down"
 	                                   style="color:#5b7fa6;font-size:10px;transition:transform .2s;${subOpen ? "" : "transform:rotate(-90deg)"}"></i>
 	                                <span style="font-weight:600;color:#c8d8ec;font-size:11px;flex:1">${sub.name}</span>
-	                                <span style="color:#7090b8;font-size:11px">${CUR} ${fmt0(currentSubTotal)}</span>
+	                                <span style="color:#7090b8;font-size:11px">${formatBoqCurrency(currentSubTotal, CUR)}</span>
 	                            </div>`;
 
 								if (subOpen) {

@@ -11,6 +11,7 @@
   "boq",
   "sales_order",
   "bill_no",
+  "ra_bill_no",
   "status",
   "customer_column",
   "customer",
@@ -144,12 +145,23 @@
    "search_index": 1
   },
   {
-   "description": "Auto-incremented per project+BOQ combination",
+   "description": "Auto-incremented per project",
    "fieldname": "bill_no",
    "fieldtype": "Int",
    "in_list_view": 1,
-   "label": "Bill No",
+   "label": "Bill Sequence",
+   "no_copy": 1,
    "read_only": 1
+  },
+  {
+   "description": "Project-wise RA Bill number shown to users",
+   "fieldname": "ra_bill_no",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "RA Bill No.",
+   "no_copy": 1,
+   "read_only": 1,
+   "search_index": 1
   },
   {
    "default": "Draft",
@@ -756,10 +768,10 @@
    "write": 1
   }
  ],
- "search_fields": "project,boq,status",
+ "search_fields": "ra_bill_no,project,boq,status",
  "sort_field": "creation",
  "sort_order": "DESC",
  "states": [],
- "title_field": "project",
+ "title_field": "ra_bill_no",
  "track_changes": 1
 }

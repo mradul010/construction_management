@@ -508,7 +508,7 @@ construction_management.ProjectProgressReport = class ProjectProgressReport {
 	ra_bill_columns() {
 		return [
 			{ label: __("RA Bill"), formatter: (row) => this.doc_link("RA Bill", row.name) },
-			{ label: __("Bill No"), className: "cm-number", formatter: (row) => this.integer(row.bill_no) },
+			{ label: __("RA Bill No."), className: "cm-number", formatter: (row) => this.escape(row.ra_bill_no || "-") },
 			{ label: __("BOQ"), formatter: (row) => (row.boq ? this.doc_link("BOQ", row.boq) : "-") },
 			{ label: __("Billing Period"), formatter: (row) => this.billing_period(row) },
 			{ label: __("Status"), fieldname: "status" },

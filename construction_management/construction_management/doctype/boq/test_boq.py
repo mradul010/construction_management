@@ -6,6 +6,10 @@ from unittest.mock import patch
 import frappe
 from frappe.tests import UnitTestCase
 
+from construction_management.construction_management.doctype.boq.boq import (
+	unlink_non_revision_duplicate_boqs,
+)
+
 
 # On IntegrationTestCase, the doctype test records and all
 # link-field test record dependencies are recursively loaded
@@ -121,6 +125,85 @@ class IntegrationTestBOQ(UnitTestCase):
 		boq._fill_parent_categories()
 
 		self.assertEqual(boq.items[0].boq_parent_category, "Civil Work")
+
+	def test_standard_duplicate_is_decoupled_from_source_boq(self):
+		boq = frappe.get_doc(
+			{
+				"doctype": "BOQ",
+				"original_boq": "BOQ-SOURCE",
+				"parent_boq": "BOQ-SOURCE",
+				"superseded_by": "BOQ-NEXT",
+				"is_revision": 1,
+				"is_active_revision": 1,
+				"revision_no": 3,
+				"revision_status": "Active",
+				"status": "Active",
+				"active_from_date": "2026-09-04",
+				"active_to_date": "2026-09-05",
+			}
+		)
+
+		boq._sanitize_standard_duplicate_references()
+
+		self.assertIsNone(boq.original_boq)
+		self.assertIsNone(boq.parent_boq)
+		self.assertIsNone(boq.superseded_by)
+		self.assertEqual(boq.is_revision, 0)
+		self.assertEqual(boq.is_active_revision, 0)
+		self.assertEqual(boq.revision_no, 0)
+		self.assertEqual(boq.revision_status, "Draft")
+		self.assertEqual(boq.status, "Draft")
+		self.assertIsNone(boq.active_from_date)
+		self.assertIsNone(boq.active_to_date)
+
+	def test_revision_copy_keeps_revision_links(self):
+		boq = frappe.get_doc(
+			{
+				"doctype": "BOQ",
+				"original_boq": "BOQ-SOURCE",
+				"parent_boq": "BOQ-PARENT",
+				"is_revision": 1,
+				"revision_no": 3,
+			}
+		)
+		boq.flags.from_boq_revision = True
+
+		boq._sanitize_standard_duplicate_references()
+
+		self.assertEqual(boq.original_boq, "BOQ-SOURCE")
+		self.assertEqual(boq.parent_boq, "BOQ-PARENT")
+		self.assertEqual(boq.is_revision, 1)
+		self.assertEqual(boq.revision_no, 3)
+
+	@patch("frappe.clear_cache")
+	@patch("frappe.db.set_value")
+	@patch("frappe.db.sql")
+	def test_unlink_non_revision_duplicate_boqs_keeps_real_revisions(
+		self, db_sql, set_value, clear_cache
+	):
+		db_sql.return_value = ["BOQ-DUPLICATE"]
+
+		unlink_non_revision_duplicate_boqs("BOQ-SOURCE")
+
+		query, params = db_sql.call_args[0]
+		self.assertIn("original_boq = %(source_boq)s", query)
+		self.assertIn("COALESCE(is_revision, 0) = 0", query)
+		self.assertIn("parent_boq IS NULL OR parent_boq = ''", query)
+		self.assertEqual(params["source_boq"], "BOQ-SOURCE")
+		self.assertTrue(db_sql.call_args.kwargs["pluck"])
+		set_value.assert_called_once_with(
+			"BOQ",
+			"BOQ-DUPLICATE",
+			{
+				"original_boq": "BOQ-DUPLICATE",
+				"parent_boq": None,
+				"superseded_by": None,
+				"is_revision": 0,
+				"is_active_revision": 0,
+			},
+			update_modified=False,
+		)
+		clear_cache.assert_called_once_with(doctype="BOQ")
 
 	def test_cost_breakdown_matches_amount(self):
 		boq = self._make_boq_with_cost_breakdown(1000)

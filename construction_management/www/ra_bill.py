@@ -48,6 +48,7 @@ def get_context(context):
 		fields=[
 			"name",
 			"bill_no",
+			"ra_bill_no",
 			"project",
 			"boq",
 			"status",
