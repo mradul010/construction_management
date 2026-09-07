@@ -26,6 +26,10 @@ class SiteMaterialConsumption(Document):
 
 	def on_cancel(self):
 		self.cancel_stock_entry()
+		self.unlink_purchase_invoice_references()
+
+	def on_trash(self):
+		self.unlink_purchase_invoice_references()
 
 	def set_missing_defaults(self):
 		settings = get_construction_settings()
@@ -211,6 +215,13 @@ class SiteMaterialConsumption(Document):
 
 		stock_entry.flags.ignore_permissions = True
 		stock_entry.cancel()
+
+	def unlink_purchase_invoice_references(self):
+		from construction_management.construction_management.overrides.purchase_invoice import (
+			unlink_site_material_consumption,
+		)
+
+		unlink_site_material_consumption(site_material_consumption=self)
 
 
 def get_construction_settings():

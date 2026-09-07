@@ -9,6 +9,9 @@ from construction_management.construction_management.utils.accounting import get
 
 
 AMOUNT_TOLERANCE = 0.0001
+SITE_MATERIAL_CONSUMPTION_FIELD = "site_material_consumption"
+SITE_MATERIAL_CONSUMPTION_ITEM_DOCTYPE = "Site Material Consumption Item"
+SITE_MATERIAL_CONSUMPTION_ITEM_SOURCE_FIELDS = ("purchase_invoice", "purchase_invoice_item")
 
 
 class ConstructionPurchaseInvoice(PurchaseInvoice):
@@ -26,7 +29,12 @@ class ConstructionPurchaseInvoice(PurchaseInvoice):
 
 	def on_cancel(self):
 		self.cancel_site_material_consumption()
+		unlink_site_material_consumption(self)
 		super().on_cancel()
+
+	def on_trash(self):
+		unlink_site_material_consumption(self)
+		super().on_trash()
 
 	def set_expense_account(self, for_validate=False):
 		if self.is_accounting_only_return():
@@ -170,10 +178,10 @@ class ConstructionPurchaseInvoice(PurchaseInvoice):
 		return row.expense_account if row and row.expense_account else None
 
 	def get_site_material_consumption_item_for_original_item(self, original_item, original_values=None):
-		if not self.return_against or not frappe.get_meta("Purchase Invoice").has_field("site_material_consumption"):
+		if not self.return_against or not frappe.get_meta("Purchase Invoice").has_field(SITE_MATERIAL_CONSUMPTION_FIELD):
 			return None
 
-		consumption = frappe.db.get_value("Purchase Invoice", self.return_against, "site_material_consumption")
+		consumption = frappe.db.get_value("Purchase Invoice", self.return_against, SITE_MATERIAL_CONSUMPTION_FIELD)
 		if not consumption or not frappe.db.exists("Site Material Consumption", consumption):
 			return None
 
@@ -493,14 +501,18 @@ class ConstructionPurchaseInvoice(PurchaseInvoice):
 		return non_empty_values.pop() if len(non_empty_values) == 1 and all(values) else None
 
 	def cancel_site_material_consumption(self):
-		if not self.meta.has_field("site_material_consumption") or not self.get("site_material_consumption"):
+		if not self.meta.has_field(SITE_MATERIAL_CONSUMPTION_FIELD) or not self.get(SITE_MATERIAL_CONSUMPTION_FIELD):
 			return
 
-		consumption = frappe.get_doc("Site Material Consumption", self.get("site_material_consumption"))
+		consumption_name = self.get(SITE_MATERIAL_CONSUMPTION_FIELD)
+		if not frappe.db.exists("Site Material Consumption", consumption_name):
+			return
+
+		consumption = frappe.get_doc("Site Material Consumption", consumption_name)
 		if consumption.docstatus == 2:
 			return
-		if consumption.docstatus != 1:
-			frappe.throw(_("Linked Site Material Consumption {0} is not submitted.").format(consumption.name))
+		if consumption.docstatus == 0:
+			return
 
 		consumption.flags.ignore_permissions = True
 		consumption.cancel()
@@ -704,6 +716,180 @@ class ConstructionPurchaseInvoice(PurchaseInvoice):
 				"status": status,
 			},
 		)
+
+
+def unlink_site_material_consumption(purchase_invoice=None, site_material_consumption=None):
+	"""
+	Clear PI <-> SMC references that otherwise block Frappe cancel/delete link checks.
+	"""
+	purchase_invoice_name = _get_doc_name(purchase_invoice)
+	consumption_names = set()
+
+	if site_material_consumption:
+		consumption_names.add(_get_doc_name(site_material_consumption))
+
+	if purchase_invoice_name:
+		consumption_names.update(_get_site_material_consumptions_for_purchase_invoice(purchase_invoice))
+
+	if not consumption_names:
+		return
+
+	consumption_names.discard(None)
+	for consumption_name in sorted(consumption_names):
+		_clear_purchase_invoice_site_material_consumption_link(purchase_invoice_name, consumption_name)
+		_clear_site_material_consumption_item_source_links(consumption_name, purchase_invoice_name)
+
+
+def _get_doc_name(doc):
+	if not doc:
+		return None
+	return doc.name if hasattr(doc, "doctype") else doc
+
+
+def _get_site_material_consumptions_for_purchase_invoice(purchase_invoice):
+	purchase_invoice_name = _get_doc_name(purchase_invoice)
+	if not purchase_invoice_name:
+		return set()
+
+	consumption_names = set()
+	if _doctype_has_field("Purchase Invoice", SITE_MATERIAL_CONSUMPTION_FIELD):
+		if hasattr(purchase_invoice, "doctype"):
+			consumption_name = purchase_invoice.get(SITE_MATERIAL_CONSUMPTION_FIELD)
+		else:
+			consumption_name = frappe.db.get_value(
+				"Purchase Invoice",
+				purchase_invoice_name,
+				SITE_MATERIAL_CONSUMPTION_FIELD,
+			)
+		if consumption_name:
+			consumption_names.add(consumption_name)
+
+	if _doctype_has_field(SITE_MATERIAL_CONSUMPTION_ITEM_DOCTYPE, "purchase_invoice"):
+		consumption_names.update(
+			frappe.get_all(
+				SITE_MATERIAL_CONSUMPTION_ITEM_DOCTYPE,
+				filters={"purchase_invoice": purchase_invoice_name},
+				pluck="parent",
+				distinct=True,
+			)
+		)
+
+	if _doctype_has_field(SITE_MATERIAL_CONSUMPTION_ITEM_DOCTYPE, "purchase_invoice_item"):
+		purchase_invoice_items = frappe.get_all(
+			"Purchase Invoice Item",
+			filters={"parent": purchase_invoice_name, "parenttype": "Purchase Invoice"},
+			pluck="name",
+		)
+		if purchase_invoice_items:
+			consumption_names.update(
+				frappe.get_all(
+					SITE_MATERIAL_CONSUMPTION_ITEM_DOCTYPE,
+					filters={"purchase_invoice_item": ("in", purchase_invoice_items)},
+					pluck="parent",
+					distinct=True,
+				)
+			)
+
+	return consumption_names
+
+
+def _clear_purchase_invoice_site_material_consumption_link(purchase_invoice_name, consumption_name):
+	if not _doctype_has_field("Purchase Invoice", SITE_MATERIAL_CONSUMPTION_FIELD):
+		return
+
+	filters = {SITE_MATERIAL_CONSUMPTION_FIELD: consumption_name}
+	if purchase_invoice_name:
+		filters["name"] = purchase_invoice_name
+
+	for invoice_name in frappe.get_all("Purchase Invoice", filters=filters, pluck="name"):
+		frappe.db.set_value(
+			"Purchase Invoice",
+			invoice_name,
+			SITE_MATERIAL_CONSUMPTION_FIELD,
+			None,
+			update_modified=False,
+		)
+
+
+def _clear_site_material_consumption_item_source_links(consumption_name, purchase_invoice_name=None):
+	if not consumption_name or not frappe.db.exists("Site Material Consumption", consumption_name):
+		return
+
+	item_meta = frappe.get_meta(SITE_MATERIAL_CONSUMPTION_ITEM_DOCTYPE)
+	fields_to_clear = [
+		fieldname
+		for fieldname in SITE_MATERIAL_CONSUMPTION_ITEM_SOURCE_FIELDS
+		if item_meta.has_field(fieldname) and item_meta.get_field(fieldname).fieldtype == "Link"
+	]
+	if not fields_to_clear:
+		return
+
+	filters = {
+		"parent": consumption_name,
+		"parenttype": "Site Material Consumption",
+	}
+
+	item_names = _get_site_material_consumption_item_names_to_unlink(
+		filters,
+		item_meta,
+		purchase_invoice_name,
+	)
+	if not item_names:
+		return
+
+	for item in frappe.get_all(
+		SITE_MATERIAL_CONSUMPTION_ITEM_DOCTYPE,
+		filters={"name": ("in", item_names)},
+		fields=["name", *fields_to_clear],
+	):
+		values = {fieldname: None for fieldname in fields_to_clear if item.get(fieldname)}
+		if values:
+			frappe.db.set_value(
+				SITE_MATERIAL_CONSUMPTION_ITEM_DOCTYPE,
+				item.name,
+				values,
+				update_modified=False,
+			)
+
+
+def _get_site_material_consumption_item_names_to_unlink(filters, item_meta, purchase_invoice_name=None):
+	if not purchase_invoice_name:
+		return frappe.get_all(SITE_MATERIAL_CONSUMPTION_ITEM_DOCTYPE, filters=filters, pluck="name")
+
+	item_names = set()
+	if item_meta.has_field("purchase_invoice"):
+		item_names.update(
+			frappe.get_all(
+				SITE_MATERIAL_CONSUMPTION_ITEM_DOCTYPE,
+				filters={**filters, "purchase_invoice": purchase_invoice_name},
+				pluck="name",
+			)
+		)
+
+	if item_meta.has_field("purchase_invoice_item"):
+		purchase_invoice_items = frappe.get_all(
+			"Purchase Invoice Item",
+			filters={"parent": purchase_invoice_name, "parenttype": "Purchase Invoice"},
+			pluck="name",
+		)
+		if purchase_invoice_items:
+			item_names.update(
+				frappe.get_all(
+					SITE_MATERIAL_CONSUMPTION_ITEM_DOCTYPE,
+					filters={**filters, "purchase_invoice_item": ("in", purchase_invoice_items)},
+					pluck="name",
+				)
+			)
+
+	return item_names
+
+
+def _doctype_has_field(doctype, fieldname):
+	try:
+		return frappe.get_meta(doctype).has_field(fieldname)
+	except frappe.DoesNotExistError:
+		frappe.clear_last_message()
+		return False
 
 
 def sync_purchase_invoice_payment_breakdown_from_payment_entry(payment_entry, method=None):
