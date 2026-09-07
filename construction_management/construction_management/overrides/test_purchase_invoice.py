@@ -5,15 +5,25 @@ from frappe.tests import UnitTestCase
 
 from construction_management.construction_management.overrides.purchase_invoice import (
 	ConstructionPurchaseInvoice,
+	unlink_site_material_consumption,
 )
 
 
 class _FakeMeta:
 	def __init__(self, fields=None):
-		self.fields = set(fields or [])
+		self.fields = {}
+		for field in fields or []:
+			if isinstance(field, tuple):
+				fieldname, fieldtype = field
+			else:
+				fieldname, fieldtype = field, "Link"
+			self.fields[fieldname] = frappe._dict(fieldtype=fieldtype)
 
 	def has_field(self, fieldname):
 		return fieldname in self.fields
+
+	def get_field(self, fieldname):
+		return self.fields.get(fieldname)
 
 
 class _FakeRow(frappe._dict):
@@ -310,3 +320,72 @@ class UnitTestPurchaseInvoiceSiteMaterialConsumption(UnitTestCase):
 				"3t2m9o014u",
 				match_context="test fallback",
 			)
+
+	def test_unlink_site_material_consumption_clears_parent_and_child_references(self):
+		invoice = _fake_purchase_invoice(
+			doctype="Purchase Invoice",
+			name="ACC-PINV-2026-00214",
+			site_material_consumption="SMC-2026-0158",
+		)
+		get_all_calls = []
+
+		def get_meta(doctype):
+			if doctype == "Purchase Invoice":
+				return _FakeMeta({"site_material_consumption"})
+			if doctype == "Site Material Consumption Item":
+				return _FakeMeta({"purchase_invoice", "purchase_invoice_item"})
+			return _FakeMeta()
+
+		def get_all(doctype, filters=None, **kwargs):
+			get_all_calls.append((doctype, filters, kwargs))
+			if doctype == "Site Material Consumption Item" and kwargs.get("pluck") == "parent":
+				return ["SMC-2026-0158"]
+			if doctype == "Purchase Invoice Item":
+				return ["pi-item-1"]
+			if doctype == "Site Material Consumption Item" and kwargs.get("pluck") == "name":
+				return ["smc-item-1"]
+			if doctype == "Purchase Invoice":
+				return ["ACC-PINV-2026-00214"]
+			if doctype == "Site Material Consumption Item":
+				return [
+					frappe._dict(
+						{
+							"name": "smc-item-1",
+							"purchase_invoice": "ACC-PINV-2026-00214",
+							"purchase_invoice_item": "pi-item-1",
+						}
+					)
+				]
+			return []
+
+		with (
+			patch("construction_management.construction_management.overrides.purchase_invoice.frappe.get_meta", side_effect=get_meta),
+			patch("construction_management.construction_management.overrides.purchase_invoice.frappe.get_all", side_effect=get_all),
+			patch("construction_management.construction_management.overrides.purchase_invoice.frappe.db.exists", return_value=True),
+			patch("construction_management.construction_management.overrides.purchase_invoice.frappe.db.set_value") as set_value,
+		):
+			unlink_site_material_consumption(invoice)
+
+		set_value.assert_any_call(
+			"Purchase Invoice",
+			"ACC-PINV-2026-00214",
+			"site_material_consumption",
+			None,
+			update_modified=False,
+		)
+		set_value.assert_any_call(
+			"Site Material Consumption Item",
+			"smc-item-1",
+			{
+				"purchase_invoice": None,
+				"purchase_invoice_item": None,
+			},
+			update_modified=False,
+		)
+		self.assertTrue(
+			any(
+				doctype == "Site Material Consumption Item"
+				and filters.get("purchase_invoice") == "ACC-PINV-2026-00214"
+				for doctype, filters, _kwargs in get_all_calls
+			)
+		)

@@ -106,20 +106,18 @@
   },
   {
    "fieldname": "purchase_invoice",
-   "fieldtype": "Link",
+   "fieldtype": "Data",
    "hidden": 1,
    "label": "Purchase Invoice",
    "no_copy": 1,
-   "options": "Purchase Invoice",
    "read_only": 1
   },
   {
    "fieldname": "purchase_invoice_item",
-   "fieldtype": "Link",
+   "fieldtype": "Data",
    "hidden": 1,
    "label": "Purchase Invoice Item",
    "no_copy": 1,
-   "options": "Purchase Invoice Item",
    "read_only": 1
   },
   {
