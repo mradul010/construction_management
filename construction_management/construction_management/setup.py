@@ -1695,6 +1695,24 @@ def get_or_create_ra_bill_receivable_account(company, currency, project=None):
 	return get_account(company, currency, project=project)
 
 
+def ensure_construction_billing_uom_allows_fractional(uom, company=None):
+	"""Ensure the UOM configured for construction billing accepts progress decimals."""
+	if not uom or not frappe.db.exists("UOM", uom):
+		return
+
+	if not frappe.db.get_value("UOM", uom, "must_be_whole_number"):
+		return
+
+	frappe.db.set_value("UOM", uom, "must_be_whole_number", 0, update_modified=False)
+	frappe.clear_cache(doctype="UOM")
+	print(
+		"Updated construction billing UOM {0} to allow fractional quantities{1}.".format(
+			uom,
+			f" for Company {company}" if company else "",
+		)
+	)
+
+
 def ensure_ra_bill_items(company=None):
 	"""
 	Ensure the service item used in RA Bill Sales Invoices exists.
@@ -1732,6 +1750,7 @@ def ensure_ra_bill_items(company=None):
 	item_code = get_default_construction_service_item(company)
 	item_group = get_default_construction_item_group(company)
 	stock_uom = get_default_construction_uom(company)
+	ensure_construction_billing_uom_allows_fractional(stock_uom, company=company)
 	items = [
 		{
 			"item_code": item_code,

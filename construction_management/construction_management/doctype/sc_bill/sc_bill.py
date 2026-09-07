@@ -2,6 +2,7 @@ import frappe
 from frappe import _
 from frappe.model.document import Document
 from frappe.utils import add_days, flt, today
+from erpnext.stock.get_item_details import get_conversion_factor
 
 from construction_management.construction_management.doctype.sc_work_order.sc_work_order import (
 	TOLERANCE,
@@ -421,6 +422,18 @@ class SCBill(Document):
 		return pi.name
 
 	def _get_purchase_invoice_items(self, expense_account, cost_center, fallback_description):
+		def get_item_uom_fields(item_code, uom):
+			stock_uom = frappe.db.get_value("Item", item_code, "stock_uom") or uom or "Nos"
+			row_uom = uom or stock_uom
+			conversion_factor = flt(
+				get_conversion_factor(item_code, row_uom).get("conversion_factor") or 1
+			)
+			return {
+				"uom": row_uom,
+				"stock_uom": stock_uom,
+				"conversion_factor": conversion_factor,
+			}
+
 		if self.billing_type != "Measured":
 			return [
 				_filter_child_fields(
@@ -431,7 +444,7 @@ class SCBill(Document):
 						"description": fallback_description,
 						"qty": 1,
 						"rate": flt(self.gross_amount),
-						"uom": "Nos",
+						**get_item_uom_fields("SC Bill Services", "Nos"),
 						"project": self.project,
 						"cost_center": cost_center,
 						"expense_account": expense_account,
@@ -474,7 +487,7 @@ class SCBill(Document):
 						"description": description,
 						"qty": qty,
 						"rate": rate,
-						"uom": row.uom or "Nos",
+						**get_item_uom_fields(item_code, row.uom),
 						"project": self.project,
 						"cost_center": row.get("cost_center") or cost_center,
 						"expense_account": expense_account,
@@ -506,6 +519,12 @@ class SCBill(Document):
 
 
 def ensure_sc_bill_service_item():
+	from construction_management.construction_management.setup import (
+		ensure_construction_billing_uom_allows_fractional,
+	)
+
+	ensure_construction_billing_uom_allows_fractional("Nos")
+
 	if frappe.db.exists("Item", "SC Bill Services"):
 		return
 

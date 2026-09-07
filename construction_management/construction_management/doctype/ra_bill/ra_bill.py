@@ -7,6 +7,7 @@ from frappe.model.naming import getseries
 from frappe.model.document import Document
 from frappe.utils import cint, flt, fmt_money, getdate, today
 from erpnext.controllers.accounts_controller import get_taxes_and_charges
+from erpnext.stock.get_item_details import get_conversion_factor
 
 from construction_management.construction_management.advance_management import (
 	get_ra_bill_advance_recovery_target,
@@ -927,6 +928,17 @@ class RABill(Document):
 		def format_invoice_currency(value):
 			return fmt_money(flt(value), currency=invoice_currency)
 
+		def get_invoice_uom_fields(uom=None):
+			row_uom = uom or service_uom
+			conversion_factor = flt(
+				get_conversion_factor(service_item, row_uom).get("conversion_factor") or 1
+			)
+			return {
+				"uom": row_uom,
+				"stock_uom": service_uom,
+				"conversion_factor": conversion_factor,
+			}
+
 		conversion_rate = 1.0
 		receivable_account = get_ra_bill_sales_invoice_receivable_account(
 			self.customer,
@@ -1167,7 +1179,7 @@ class RABill(Document):
 					"description": "\n".join(description_lines),
 					"qty": 1,
 					"rate": flt(self.gross_amount),
-					"uom": service_uom,
+					**get_invoice_uom_fields(service_uom),
 					"income_account": income_account,
 					"cost_center": project_cost_center,
 				}
@@ -1215,7 +1227,7 @@ class RABill(Document):
 						"description": "\n".join(description_lines),
 						"qty": qty,
 						"rate": rate,
-						"uom": row.uom or service_uom,
+						**get_invoice_uom_fields(row.uom),
 						"income_account": income_account,
 						"cost_center": project_cost_center,
 					}
