@@ -1,0 +1,40 @@
+{% extends "templates/web.html" %}
+
+{% block navbar %}{% endblock %}
+{% block footer %}{% endblock %}
+
+{% block head_include %}
+{{ super() }}
+<link rel="stylesheet" href="/assets/construction_management/css/qatra_client_portal.css">
+{% endblock %}
+
+{% block page_content %}
+<div class="qatra-client-portal-page qatra-dashboard-placeholder">
+	<main class="qatra-dashboard-shell">
+		<section class="qatra-dashboard-panel">
+			<div>
+				<p class="qatra-eyebrow">QATRA Client Portal</p>
+				<h1>Signing out</h1>
+				<p>Please wait while your session is closed.</p>
+			</div>
+		</section>
+	</main>
+</div>
+{% endblock %}
+
+{% block script %}
+{{ super() }}
+<script>
+	frappe.ready(function () {
+		frappe.call({
+			method: "logout",
+			callback: function () {
+				window.location.href = "/client-portal";
+			},
+			error: function () {
+				window.location.href = "/client-portal";
+			}
+		});
+	});
+</script>
+{% endblock %}

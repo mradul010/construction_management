@@ -1,0 +1,135 @@
+{% extends "construction_management/templates/client_portal/base.html" %}
+
+{% block portal_content %}
+<section class="qatra-dashboard-command-hero qatra-dashboard-command-hero--compact">
+	<div class="qatra-dashboard-hero-grid">
+		<div class="qatra-dashboard-hero-copy">
+			<div class="qatra-section-kicker qatra-section-kicker--light">
+				<span></span>
+				<p>Project Portfolio</p>
+			</div>
+			<h1>{{ dashboard_title or page_title }}</h1>
+			<p class="qatra-dashboard-hero-text">
+				{{ customer_name }} &middot; {{ project_summary.total }} authorized
+				project{% if project_summary.total != 1 %}s{% endif %}
+			</p>
+
+			<div class="qatra-dashboard-pill-row">
+				<div class="qatra-dashboard-info-pill">
+					<span>Total Projects</span>
+					<strong>{{ project_summary.total }}</strong>
+				</div>
+				<div class="qatra-dashboard-info-pill">
+					<span>Active</span>
+					<strong>{{ project_summary.active }}</strong>
+				</div>
+				<div class="qatra-dashboard-info-pill">
+					<span>Average Progress</span>
+					<strong>{{ project_summary.average_progress }}%</strong>
+				</div>
+			</div>
+		</div>
+
+		<div class="qatra-dashboard-progress-panel">
+			<p class="qatra-dashboard-panel-label">Client Overview</p>
+			<h2>{{ project_summary.active }} active project{% if project_summary.active != 1 %}s{% endif %}</h2>
+			<p class="qatra-dashboard-muted">
+				Completed: {{ project_summary.completed }} &middot; On Hold: {{ project_summary.on_hold }}
+			</p>
+		</div>
+	</div>
+</section>
+
+<section class="qatra-dashboard-toolbar">
+	<div>
+		<h2>Projects</h2>
+		<p>{{ project_summary.total }} project{% if project_summary.total != 1 %}s{% endif %} linked to this client account</p>
+	</div>
+	<div class="qatra-dashboard-toolbar-actions">
+		<label>
+			<span>Search</span>
+			<input type="search" placeholder="Search project..." data-qatra-project-search>
+		</label>
+		<label>
+			<span>Status</span>
+			<select data-qatra-project-status>
+				<option value="">All Status</option>
+				<option value="Open">Open</option>
+				<option value="In Progress">In Progress</option>
+				<option value="Active">Active</option>
+				<option value="On Hold">On Hold</option>
+				<option value="Completed">Completed</option>
+				<option value="Closed">Closed</option>
+			</select>
+		</label>
+	</div>
+</section>
+
+{% if projects %}
+<section class="qatra-dashboard-project-grid" data-qatra-project-list>
+	{% for project in projects %}
+	<a
+		class="qatra-dashboard-project-card"
+		href="{{ project.detail_route }}"
+		data-qatra-project-card
+		data-search="{{ project.display_name }} {{ project.name }} {{ project.display_location }} {{ project.display_manager }}"
+		data-status="{{ project.display_status }}"
+	>
+		<div class="qatra-dashboard-project-card-top">
+			<div>
+				<span>{{ project.display_status }}</span>
+				<h3>{{ project.display_name }}</h3>
+				<p>{{ project.display_location }}</p>
+			</div>
+			<div
+				class="qatra-dashboard-mini-progress"
+				style="--progress: {{ project.display_percent_complete or 0 }};"
+				aria-label="{{ project.display_name }} progress {{ '%.0f'|format(project.display_percent_complete or 0) }}%"
+			>
+				<strong>{{ "%.0f"|format(project.display_percent_complete or 0) }}%</strong>
+			</div>
+		</div>
+
+		<div class="qatra-dashboard-project-card-body">
+			<div class="qatra-dashboard-project-info-grid">
+				<div>
+					<span>Client</span>
+					<strong>{{ project.customer_name }}</strong>
+				</div>
+				<div>
+					<span>Project Manager</span>
+					<strong>{{ project.display_manager }}</strong>
+				</div>
+				<div>
+					<span>Start Date</span>
+					<strong>{{ project.display_start_date }}</strong>
+				</div>
+				<div>
+					<span>Expected End</span>
+					<strong>{{ project.display_end_date }}</strong>
+				</div>
+			</div>
+
+			<div class="qatra-dashboard-progress-line" aria-hidden="true">
+				<div style="width: {{ project.display_percent_complete or 0 }}%;"></div>
+			</div>
+
+			<div class="qatra-dashboard-project-link">
+				<span>View Project Details</span>
+				<b>&rarr;</b>
+			</div>
+		</div>
+	</a>
+	{% endfor %}
+</section>
+
+<section class="qatra-dashboard-empty-card qatra-dashboard-filter-empty" data-qatra-project-empty hidden>
+	<p>No projects match the selected filters.</p>
+</section>
+{% else %}
+<section class="qatra-dashboard-empty-state">
+	<h1>No projects found</h1>
+	<p>No projects are currently linked to your client account.</p>
+</section>
+{% endif %}
+{% endblock %}

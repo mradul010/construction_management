@@ -1,0 +1,324 @@
+{% extends "construction_management/templates/client_portal/base.html" %}
+
+{% block portal_content %}
+{% if dashboard.projects and dashboard.selected_project and dashboard.selected_project_financials %}
+<section class="qatra-dashboard-command-hero">
+	<div class="qatra-dashboard-hero-grid">
+		<div class="qatra-dashboard-hero-copy">
+			<div class="qatra-section-kicker qatra-section-kicker--light">
+				<span></span>
+				<p>Client Command Center</p>
+			</div>
+			<h1>{{ dashboard.selected_project.display_name }}</h1>
+			<p class="qatra-dashboard-hero-text">
+				{{ dashboard.customer.name }} &middot; {{ dashboard.project_summary.total_projects }}
+				project{% if dashboard.project_summary.total_projects != 1 %}s{% endif %}
+			</p>
+
+			<div class="qatra-dashboard-pill-row">
+				<div class="qatra-dashboard-info-pill">
+					<span>Location</span>
+					<strong>{{ dashboard.selected_project.display_location }}</strong>
+				</div>
+				<div class="qatra-dashboard-info-pill">
+					<span>Manager</span>
+					<strong>{{ dashboard.selected_project.display_manager }}</strong>
+				</div>
+				<div class="qatra-dashboard-info-pill">
+					<span>Status</span>
+					<strong>{{ dashboard.selected_project.display_status }}</strong>
+				</div>
+			</div>
+
+			<div class="qatra-dashboard-hero-actions">
+				<a class="qatra-dashboard-btn qatra-dashboard-btn--primary" href="{{ dashboard.selected_project.detail_route }}">Open Project</a>
+				<a class="qatra-dashboard-btn qatra-dashboard-btn--secondary" href="/client-portal/reports?project={{ dashboard.selected_project.name | urlencode }}">View Reports</a>
+			</div>
+		</div>
+
+		<div class="qatra-dashboard-progress-panel">
+			<div class="qatra-dashboard-progress-top">
+				<div>
+					<p class="qatra-dashboard-muted">Overall Progress</p>
+					<h2>{{ dashboard.selected_project_financials.display_physical_progress }}</h2>
+					<p class="qatra-dashboard-muted">Current stage: {{ dashboard.current_stage }}</p>
+				</div>
+				<div
+					class="qatra-dashboard-circle-progress"
+					style="--progress: {{ dashboard.selected_project_financials.physical_progress or 0 }};"
+					aria-label="Overall project progress {{ dashboard.selected_project_financials.display_physical_progress }}"
+				>
+					<div>
+						<strong>{{ "%.0f"|format(dashboard.selected_project_financials.physical_progress or 0) }}%</strong>
+					</div>
+				</div>
+			</div>
+
+			<div class="qatra-dashboard-milestone-card">
+				<p>Next Milestone</p>
+				<h3>{% if dashboard.next_milestone %}{{ dashboard.next_milestone.title }}{% else %}No upcoming milestone{% endif %}</h3>
+				<span>
+					{% if dashboard.next_milestone %}
+					{{ dashboard.next_milestone.expected_date }} &middot; {{ dashboard.next_milestone.status }}
+					{% else %}
+					No linked milestone.
+					{% endif %}
+				</span>
+			</div>
+		</div>
+	</div>
+</section>
+
+<nav class="qatra-dashboard-project-switcher" aria-label="Dashboard project">
+	{% for project in dashboard.projects %}
+	<a
+		href="{{ project.dashboard_route }}"
+		class="{% if dashboard.selected_project.name == project.name %}qatra-dashboard-project-tab qatra-dashboard-project-tab--active{% else %}qatra-dashboard-project-tab{% endif %}"
+		{% if dashboard.selected_project.name == project.name %}aria-current="page"{% endif %}
+	>
+		<span>{{ project.display_status }}</span>
+		<strong>{{ project.display_name }}</strong>
+	</a>
+	{% endfor %}
+</nav>
+
+<section class="qatra-dashboard-portfolio-grid">
+	<div class="qatra-dashboard-metric">
+		<span>Total Projects</span>
+		<strong>{{ dashboard.project_summary.total_projects }}</strong>
+	</div>
+	<div class="qatra-dashboard-metric">
+		<span>Active Projects</span>
+		<strong>{{ dashboard.project_summary.active_projects }}</strong>
+	</div>
+	<div class="qatra-dashboard-metric">
+		<span>Total Contract Value</span>
+		<strong>{{ dashboard.financial_summary.display_contract_value }}</strong>
+	</div>
+	<div class="qatra-dashboard-metric qatra-dashboard-metric--dark">
+		<span>Total Received</span>
+		<strong>{{ dashboard.financial_summary.display_total_received }}</strong>
+	</div>
+</section>
+
+<section class="qatra-dashboard-summary-grid">
+	<a href="/client-portal/reports?project={{ dashboard.selected_project.name | urlencode }}" class="qatra-dashboard-summary-card">
+		<p>Reports</p>
+		<h2>{{ dashboard.counts.reports }}</h2>
+		<span>Published project updates</span>
+		<b>&rarr;</b>
+	</a>
+	<a href="/client-portal/documents" class="qatra-dashboard-summary-card">
+		<p>Documents</p>
+		<h2>{{ dashboard.counts.documents }}</h2>
+		<span>Shared client files</span>
+		<b>&rarr;</b>
+	</a>
+	<a href="/client-portal/approvals" class="qatra-dashboard-summary-card qatra-dashboard-summary-card--dark">
+		<p>Approvals</p>
+		<h2>{{ dashboard.counts.pending_approvals }}</h2>
+		<span>Waiting for review</span>
+		<b>&rarr;</b>
+	</a>
+</section>
+
+<section class="qatra-dashboard-content-grid">
+	<div class="qatra-dashboard-white-card qatra-dashboard-large-card">
+		<div class="qatra-section-kicker">
+			<span></span>
+			<p>Project Journey</p>
+		</div>
+		<h2 class="qatra-dashboard-section-title">Where the project stands today</h2>
+
+		{% if dashboard.journey %}
+		<div class="qatra-dashboard-journey-grid">
+			{% for stage in dashboard.journey %}
+			<div class="{% if stage.status == 'Active' %}qatra-dashboard-journey-step qatra-dashboard-journey-step--active{% else %}qatra-dashboard-journey-step{% endif %}">
+				<p>{{ "%02d"|format(loop.index) }}</p>
+				<h4>{{ stage.label }}</h4>
+				<span>{{ stage.status }}</span>
+			</div>
+			{% endfor %}
+		</div>
+		{% else %}
+		<div class="qatra-dashboard-empty-card">
+			<p>Stage not specified.</p>
+		</div>
+		{% endif %}
+	</div>
+
+	<div class="qatra-dashboard-white-card qatra-dashboard-soft-card">
+		<div class="qatra-section-kicker">
+			<span></span>
+			<p>Snapshot</p>
+		</div>
+		<h2 class="qatra-dashboard-section-title">Client Overview</h2>
+
+		<div class="qatra-dashboard-snapshot-list">
+			<div>
+				<span>Billing Progress</span>
+				<strong>{{ dashboard.selected_project_financials.display_billing_progress }}</strong>
+			</div>
+			<div>
+				<span>Collection Progress</span>
+				<strong>{{ dashboard.selected_project_financials.display_collection_progress }}</strong>
+			</div>
+			<div>
+				<span>Invoice Outstanding</span>
+				<strong>{{ dashboard.selected_project_financials.display_invoice_outstanding }}</strong>
+			</div>
+			<div>
+				<span>Expected Completion</span>
+				<strong>{{ dashboard.selected_project.timeline.end_date }}</strong>
+			</div>
+		</div>
+	</div>
+</section>
+
+<section class="qatra-dashboard-financial-grid">
+	<div class="qatra-dashboard-financial-card">
+		<span>Contract Value</span>
+		<strong>{{ dashboard.selected_project_financials.display_contract_value }}</strong>
+	</div>
+	<div class="qatra-dashboard-financial-card">
+		<span>Total Invoiced</span>
+		<strong>{{ dashboard.selected_project_financials.display_total_invoiced }}</strong>
+	</div>
+	<div class="qatra-dashboard-financial-card">
+		<span>Total Received</span>
+		<strong>{{ dashboard.selected_project_financials.display_total_received }}</strong>
+	</div>
+	<div class="qatra-dashboard-financial-card">
+		<span>Unbilled Contract Value</span>
+		<strong>{{ dashboard.selected_project_financials.display_remaining_contract_value }}</strong>
+	</div>
+</section>
+
+<section class="qatra-dashboard-content-grid">
+	<div class="qatra-dashboard-white-card">
+		<div class="qatra-section-kicker">
+			<span></span>
+			<p>Activity</p>
+		</div>
+		<h2 class="qatra-dashboard-section-title">Recent Project Activity</h2>
+
+		{% if dashboard.recent_activity %}
+		<div class="qatra-dashboard-activity-list">
+			{% for row in dashboard.recent_activity %}
+			<div class="qatra-dashboard-activity-item">
+				<span>{{ row.display_date }}</span>
+				<strong>{{ row.type }}</strong>
+				<p>{{ row.description }}</p>
+				<em>{{ row.status }}</em>
+			</div>
+			{% endfor %}
+		</div>
+		{% else %}
+		<div class="qatra-dashboard-empty-card">
+			<p>No recent project activity.</p>
+		</div>
+		{% endif %}
+	</div>
+
+	<div class="qatra-dashboard-white-card qatra-dashboard-soft-card">
+		<div class="qatra-section-kicker">
+			<span></span>
+			<p>Project Detail</p>
+		</div>
+		<h2 class="qatra-dashboard-section-title">Selected Project</h2>
+
+		<div class="qatra-dashboard-snapshot-list">
+			<div>
+				<span>Project ID</span>
+				<strong>{{ dashboard.selected_project.name }}</strong>
+			</div>
+			<div>
+				<span>Start Date</span>
+				<strong>{{ dashboard.selected_project.timeline.start_date }}</strong>
+			</div>
+			<div>
+				<span>Timeline</span>
+				<strong>{{ dashboard.selected_project.timeline.state }}</strong>
+			</div>
+			<div>
+				<span>Contract</span>
+				<strong>{{ dashboard.selected_project_financials.display_contract_value }}</strong>
+			</div>
+		</div>
+	</div>
+</section>
+
+<section class="qatra-dashboard-white-card qatra-dashboard-projects-card">
+	<div class="qatra-dashboard-card-header">
+		<div>
+			<div class="qatra-section-kicker">
+				<span></span>
+				<p>All Projects</p>
+			</div>
+			<h2 class="qatra-dashboard-section-title">Authorized Projects</h2>
+		</div>
+	</div>
+
+	<div class="qatra-dashboard-project-grid">
+		{% for project in dashboard.projects %}
+		<a class="qatra-dashboard-project-card" href="{{ project.dashboard_route }}">
+			<div class="qatra-dashboard-project-card-top">
+				<div>
+					<span>{{ project.name }}</span>
+					<h3>{{ project.display_name }}</h3>
+					<p>{{ project.display_location }}</p>
+				</div>
+				<div
+					class="qatra-dashboard-mini-progress"
+					style="--progress: {{ project.display_percent_complete or 0 }};"
+					aria-label="{{ project.display_name }} progress {{ '%.0f'|format(project.display_percent_complete or 0) }}%"
+				>
+					<strong>{{ "%.0f"|format(project.display_percent_complete or 0) }}%</strong>
+				</div>
+			</div>
+			<div class="qatra-dashboard-project-card-body">
+				<div class="qatra-dashboard-project-info-grid">
+					<div>
+						<span>Status</span>
+						<strong>{{ project.display_status }}</strong>
+					</div>
+					<div>
+						<span>Manager</span>
+						<strong>{{ project.display_manager }}</strong>
+					</div>
+					<div>
+						<span>Billing</span>
+						<strong>{{ project.display_billing_progress }}</strong>
+					</div>
+					<div>
+						<span>Collection</span>
+						<strong>{{ project.display_collection_progress }}</strong>
+					</div>
+					<div>
+						<span>Start Date</span>
+						<strong>{{ project.display_start_date }}</strong>
+					</div>
+					<div>
+						<span>Expected Completion</span>
+						<strong>{{ project.display_end_date }}</strong>
+					</div>
+				</div>
+				<div class="qatra-dashboard-progress-line" aria-hidden="true">
+					<div style="width: {{ project.display_percent_complete or 0 }}%;"></div>
+				</div>
+				<div class="qatra-dashboard-project-link">
+					<span>Select Project</span>
+					<b>&rarr;</b>
+				</div>
+			</div>
+		</a>
+		{% endfor %}
+	</div>
+</section>
+{% else %}
+<section class="qatra-dashboard-empty-state">
+	<h1>{{ dashboard.customer.name }}</h1>
+	<p>No projects are currently linked to your account.</p>
+</section>
+{% endif %}
+{% endblock %}

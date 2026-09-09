@@ -1,0 +1,255 @@
+{% extends "construction_management/templates/client_portal/base.html" %}
+
+{% block portal_content %}
+<a href="/client-portal/projects" class="qatra-dashboard-back-link">&larr; Back to projects</a>
+
+<section class="qatra-dashboard-command-hero qatra-dashboard-command-hero--compact">
+	<div class="qatra-dashboard-hero-grid">
+		<div class="qatra-dashboard-hero-copy">
+			<div class="qatra-section-kicker qatra-section-kicker--light">
+				<span></span>
+				<p>Project Details</p>
+			</div>
+			<h1>{{ project.display_name }}</h1>
+			<p class="qatra-dashboard-hero-text">
+				{{ project.name }} &middot; {{ customer_name }}
+			</p>
+
+			<div class="qatra-dashboard-pill-row">
+				<div class="qatra-dashboard-info-pill">
+					<span>Location</span>
+					<strong>{{ project.display_location }}</strong>
+				</div>
+				<div class="qatra-dashboard-info-pill">
+					<span>Status</span>
+					<strong>{{ project.display_status }}</strong>
+				</div>
+				<div class="qatra-dashboard-info-pill">
+					<span>Manager</span>
+					<strong>{{ project.display_manager }}</strong>
+				</div>
+			</div>
+		</div>
+
+		<div class="qatra-dashboard-progress-panel">
+			<div class="qatra-dashboard-progress-top">
+				<div>
+					<p class="qatra-dashboard-muted">Overall Progress</p>
+					<h2>{{ financial_summary.display_physical_progress }}</h2>
+					<p class="qatra-dashboard-muted">Current stage: {{ current_stage }}</p>
+				</div>
+				<div
+					class="qatra-dashboard-circle-progress"
+					style="--progress: {{ financial_summary.physical_progress or 0 }};"
+					aria-label="Overall project progress {{ financial_summary.display_physical_progress }}"
+				>
+					<div>
+						<strong>{{ "%.0f"|format(financial_summary.physical_progress or 0) }}%</strong>
+					</div>
+				</div>
+			</div>
+
+			<div class="qatra-dashboard-milestone-card">
+				<p>Next Client Update</p>
+				<h3>{% if next_milestone %}{{ next_milestone.title }}{% else %}No upcoming milestone{% endif %}</h3>
+				<span>
+					{% if next_milestone %}
+					{{ next_milestone.expected_date }} &middot; {{ next_milestone.status }}
+					{% else %}
+					No linked milestone.
+					{% endif %}
+				</span>
+			</div>
+		</div>
+	</div>
+</section>
+
+<section class="qatra-dashboard-detail-stats-grid">
+	<div class="qatra-dashboard-detail-stat-card">
+		<span>Start Date</span>
+		<strong>{{ project.display_start_date }}</strong>
+	</div>
+	<div class="qatra-dashboard-detail-stat-card">
+		<span>Expected End</span>
+		<strong>{{ project.display_end_date }}</strong>
+	</div>
+	<div class="qatra-dashboard-detail-stat-card">
+		<span>Published DPRs</span>
+		<strong>{{ project_counts.dprs }}</strong>
+	</div>
+	<div class="qatra-dashboard-detail-stat-card qatra-dashboard-detail-stat-card--dark">
+		<span>Pending Approvals</span>
+		<strong>0</strong>
+	</div>
+</section>
+
+<section class="qatra-dashboard-content-grid">
+	<div class="qatra-dashboard-white-card qatra-dashboard-large-card">
+		<div class="qatra-section-kicker">
+			<span></span>
+			<p>Project Journey</p>
+		</div>
+		<h2 class="qatra-dashboard-section-title">Current Project Stage</h2>
+
+		{% if journey %}
+		<div class="qatra-dashboard-journey-grid">
+			{% for stage in journey %}
+			<div class="{% if stage.status == 'Active' %}qatra-dashboard-journey-step qatra-dashboard-journey-step--active{% else %}qatra-dashboard-journey-step{% endif %}">
+				<p>{{ "%02d"|format(loop.index) }}</p>
+				<h4>{{ stage.label }}</h4>
+				<span>{{ stage.status }}</span>
+			</div>
+			{% endfor %}
+		</div>
+		{% else %}
+		<div class="qatra-dashboard-empty-card">
+			<p>Stage not specified.</p>
+		</div>
+		{% endif %}
+	</div>
+
+	<div class="qatra-dashboard-white-card qatra-dashboard-soft-card">
+		<div class="qatra-section-kicker">
+			<span></span>
+			<p>Project Info</p>
+		</div>
+		<h2 class="qatra-dashboard-section-title">Overview</h2>
+
+		<div class="qatra-dashboard-snapshot-list">
+			<div>
+				<span>Client</span>
+				<strong>{{ project.customer_name }}</strong>
+			</div>
+			<div>
+				<span>Project Manager</span>
+				<strong>{{ project.display_manager }}</strong>
+			</div>
+			<div>
+				<span>Status</span>
+				<strong>{{ project.display_status }}</strong>
+			</div>
+			<div>
+				<span>Progress</span>
+				<strong>{{ financial_summary.display_physical_progress }}</strong>
+			</div>
+		</div>
+	</div>
+</section>
+
+<section class="qatra-dashboard-financial-grid">
+	<div class="qatra-dashboard-financial-card">
+		<span>Contract Value</span>
+		<strong>{{ financial_summary.display_contract_value }}</strong>
+	</div>
+	<div class="qatra-dashboard-financial-card">
+		<span>Total Invoiced</span>
+		<strong>{{ financial_summary.display_total_invoiced }}</strong>
+	</div>
+	<div class="qatra-dashboard-financial-card">
+		<span>Total Received</span>
+		<strong>{{ financial_summary.display_total_received }}</strong>
+	</div>
+	<div class="qatra-dashboard-financial-card">
+		<span>Invoice Outstanding</span>
+		<strong>{{ financial_summary.display_invoice_outstanding }}</strong>
+	</div>
+</section>
+
+<section class="qatra-dashboard-summary-grid">
+	<a href="/client-portal/reports?project={{ project.name | urlencode }}" class="qatra-dashboard-summary-card">
+		<p>Reports</p>
+		<h2>{{ project_counts.dprs }}</h2>
+		<span>Published project updates</span>
+		<b>&rarr;</b>
+	</a>
+	<a href="/client-portal/documents" class="qatra-dashboard-summary-card">
+		<p>BOQs</p>
+		<h2>{{ project_counts.boqs }}</h2>
+		<span>Project commercial records</span>
+		<b>&rarr;</b>
+	</a>
+	<a href="/client-portal/payments?project={{ project.name | urlencode }}" class="qatra-dashboard-summary-card qatra-dashboard-summary-card--dark">
+		<p>Payments</p>
+		<h2>{{ financial_summary.display_collection_progress }}</h2>
+		<span>Collection progress</span>
+		<b>&rarr;</b>
+	</a>
+</section>
+
+<section class="qatra-dashboard-content-grid">
+	<div class="qatra-dashboard-white-card">
+		<div class="qatra-section-kicker">
+			<span></span>
+			<p>Activity</p>
+		</div>
+		<h2 class="qatra-dashboard-section-title">Recent Project Activity</h2>
+
+		{% if recent_activity %}
+		<div class="qatra-dashboard-activity-list">
+			{% for row in recent_activity %}
+			<div class="qatra-dashboard-activity-item">
+				<span>{{ row.display_date }}</span>
+				<strong>{{ row.type }}</strong>
+				<p>{{ row.description }}</p>
+				<em>{{ row.status }}</em>
+			</div>
+			{% endfor %}
+		</div>
+		{% else %}
+		<div class="qatra-dashboard-empty-card">
+			<p>No recent project activity.</p>
+		</div>
+		{% endif %}
+	</div>
+
+	<div class="qatra-dashboard-white-card qatra-dashboard-soft-card">
+		<div class="qatra-section-kicker">
+			<span></span>
+			<p>Financials</p>
+		</div>
+		<h2 class="qatra-dashboard-section-title">Billing Snapshot</h2>
+
+		<div class="qatra-dashboard-snapshot-list">
+			<div>
+				<span>Billing Progress</span>
+				<strong>{{ financial_summary.display_billing_progress }}</strong>
+			</div>
+			<div>
+				<span>Collection Progress</span>
+				<strong>{{ financial_summary.display_collection_progress }}</strong>
+			</div>
+			<div>
+				<span>Advance Received</span>
+				<strong>{{ financial_summary.display_advance_received }}</strong>
+			</div>
+			<div>
+				<span>Unbilled Contract</span>
+				<strong>{{ financial_summary.display_remaining_contract_value }}</strong>
+			</div>
+		</div>
+	</div>
+</section>
+
+<section class="qatra-dashboard-quick-access-grid">
+	<a href="/client-portal/reports?project={{ project.name | urlencode }}" class="qatra-dashboard-quick-access-card">
+		<p>Reports</p>
+		<h3>Project Reports</h3>
+		<span>{{ project_counts.dprs }} published</span>
+	</a>
+	<a href="/client-portal/documents" class="qatra-dashboard-quick-access-card">
+		<p>Documents</p>
+		<h3>Shared Files</h3>
+		<span>0 visible files</span>
+	</a>
+	<a href="/client-portal/gallery" class="qatra-dashboard-quick-access-card">
+		<p>Gallery</p>
+		<h3>Site Photos</h3>
+		<span>Published DPR photos</span>
+	</a>
+	<a href="/client-portal/approvals" class="qatra-dashboard-quick-access-card qatra-dashboard-quick-access-card--dark">
+		<p>Approvals</p>
+		<h3>Pending Review</h3>
+		<span>0 open requests</span>
+	</a>
+</section>
+{% endblock %}

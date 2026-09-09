@@ -1,0 +1,150 @@
+{% extends "templates/web.html" %}
+
+{% block navbar %}{% endblock %}
+{% block footer %}{% endblock %}
+
+{% block head_include %}
+{{ super() }}
+<link rel="stylesheet" href="/assets/construction_management/css/qatra_client_portal.css?v={{ qatra_client_portal_asset_version or '1' }}">
+{% endblock %}
+
+{% block page_content %}
+<div class="qatra-client-portal-page qatra-login-page">
+	<section class="qatra-login-shell" aria-label="QATRA Client Portal Login">
+		<div class="qatra-brand-panel">
+			<div class="qatra-brand-panel__accent" aria-hidden="true"></div>
+			<div class="qatra-brand-panel__content">
+				<div class="qatra-logo-lockup">
+					<img class="qatra-logo-lockup__image" src="{{ qatra_logo }}" alt="{{ qatra_company_name or 'QATRA Building Contracting' }}" onerror="this.onerror=null; this.src='{{ qatra_fallback_logo }}';">
+					<div class="qatra-logo-lockup__fallback" hidden>
+						<span>QATRA</span>
+						<small>Building Contracting</small>
+					</div>
+				</div>
+
+				<div class="qatra-brand-copy">
+					<p class="qatra-eyebrow">Client Portal</p>
+					<h1>Welcome to QATRA Client Space</h1>
+					<p>
+						Track project progress, review documents, follow reports and manage approvals
+						through a secure client experience.
+					</p>
+				</div>
+
+				<div class="qatra-tag-list" aria-label="Portal sections">
+					<span>Project Progress</span>
+					<span>Documents</span>
+					<span>Reports</span>
+					<span>Approvals</span>
+				</div>
+
+				<div class="qatra-building-visual" aria-hidden="true">
+					<div class="qatra-skyline qatra-skyline--one"></div>
+					<div class="qatra-skyline qatra-skyline--two"></div>
+					<div class="qatra-skyline qatra-skyline--three"></div>
+					<div class="qatra-crane">
+						<span></span>
+						<span></span>
+						<span></span>
+					</div>
+				</div>
+			</div>
+		</div>
+
+		<div class="qatra-form-panel">
+			<div class="qatra-login-card">
+				<div class="qatra-secure-label">
+					<span aria-hidden="true">&#10003;</span>
+					<span>Secure Access</span>
+				</div>
+
+				<div class="qatra-form-heading">
+					<h2>Client Login</h2>
+					<p>Sign in with your registered QATRA client account.</p>
+				</div>
+
+				{% if portal_error %}
+				<div class="qatra-form-message qatra-form-message--error" role="alert">
+					{{ portal_error }}
+					{% if is_logged_in %}
+					<a href="/client-portal/logout">Sign out and use another account</a>
+					{% endif %}
+				</div>
+				{% else %}
+				<div class="qatra-form-message qatra-form-message--error" role="alert" hidden></div>
+				{% endif %}
+				<div class="qatra-form-message qatra-form-message--success" role="status" hidden></div>
+
+				<form class="qatra-login-form" id="qatra-client-login-form" novalidate>
+					<div class="qatra-field">
+						<label for="qatra-login-email">Email Address</label>
+						<input
+							id="qatra-login-email"
+							name="usr"
+							type="email"
+							autocomplete="username"
+							placeholder="client@example.com"
+							required
+							autofocus
+						>
+						<p class="qatra-field-error" data-field-error="usr"></p>
+					</div>
+
+					<div class="qatra-field">
+						<label for="qatra-login-password">Password</label>
+						<input
+							id="qatra-login-password"
+							name="pwd"
+							type="password"
+							autocomplete="current-password"
+							placeholder="Enter your password"
+							required
+						>
+						<p class="qatra-field-error" data-field-error="pwd"></p>
+					</div>
+
+					<div class="qatra-form-options">
+						<label class="qatra-remember-me">
+							<input id="qatra-remember-me" type="checkbox" name="remember_me" value="1">
+							<span>Remember me</span>
+						</label>
+						<button class="qatra-link-button" type="button" data-qatra-show-reset>Forgot password?</button>
+					</div>
+
+					<button class="qatra-sign-in-button" type="submit" data-default-label="Sign in">
+						<span>Sign in</span>
+					</button>
+				</form>
+
+				<form class="qatra-login-form qatra-reset-form" id="qatra-client-reset-form" hidden novalidate>
+					<div class="qatra-field">
+						<label for="qatra-reset-email">Email Address</label>
+						<input
+							id="qatra-reset-email"
+							name="user"
+							type="email"
+							autocomplete="username"
+							placeholder="client@example.com"
+							required
+						>
+						<p class="qatra-field-error" data-reset-field-error="user"></p>
+					</div>
+
+					<button class="qatra-sign-in-button" type="submit" data-default-label="Send reset link">
+						<span>Send reset link</span>
+					</button>
+
+					<button class="qatra-link-button qatra-link-button--standalone" type="button" data-qatra-show-login>
+						Back to sign in
+					</button>
+				</form>
+			</div>
+		</div>
+	</section>
+</div>
+{% endblock %}
+
+{% block script %}
+{{ super() }}
+<script src="/assets/construction_management/js/qatra_client_portal_login.js?v={{ qatra_client_portal_asset_version or '1' }}"></script>
+{% endblock %}

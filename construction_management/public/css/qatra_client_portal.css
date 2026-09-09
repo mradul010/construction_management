@@ -1,0 +1,3320 @@
+.qatra-client-portal {
+	--qatra-navy: #0b1324;
+	--qatra-navy-soft: #121d32;
+	--qatra-gold: #d8b85f;
+	--qatra-gold-dark: #c8a24a;
+	--qatra-cream: #f7f4ee;
+	--qatra-soft: #fcfaf6;
+	--qatra-border: #e7e2d8;
+	--qatra-white: #ffffff;
+	--qatra-ink: #1c2433;
+	--qatra-muted: #667085;
+	background: var(--qatra-cream);
+	color: var(--qatra-ink);
+	font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+	min-height: 100vh;
+}
+
+.qatra-client-portal,
+.qatra-client-portal * {
+	box-sizing: border-box;
+}
+
+.qatra-client-portal .page-content-wrapper,
+.qatra-client-portal .page_content {
+	padding: 0;
+}
+
+.qatra-client-portal main {
+	max-width: none;
+	padding: 0;
+}
+
+.qatra-client-portal .qatra-login-shell {
+	display: grid;
+	grid-template-columns: minmax(0, 1.1fr) minmax(360px, 0.9fr);
+	min-height: 100vh;
+}
+
+.qatra-client-portal .qatra-brand-panel {
+	background:
+		linear-gradient(135deg, rgba(11, 19, 36, 0.96), rgba(18, 29, 50, 0.98)),
+		linear-gradient(45deg, rgba(216, 184, 95, 0.2), transparent);
+	color: var(--qatra-white);
+	min-height: 100%;
+	overflow: hidden;
+	position: relative;
+}
+
+.qatra-client-portal .qatra-brand-panel__accent {
+	background: linear-gradient(180deg, var(--qatra-gold), rgba(216, 184, 95, 0));
+	height: 72%;
+	left: clamp(24px, 5vw, 72px);
+	position: absolute;
+	top: 0;
+	width: 3px;
+}
+
+.qatra-client-portal .qatra-brand-panel__content {
+	display: flex;
+	flex-direction: column;
+	gap: clamp(28px, 5vw, 64px);
+	min-height: 100vh;
+	padding: clamp(28px, 6vw, 76px);
+	position: relative;
+	z-index: 1;
+}
+
+.qatra-client-portal .qatra-logo-lockup {
+	align-items: center;
+	display: flex;
+	min-height: 76px;
+}
+
+.qatra-client-portal .qatra-logo-lockup__image {
+	display: block;
+	height: auto;
+	max-height: 76px;
+	max-width: 220px;
+	object-fit: contain;
+	width: auto;
+}
+
+.qatra-client-portal .qatra-logo-lockup__fallback {
+	border-left: 3px solid var(--qatra-gold);
+	display: grid;
+	gap: 2px;
+	padding-left: 16px;
+}
+
+.qatra-client-portal .qatra-logo-lockup__fallback span {
+	color: var(--qatra-white);
+	font-size: 2rem;
+	font-weight: 800;
+	line-height: 1;
+}
+
+.qatra-client-portal .qatra-logo-lockup__fallback small {
+	color: var(--qatra-gold);
+	font-size: 0.78rem;
+	font-weight: 700;
+	text-transform: uppercase;
+}
+
+.qatra-client-portal .qatra-brand-copy {
+	max-width: 720px;
+}
+
+.qatra-client-portal .qatra-eyebrow {
+	color: var(--qatra-gold);
+	font-size: 0.78rem;
+	font-weight: 800;
+	letter-spacing: 0;
+	margin: 0 0 14px;
+	text-transform: uppercase;
+}
+
+.qatra-client-portal .qatra-brand-copy h1 {
+	color: var(--qatra-white);
+	font-size: 4rem;
+	font-weight: 750;
+	line-height: 1.02;
+	margin: 0;
+	max-width: 780px;
+}
+
+.qatra-client-portal .qatra-brand-copy p {
+	color: rgba(255, 255, 255, 0.74);
+	font-size: 1.04rem;
+	line-height: 1.7;
+	margin: 22px 0 0;
+	max-width: 620px;
+}
+
+.qatra-client-portal .qatra-tag-list {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 10px;
+}
+
+.qatra-client-portal .qatra-tag-list span {
+	background: rgba(255, 255, 255, 0.08);
+	border: 1px solid rgba(216, 184, 95, 0.38);
+	border-radius: 999px;
+	color: rgba(255, 255, 255, 0.88);
+	font-size: 0.85rem;
+	font-weight: 650;
+	padding: 8px 14px;
+}
+
+.qatra-client-portal .qatra-building-visual {
+	align-items: end;
+	display: grid;
+	grid-template-columns: 0.8fr 1fr 0.65fr;
+	gap: 14px;
+	margin-top: auto;
+	max-width: 620px;
+	min-height: 210px;
+	position: relative;
+}
+
+.qatra-client-portal .qatra-skyline {
+	background:
+		linear-gradient(90deg, transparent 13%, rgba(216, 184, 95, 0.28) 13% 18%, transparent 18% 43%, rgba(216, 184, 95, 0.28) 43% 48%, transparent 48% 73%, rgba(216, 184, 95, 0.28) 73% 78%, transparent 78%),
+		linear-gradient(180deg, rgba(255, 255, 255, 0.2), rgba(255, 255, 255, 0.05));
+	border: 1px solid rgba(216, 184, 95, 0.22);
+	border-bottom: 4px solid var(--qatra-gold-dark);
+}
+
+.qatra-client-portal .qatra-skyline--one {
+	height: 128px;
+}
+
+.qatra-client-portal .qatra-skyline--two {
+	height: 186px;
+}
+
+.qatra-client-portal .qatra-skyline--three {
+	height: 104px;
+}
+
+.qatra-client-portal .qatra-crane {
+	height: 160px;
+	left: 36%;
+	position: absolute;
+	top: 4px;
+	width: 250px;
+}
+
+.qatra-client-portal .qatra-crane span {
+	background: rgba(216, 184, 95, 0.76);
+	display: block;
+	position: absolute;
+}
+
+.qatra-client-portal .qatra-crane span:nth-child(1) {
+	height: 150px;
+	left: 42px;
+	width: 3px;
+}
+
+.qatra-client-portal .qatra-crane span:nth-child(2) {
+	height: 3px;
+	left: 42px;
+	top: 16px;
+	width: 190px;
+}
+
+.qatra-client-portal .qatra-crane span:nth-child(3) {
+	height: 48px;
+	left: 218px;
+	top: 18px;
+	width: 2px;
+}
+
+.qatra-client-portal .qatra-form-panel {
+	align-items: center;
+	background:
+		linear-gradient(180deg, rgba(255, 255, 255, 0.94), rgba(247, 244, 238, 0.96));
+	display: flex;
+	justify-content: center;
+	padding: clamp(24px, 5vw, 72px);
+}
+
+.qatra-client-portal .qatra-login-card {
+	background: var(--qatra-white);
+	border: 1px solid rgba(11, 19, 36, 0.08);
+	border-radius: 8px;
+	box-shadow: 0 24px 60px rgba(11, 19, 36, 0.14);
+	max-width: 460px;
+	padding: clamp(28px, 4vw, 46px);
+	width: 100%;
+}
+
+.qatra-client-portal .qatra-secure-label {
+	align-items: center;
+	color: var(--qatra-gold-dark);
+	display: inline-flex;
+	font-size: 0.78rem;
+	font-weight: 800;
+	gap: 8px;
+	margin-bottom: 26px;
+	text-transform: uppercase;
+}
+
+.qatra-client-portal .qatra-secure-label span:first-child {
+	align-items: center;
+	background: rgba(216, 184, 95, 0.16);
+	border-radius: 50%;
+	display: inline-flex;
+	height: 24px;
+	justify-content: center;
+	width: 24px;
+}
+
+.qatra-client-portal .qatra-form-heading h2 {
+	color: var(--qatra-navy);
+	font-size: 2rem;
+	font-weight: 760;
+	line-height: 1.1;
+	margin: 0;
+}
+
+.qatra-client-portal .qatra-form-heading p {
+	color: var(--qatra-muted);
+	font-size: 0.98rem;
+	line-height: 1.6;
+	margin: 10px 0 28px;
+}
+
+.qatra-client-portal .qatra-login-form {
+	display: grid;
+	gap: 18px;
+}
+
+.qatra-client-portal .qatra-field {
+	display: grid;
+	gap: 8px;
+}
+
+.qatra-client-portal .qatra-field label,
+.qatra-client-portal .qatra-remember-me {
+	color: var(--qatra-ink);
+	font-size: 0.9rem;
+	font-weight: 680;
+}
+
+.qatra-client-portal .qatra-field input {
+	background: #fbfaf7;
+	border: 1px solid #ded7c9;
+	border-radius: 7px;
+	color: var(--qatra-ink);
+	font-size: 1rem;
+	min-height: 48px;
+	outline: none;
+	padding: 12px 14px;
+	transition: border-color 0.16s ease, box-shadow 0.16s ease, background 0.16s ease;
+	width: 100%;
+}
+
+.qatra-client-portal .qatra-field input:focus {
+	background: var(--qatra-white);
+	border-color: var(--qatra-gold-dark);
+	box-shadow: 0 0 0 3px rgba(216, 184, 95, 0.2);
+}
+
+.qatra-client-portal .qatra-field-error {
+	color: #b42318;
+	font-size: 0.82rem;
+	line-height: 1.4;
+	margin: 0;
+	min-height: 0;
+}
+
+.qatra-client-portal .qatra-field.qatra-field--invalid input {
+	border-color: #d92d20;
+}
+
+.qatra-client-portal .qatra-form-message {
+	border-radius: 7px;
+	font-size: 0.9rem;
+	line-height: 1.45;
+	margin-bottom: 18px;
+	padding: 12px 14px;
+}
+
+.qatra-client-portal .qatra-form-message--error {
+	background: #fff1f0;
+	border: 1px solid #fecdca;
+	color: #912018;
+}
+
+.qatra-client-portal .qatra-form-message--success {
+	background: #ecfdf3;
+	border: 1px solid #abefc6;
+	color: #067647;
+}
+
+.qatra-client-portal .qatra-form-message a {
+	color: inherit;
+	display: inline-block;
+	font-weight: 750;
+	margin-top: 8px;
+	text-decoration: underline;
+}
+
+.qatra-client-portal .qatra-form-options {
+	align-items: center;
+	display: flex;
+	gap: 16px;
+	justify-content: space-between;
+	margin-top: 2px;
+}
+
+.qatra-client-portal .qatra-remember-me {
+	align-items: center;
+	display: inline-flex;
+	gap: 8px;
+	margin: 0;
+}
+
+.qatra-client-portal .qatra-remember-me input {
+	accent-color: var(--qatra-gold-dark);
+	height: 16px;
+	width: 16px;
+}
+
+.qatra-client-portal .qatra-form-options a {
+	color: var(--qatra-gold-dark);
+	font-size: 0.9rem;
+	font-weight: 750;
+	text-decoration: none;
+}
+
+.qatra-client-portal .qatra-form-options a:hover {
+	color: var(--qatra-navy);
+	text-decoration: underline;
+}
+
+.qatra-client-portal .qatra-link-button {
+	background: transparent;
+	border: 0;
+	color: var(--qatra-gold-dark);
+	cursor: pointer;
+	font-size: 0.9rem;
+	font-weight: 750;
+	padding: 0;
+	text-align: left;
+}
+
+.qatra-client-portal .qatra-link-button:hover {
+	color: var(--qatra-navy);
+	text-decoration: underline;
+}
+
+.qatra-client-portal .qatra-link-button--standalone {
+	justify-self: center;
+	margin-top: -2px;
+}
+
+.qatra-client-portal .qatra-sign-in-button,
+.qatra-client-portal .qatra-sign-out-button {
+	align-items: center;
+	background: linear-gradient(180deg, var(--qatra-gold), var(--qatra-gold-dark));
+	border: 0;
+	border-radius: 7px;
+	color: var(--qatra-navy);
+	display: inline-flex;
+	font-size: 1rem;
+	font-weight: 800;
+	justify-content: center;
+	min-height: 50px;
+	padding: 13px 18px;
+	text-decoration: none;
+	transition: filter 0.16s ease, transform 0.16s ease;
+	width: 100%;
+}
+
+.qatra-client-portal .qatra-sign-in-button:hover,
+.qatra-client-portal .qatra-sign-out-button:hover {
+	color: var(--qatra-navy);
+	filter: brightness(0.98);
+	text-decoration: none;
+	transform: translateY(-1px);
+}
+
+.qatra-client-portal .qatra-sign-in-button:disabled {
+	cursor: not-allowed;
+	filter: grayscale(0.2);
+	opacity: 0.7;
+	transform: none;
+}
+
+.qatra-client-portal .qatra-dashboard-placeholder {
+	align-items: center;
+	display: flex;
+	padding: clamp(24px, 5vw, 72px);
+}
+
+.qatra-client-portal .qatra-dashboard-shell {
+	margin: 0 auto;
+	max-width: 980px;
+	width: 100%;
+}
+
+.qatra-client-portal .qatra-dashboard-panel {
+	align-items: center;
+	background: var(--qatra-white);
+	border: 1px solid rgba(11, 19, 36, 0.08);
+	border-radius: 8px;
+	box-shadow: 0 24px 60px rgba(11, 19, 36, 0.12);
+	display: flex;
+	gap: 24px;
+	justify-content: space-between;
+	padding: clamp(28px, 5vw, 54px);
+}
+
+.qatra-client-portal .qatra-dashboard-panel h1 {
+	color: var(--qatra-navy);
+	font-size: 2.8rem;
+	font-weight: 760;
+	line-height: 1.12;
+	margin: 0;
+}
+
+.qatra-client-portal .qatra-dashboard-panel p:last-child {
+	color: var(--qatra-muted);
+	font-size: 1rem;
+	margin: 12px 0 0;
+}
+
+.qatra-client-portal .qatra-sign-out-button {
+	max-width: 160px;
+}
+
+.qatra-client-portal .qatra-portal-shell {
+	background: var(--qatra-cream);
+	min-height: 100vh;
+}
+
+.qatra-client-portal .qatra-portal-sidebar {
+	background: var(--qatra-white);
+	border-right: 1px solid var(--qatra-border);
+	box-shadow: 10px 0 30px rgba(11, 19, 36, 0.06);
+	height: 100vh;
+	left: 0;
+	position: fixed;
+	top: 0;
+	transition: width 0.18s ease;
+	width: 270px;
+	z-index: 40;
+}
+
+.qatra-client-portal .qatra-portal-sidebar-inner {
+	display: flex;
+	flex-direction: column;
+	gap: 28px;
+	height: 100%;
+	padding: 26px 20px;
+}
+
+.qatra-client-portal .qatra-portal-sidebar-top {
+	align-items: flex-start;
+	display: flex;
+	gap: 12px;
+	justify-content: space-between;
+}
+
+.qatra-client-portal .qatra-portal-logo {
+	align-items: center;
+	display: flex;
+	min-height: 64px;
+	min-width: 0;
+	text-decoration: none;
+}
+
+.qatra-client-portal .qatra-portal-logo img {
+	background: var(--qatra-navy);
+	display: block;
+	height: auto;
+	max-height: 64px;
+	max-width: 190px;
+	object-fit: contain;
+	padding: 10px 12px;
+	width: auto;
+}
+
+.qatra-client-portal .qatra-portal-collapse-button {
+	align-items: center;
+	background: var(--qatra-soft);
+	border: 1px solid var(--qatra-border);
+	border-radius: 8px;
+	color: var(--qatra-navy);
+	cursor: pointer;
+	display: inline-flex;
+	flex: 0 0 auto;
+	font-size: 0.72rem;
+	font-weight: 900;
+	height: 34px;
+	justify-content: center;
+	margin-top: 8px;
+	padding: 0;
+	width: 34px;
+}
+
+.qatra-client-portal .qatra-portal-collapse-button:hover {
+	background: var(--qatra-cream);
+	border-color: var(--qatra-gold-dark);
+}
+
+.qatra-client-portal .qatra-portal-nav {
+	display: grid;
+	gap: 8px;
+}
+
+.qatra-client-portal .qatra-portal-nav-link {
+	align-items: center;
+	border-radius: 8px;
+	color: var(--qatra-ink);
+	display: flex;
+	font-size: 0.96rem;
+	font-weight: 700;
+	min-height: 44px;
+	padding: 10px 14px 10px 18px;
+	position: relative;
+	text-decoration: none;
+	transition: background 0.16s ease, color 0.16s ease;
+}
+
+.qatra-client-portal .qatra-portal-nav-link:hover {
+	background: var(--qatra-cream);
+	color: var(--qatra-navy);
+	text-decoration: none;
+}
+
+.qatra-client-portal .qatra-portal-nav-link--active {
+	background: var(--qatra-navy);
+	color: var(--qatra-white);
+}
+
+.qatra-client-portal .qatra-portal-nav-link--active::before {
+	background: var(--qatra-gold);
+	border-radius: 999px;
+	content: "";
+	height: 24px;
+	left: 7px;
+	position: absolute;
+	top: 50%;
+	transform: translateY(-50%);
+	width: 3px;
+}
+
+.qatra-client-portal .qatra-portal-nav-link--active:hover {
+	background: var(--qatra-navy);
+	color: var(--qatra-white);
+}
+
+.qatra-client-portal .qatra-portal-user {
+	border-top: 1px solid var(--qatra-border);
+	display: grid;
+	gap: 6px;
+	margin-top: auto;
+	padding-top: 18px;
+}
+
+.qatra-client-portal .qatra-portal-user-name {
+	color: var(--qatra-navy);
+	font-size: 0.96rem;
+	font-weight: 800;
+	line-height: 1.35;
+	overflow-wrap: anywhere;
+}
+
+.qatra-client-portal .qatra-portal-user-company {
+	color: var(--qatra-muted);
+	font-size: 0.85rem;
+	font-weight: 650;
+	line-height: 1.4;
+	overflow-wrap: anywhere;
+}
+
+.qatra-client-portal .qatra-portal-signout {
+	background: var(--qatra-soft);
+	border: 1px solid var(--qatra-border);
+	border-radius: 8px;
+	color: var(--qatra-navy);
+	cursor: pointer;
+	font-size: 0.9rem;
+	font-weight: 800;
+	margin-top: 10px;
+	min-height: 42px;
+	padding: 10px 14px;
+	text-align: center;
+	transition: border-color 0.16s ease, background 0.16s ease;
+	width: 100%;
+}
+
+.qatra-client-portal .qatra-portal-signout:hover {
+	background: var(--qatra-cream);
+	border-color: var(--qatra-gold-dark);
+}
+
+.qatra-client-portal .qatra-portal-content {
+	margin-left: 270px;
+	min-height: 100vh;
+	transition: margin-left 0.18s ease;
+}
+
+.qatra-client-portal .qatra-portal-main {
+	padding: 40px;
+}
+
+.qatra-client-portal.qatra-portal-sidebar-collapsed .qatra-portal-sidebar {
+	width: 76px;
+}
+
+.qatra-client-portal.qatra-portal-sidebar-collapsed .qatra-portal-sidebar-inner {
+	align-items: center;
+	padding-left: 12px;
+	padding-right: 12px;
+}
+
+.qatra-client-portal.qatra-portal-sidebar-collapsed .qatra-portal-sidebar-top {
+	align-items: center;
+	flex-direction: column;
+}
+
+.qatra-client-portal.qatra-portal-sidebar-collapsed .qatra-portal-logo {
+	min-height: 46px;
+	overflow: hidden;
+	width: 48px;
+}
+
+.qatra-client-portal.qatra-portal-sidebar-collapsed .qatra-portal-logo img {
+	max-height: 46px;
+	max-width: 120px;
+	padding: 8px;
+	transform: translateX(-8px);
+}
+
+.qatra-client-portal.qatra-portal-sidebar-collapsed .qatra-portal-collapse-button {
+	margin-top: 0;
+}
+
+.qatra-client-portal.qatra-portal-sidebar-collapsed .qatra-portal-nav,
+.qatra-client-portal.qatra-portal-sidebar-collapsed .qatra-portal-user,
+.qatra-client-portal.qatra-portal-sidebar-collapsed .qatra-portal-signout {
+	width: 100%;
+}
+
+.qatra-client-portal.qatra-portal-sidebar-collapsed .qatra-portal-nav-link {
+	justify-content: center;
+	padding-left: 0;
+	padding-right: 0;
+}
+
+.qatra-client-portal.qatra-portal-sidebar-collapsed .qatra-portal-nav-link span,
+.qatra-client-portal.qatra-portal-sidebar-collapsed .qatra-portal-user-name,
+.qatra-client-portal.qatra-portal-sidebar-collapsed .qatra-portal-user-company,
+.qatra-client-portal.qatra-portal-sidebar-collapsed .qatra-portal-signout {
+	font-size: 0;
+	overflow: hidden;
+}
+
+.qatra-client-portal.qatra-portal-sidebar-collapsed .qatra-portal-nav-link span::before {
+	content: attr(data-qatra-nav-initial);
+	font-size: 0.95rem;
+}
+
+.qatra-client-portal.qatra-portal-sidebar-collapsed .qatra-portal-signout::before {
+	content: "Out";
+	font-size: 0.72rem;
+}
+
+.qatra-client-portal.qatra-portal-sidebar-collapsed .qatra-portal-content {
+	margin-left: 76px;
+}
+
+.qatra-client-portal .qatra-portal-mobile-header {
+	align-items: center;
+	background: var(--qatra-white);
+	border-bottom: 1px solid var(--qatra-border);
+	display: none;
+	gap: 14px;
+	min-height: 68px;
+	padding: 12px 18px;
+	position: sticky;
+	top: 0;
+	z-index: 30;
+}
+
+.qatra-client-portal .qatra-portal-mobile-logo {
+	background: var(--qatra-navy);
+	height: 42px;
+	object-fit: contain;
+	padding: 6px 8px;
+	width: 118px;
+}
+
+.qatra-client-portal .qatra-portal-mobile-title {
+	color: var(--qatra-navy);
+	font-size: 0.98rem;
+	font-weight: 800;
+	margin-right: auto;
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.qatra-client-portal .qatra-portal-menu-button {
+	align-items: center;
+	background: var(--qatra-navy);
+	border: 0;
+	border-radius: 8px;
+	cursor: pointer;
+	display: inline-flex;
+	flex-direction: column;
+	gap: 4px;
+	height: 42px;
+	justify-content: center;
+	padding: 0;
+	width: 42px;
+}
+
+.qatra-client-portal .qatra-portal-menu-button span {
+	background: var(--qatra-white);
+	border-radius: 999px;
+	display: block;
+	height: 2px;
+	width: 18px;
+}
+
+.qatra-client-portal .qatra-portal-backdrop {
+	background: rgba(11, 19, 36, 0.48);
+	display: none;
+	inset: 0;
+	position: fixed;
+	z-index: 35;
+}
+
+.qatra-client-portal .qatra-portal-hero {
+	background:
+		linear-gradient(135deg, rgba(11, 19, 36, 0.98), rgba(18, 29, 50, 0.96)),
+		linear-gradient(45deg, rgba(216, 184, 95, 0.2), transparent);
+	border-radius: 8px;
+	box-shadow: 0 20px 48px rgba(11, 19, 36, 0.12);
+	color: var(--qatra-white);
+	overflow: hidden;
+	padding: 42px;
+	position: relative;
+}
+
+.qatra-client-portal .qatra-portal-hero::after {
+	background: var(--qatra-gold);
+	content: "";
+	height: 120px;
+	position: absolute;
+	right: 38px;
+	top: 0;
+	width: 3px;
+}
+
+.qatra-client-portal .qatra-portal-hero h1 {
+	color: var(--qatra-white);
+	font-size: 2.8rem;
+	font-weight: 780;
+	line-height: 1.12;
+	margin: 0;
+	max-width: 760px;
+}
+
+.qatra-client-portal .qatra-portal-hero p:last-child {
+	color: rgba(255, 255, 255, 0.76);
+	font-size: 1.04rem;
+	line-height: 1.7;
+	margin: 14px 0 0;
+	max-width: 620px;
+}
+
+.qatra-client-portal .qatra-project-grid {
+	display: grid;
+	gap: 18px;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	margin-top: 24px;
+}
+
+.qatra-client-portal .qatra-project-card {
+	background: var(--qatra-white);
+	border: 1px solid var(--qatra-border);
+	border-radius: 8px;
+	box-shadow: 0 16px 36px rgba(11, 19, 36, 0.08);
+	color: var(--qatra-ink);
+	display: grid;
+	gap: 18px;
+	min-width: 0;
+	padding: 24px;
+	text-decoration: none;
+	transition: border-color 0.16s ease, box-shadow 0.16s ease, transform 0.16s ease;
+}
+
+.qatra-client-portal .qatra-project-card:hover {
+	border-color: rgba(200, 162, 74, 0.55);
+	box-shadow: 0 20px 42px rgba(11, 19, 36, 0.12);
+	color: var(--qatra-ink);
+	text-decoration: none;
+	transform: translateY(-2px);
+}
+
+.qatra-client-portal .qatra-project-card-header,
+.qatra-client-portal .qatra-project-overview-header {
+	align-items: flex-start;
+	display: flex;
+	gap: 18px;
+	justify-content: space-between;
+}
+
+.qatra-client-portal .qatra-project-card-header span,
+.qatra-client-portal .qatra-project-progress span,
+.qatra-client-portal .qatra-project-meta dt,
+.qatra-client-portal .qatra-project-detail-grid span,
+.qatra-client-portal .qatra-project-stats span {
+	color: var(--qatra-muted);
+	display: block;
+	font-size: 0.78rem;
+	font-weight: 800;
+	margin-bottom: 5px;
+	text-transform: uppercase;
+}
+
+.qatra-client-portal .qatra-project-card-header h2,
+.qatra-client-portal .qatra-project-overview-header h2 {
+	color: var(--qatra-navy);
+	font-size: 1.25rem;
+	font-weight: 800;
+	line-height: 1.25;
+	margin: 0;
+	overflow-wrap: anywhere;
+}
+
+.qatra-client-portal .qatra-project-card-header em {
+	background: var(--qatra-cream);
+	border: 1px solid var(--qatra-border);
+	border-radius: 999px;
+	color: var(--qatra-navy);
+	flex: 0 0 auto;
+	font-size: 0.78rem;
+	font-style: normal;
+	font-weight: 800;
+	padding: 6px 10px;
+}
+
+.qatra-client-portal .qatra-project-progress {
+	display: grid;
+	gap: 8px;
+}
+
+.qatra-client-portal .qatra-project-progress strong {
+	color: var(--qatra-navy);
+	font-size: 1.4rem;
+	font-weight: 850;
+}
+
+.qatra-client-portal .qatra-project-progress-bar {
+	background: #ece7dc;
+	border-radius: 999px;
+	height: 8px;
+	overflow: hidden;
+}
+
+.qatra-client-portal .qatra-project-progress-bar span {
+	background: linear-gradient(90deg, var(--qatra-gold-dark), var(--qatra-gold));
+	display: block;
+	height: 100%;
+}
+
+.qatra-client-portal .qatra-project-meta {
+	display: grid;
+	gap: 12px;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	margin: 0;
+}
+
+.qatra-client-portal .qatra-project-meta dd {
+	color: var(--qatra-ink);
+	font-size: 0.95rem;
+	font-weight: 700;
+	margin: 0;
+	overflow-wrap: anywhere;
+}
+
+.qatra-client-portal .qatra-project-overview,
+.qatra-client-portal .qatra-empty-state {
+	background: var(--qatra-white);
+	border: 1px solid var(--qatra-border);
+	border-radius: 8px;
+	box-shadow: 0 16px 36px rgba(11, 19, 36, 0.08);
+	margin-top: 24px;
+	padding: 28px;
+}
+
+.qatra-client-portal .qatra-project-detail-grid {
+	display: grid;
+	gap: 18px;
+	grid-template-columns: repeat(4, minmax(0, 1fr));
+	margin-top: 24px;
+}
+
+.qatra-client-portal .qatra-project-detail-grid strong {
+	color: var(--qatra-navy);
+	display: block;
+	font-size: 0.98rem;
+	font-weight: 800;
+	line-height: 1.35;
+	overflow-wrap: anywhere;
+}
+
+.qatra-client-portal .qatra-project-stats {
+	display: grid;
+	gap: 18px;
+	grid-template-columns: repeat(3, minmax(0, 1fr));
+	margin-top: 18px;
+}
+
+.qatra-client-portal .qatra-client-summary {
+	grid-template-columns: repeat(4, minmax(0, 1fr));
+	margin-top: 24px;
+}
+
+.qatra-client-portal .qatra-project-stats div {
+	background: var(--qatra-white);
+	border: 1px solid var(--qatra-border);
+	border-radius: 8px;
+	padding: 22px;
+}
+
+.qatra-client-portal .qatra-project-stats strong {
+	color: var(--qatra-navy);
+	display: block;
+	font-size: 2rem;
+	font-weight: 850;
+	line-height: 1;
+}
+
+.qatra-client-portal .qatra-portal-action {
+	background: var(--qatra-navy);
+	border-radius: 8px;
+	color: var(--qatra-white);
+	display: inline-flex;
+	font-size: 0.9rem;
+	font-weight: 800;
+	min-height: 42px;
+	padding: 10px 14px;
+	text-decoration: none;
+}
+
+.qatra-client-portal .qatra-portal-action:hover {
+	background: var(--qatra-navy-soft);
+	color: var(--qatra-white);
+	text-decoration: none;
+}
+
+.qatra-client-portal .qatra-empty-state h2 {
+	color: var(--qatra-navy);
+	font-size: 1.35rem;
+	font-weight: 800;
+	margin: 0;
+}
+
+.qatra-client-portal .qatra-empty-state p {
+	color: var(--qatra-muted);
+	margin: 8px 0 0;
+}
+
+.qatra-client-portal .qatra-project-switcher {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 10px;
+	margin-top: 24px;
+}
+
+.qatra-client-portal .qatra-project-switcher-link {
+	background: var(--qatra-white);
+	border: 1px solid var(--qatra-border);
+	border-radius: 8px;
+	color: var(--qatra-muted);
+	font-size: 0.9rem;
+	font-weight: 800;
+	padding: 10px 14px;
+	text-decoration: none;
+}
+
+.qatra-client-portal .qatra-project-switcher-link:hover,
+.qatra-client-portal .qatra-project-switcher-link--active {
+	background: var(--qatra-navy);
+	border-color: var(--qatra-navy);
+	color: var(--qatra-white);
+	text-decoration: none;
+}
+
+.qatra-client-portal .qatra-financial-grid,
+.qatra-client-portal .qatra-financial-progress {
+	display: grid;
+	gap: 18px;
+	grid-template-columns: repeat(3, minmax(0, 1fr));
+	margin-top: 24px;
+}
+
+.qatra-client-portal .qatra-financial-grid--four {
+	grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.qatra-client-portal .qatra-financial-grid div,
+.qatra-client-portal .qatra-financial-progress div {
+	background: #f8f5ef;
+	border: 1px solid var(--qatra-border);
+	border-radius: 8px;
+	padding: 18px;
+}
+
+.qatra-client-portal .qatra-financial-grid span,
+.qatra-client-portal .qatra-financial-progress span,
+.qatra-client-portal .qatra-financial-row--head span,
+.qatra-client-portal .qatra-statement-item span {
+	color: var(--qatra-muted);
+	display: block;
+	font-size: 0.78rem;
+	font-weight: 800;
+	text-transform: uppercase;
+}
+
+.qatra-client-portal .qatra-financial-grid strong,
+.qatra-client-portal .qatra-financial-progress strong {
+	color: var(--qatra-navy);
+	display: block;
+	font-size: 1.18rem;
+	font-weight: 850;
+	margin-top: 6px;
+	overflow-wrap: anywhere;
+}
+
+.qatra-client-portal .qatra-financial-section {
+	background: var(--qatra-white);
+	border: 1px solid var(--qatra-border);
+	border-radius: 8px;
+	box-shadow: 0 16px 36px rgba(11, 19, 36, 0.08);
+	margin-top: 24px;
+	padding: 28px;
+}
+
+.qatra-client-portal .qatra-financial-table {
+	border: 1px solid var(--qatra-border);
+	border-radius: 8px;
+	margin-top: 20px;
+	overflow: hidden;
+}
+
+.qatra-client-portal .qatra-financial-row {
+	display: grid;
+	gap: 14px;
+	grid-template-columns: 1.15fr 0.8fr 1.4fr 1fr 1fr 1fr 0.85fr;
+	padding: 14px 16px;
+}
+
+.qatra-client-portal .qatra-financial-row--six {
+	grid-template-columns: 0.8fr 0.9fr 1.05fr 1.5fr 1fr 0.85fr;
+}
+
+.qatra-client-portal .qatra-financial-row + .qatra-financial-row {
+	border-top: 1px solid var(--qatra-border);
+}
+
+.qatra-client-portal .qatra-financial-row--head {
+	background: #f8f5ef;
+}
+
+.qatra-client-portal .qatra-financial-row:not(.qatra-financial-row--head) span {
+	color: var(--qatra-ink);
+	font-size: 0.9rem;
+	font-weight: 700;
+	overflow-wrap: anywhere;
+}
+
+.qatra-client-portal .qatra-statement-list {
+	display: grid;
+	gap: 12px;
+	margin-top: 20px;
+}
+
+.qatra-client-portal .qatra-statement-item {
+	align-items: center;
+	border: 1px solid var(--qatra-border);
+	border-radius: 8px;
+	display: grid;
+	gap: 14px;
+	grid-template-columns: 0.85fr 0.9fr minmax(0, 1.6fr) 1fr;
+	padding: 16px;
+}
+
+.qatra-client-portal .qatra-statement-item strong {
+	color: var(--qatra-navy);
+	font-weight: 850;
+}
+
+.qatra-client-portal .qatra-statement-item p {
+	color: var(--qatra-ink);
+	font-size: 0.92rem;
+	font-weight: 700;
+	margin: 0;
+	overflow-wrap: anywhere;
+}
+
+.qatra-client-portal .qatra-statement-item em {
+	color: var(--qatra-navy);
+	font-style: normal;
+	font-weight: 850;
+	overflow-wrap: anywhere;
+	text-align: right;
+}
+
+.qatra-client-portal .qatra-empty-state--compact {
+	box-shadow: none;
+	margin-top: 20px;
+	padding: 18px;
+}
+
+.qatra-client-portal .qatra-journey {
+	display: grid;
+	gap: 12px;
+	grid-template-columns: repeat(5, minmax(0, 1fr));
+	margin-top: 20px;
+}
+
+.qatra-client-portal .qatra-journey-step {
+	background: #f8f5ef;
+	border: 1px solid var(--qatra-border);
+	border-radius: 8px;
+	padding: 16px;
+}
+
+.qatra-client-portal .qatra-journey-step span {
+	color: var(--qatra-muted);
+	display: block;
+	font-size: 0.75rem;
+	font-weight: 800;
+	text-transform: uppercase;
+}
+
+.qatra-client-portal .qatra-journey-step strong {
+	color: var(--qatra-navy);
+	display: block;
+	font-size: 0.98rem;
+	font-weight: 850;
+	margin-top: 6px;
+	overflow-wrap: anywhere;
+}
+
+.qatra-client-portal .qatra-dashboard-command-hero {
+	background: var(--qatra-navy);
+	border-radius: 8px;
+	box-shadow: 0 30px 90px rgba(11, 19, 36, 0.24);
+	color: var(--qatra-white);
+	overflow: hidden;
+	padding: 44px;
+	position: relative;
+}
+
+.qatra-client-portal .qatra-dashboard-command-hero::before {
+	background: linear-gradient(180deg, rgba(216, 184, 95, 0.9), rgba(216, 184, 95, 0));
+	content: "";
+	height: 70%;
+	position: absolute;
+	right: 38px;
+	top: 0;
+	width: 3px;
+}
+
+.qatra-client-portal .qatra-dashboard-hero-grid {
+	align-items: center;
+	display: grid;
+	gap: 48px;
+	grid-template-columns: minmax(0, 1.2fr) minmax(320px, 0.8fr);
+	position: relative;
+	z-index: 1;
+}
+
+.qatra-client-portal .qatra-section-kicker {
+	align-items: center;
+	display: flex;
+	gap: 14px;
+	margin-bottom: 18px;
+}
+
+.qatra-client-portal .qatra-section-kicker span {
+	background: var(--qatra-gold);
+	display: block;
+	height: 1px;
+	width: 48px;
+}
+
+.qatra-client-portal .qatra-section-kicker p {
+	color: var(--qatra-gold-dark);
+	font-size: 0.75rem;
+	font-weight: 850;
+	letter-spacing: 0;
+	margin: 0;
+	text-transform: uppercase;
+}
+
+.qatra-client-portal .qatra-section-kicker--light p {
+	color: var(--qatra-gold);
+}
+
+.qatra-client-portal .qatra-dashboard-hero-copy h1 {
+	color: var(--qatra-white);
+	font-size: 3.1rem;
+	font-weight: 820;
+	line-height: 1.12;
+	margin: 0;
+	max-width: 760px;
+	overflow-wrap: anywhere;
+}
+
+.qatra-client-portal .qatra-dashboard-hero-text {
+	color: rgba(255, 255, 255, 0.66);
+	font-size: 1rem;
+	line-height: 1.8;
+	margin: 24px 0 0;
+	max-width: 700px;
+}
+
+.qatra-client-portal .qatra-dashboard-pill-row {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 14px;
+	margin-top: 32px;
+}
+
+.qatra-client-portal .qatra-dashboard-info-pill {
+	background: rgba(255, 255, 255, 0.06);
+	border: 1px solid rgba(255, 255, 255, 0.14);
+	border-radius: 999px;
+	display: inline-flex;
+	gap: 8px;
+	max-width: 100%;
+	padding: 12px 18px;
+}
+
+.qatra-client-portal .qatra-dashboard-info-pill span {
+	color: rgba(255, 255, 255, 0.5);
+	font-size: 0.84rem;
+	font-weight: 750;
+}
+
+.qatra-client-portal .qatra-dashboard-info-pill strong {
+	color: var(--qatra-white);
+	font-size: 0.84rem;
+	font-weight: 850;
+	overflow-wrap: anywhere;
+}
+
+.qatra-client-portal .qatra-dashboard-hero-actions {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 14px;
+	margin-top: 36px;
+}
+
+.qatra-client-portal .qatra-dashboard-btn {
+	align-items: center;
+	border-radius: 999px;
+	display: inline-flex;
+	font-size: 0.95rem;
+	font-weight: 850;
+	justify-content: center;
+	min-height: 50px;
+	padding: 14px 24px;
+	text-decoration: none;
+}
+
+.qatra-client-portal .qatra-dashboard-btn:hover {
+	text-decoration: none;
+}
+
+.qatra-client-portal .qatra-dashboard-btn--primary {
+	background: var(--qatra-gold);
+	color: var(--qatra-navy);
+}
+
+.qatra-client-portal .qatra-dashboard-btn--primary:hover {
+	color: var(--qatra-navy);
+	filter: brightness(0.98);
+}
+
+.qatra-client-portal .qatra-dashboard-btn--secondary {
+	border: 1px solid rgba(255, 255, 255, 0.18);
+	color: rgba(255, 255, 255, 0.86);
+}
+
+.qatra-client-portal .qatra-dashboard-btn--secondary:hover {
+	background: rgba(255, 255, 255, 0.08);
+	color: var(--qatra-white);
+}
+
+.qatra-client-portal .qatra-dashboard-progress-panel {
+	background: rgba(255, 255, 255, 0.08);
+	border: 1px solid rgba(255, 255, 255, 0.12);
+	border-radius: 8px;
+	padding: 28px;
+}
+
+.qatra-client-portal .qatra-dashboard-progress-top {
+	align-items: center;
+	display: flex;
+	gap: 24px;
+	justify-content: space-between;
+}
+
+.qatra-client-portal .qatra-dashboard-muted {
+	color: rgba(255, 255, 255, 0.54);
+	font-size: 0.9rem;
+	line-height: 1.7;
+	margin: 0;
+}
+
+.qatra-client-portal .qatra-dashboard-progress-panel h2 {
+	color: var(--qatra-white);
+	font-size: 2.2rem;
+	font-weight: 850;
+	line-height: 1;
+	margin: 10px 0 14px;
+}
+
+.qatra-client-portal .qatra-dashboard-circle-progress {
+	--value: calc(var(--progress) * 3.6deg);
+	background: conic-gradient(var(--qatra-gold) var(--value), rgba(255, 255, 255, 0.14) 0deg);
+	border-radius: 50%;
+	display: grid;
+	flex: 0 0 auto;
+	height: 132px;
+	place-items: center;
+	width: 132px;
+}
+
+.qatra-client-portal .qatra-dashboard-circle-progress div {
+	background: var(--qatra-navy);
+	border-radius: 50%;
+	display: grid;
+	height: 92px;
+	place-items: center;
+	width: 92px;
+}
+
+.qatra-client-portal .qatra-dashboard-circle-progress strong {
+	color: var(--qatra-gold);
+	font-size: 1.55rem;
+	font-weight: 850;
+}
+
+.qatra-client-portal .qatra-dashboard-milestone-card {
+	background: rgba(255, 255, 255, 0.07);
+	border: 1px solid rgba(255, 255, 255, 0.1);
+	border-radius: 8px;
+	margin-top: 28px;
+	padding: 24px;
+}
+
+.qatra-client-portal .qatra-dashboard-milestone-card p {
+	color: var(--qatra-gold);
+	font-size: 0.76rem;
+	font-weight: 850;
+	letter-spacing: 0;
+	margin: 0;
+	text-transform: uppercase;
+}
+
+.qatra-client-portal .qatra-dashboard-milestone-card h3 {
+	color: var(--qatra-white);
+	font-size: 1.35rem;
+	font-weight: 850;
+	line-height: 1.3;
+	margin: 14px 0 10px;
+	overflow-wrap: anywhere;
+}
+
+.qatra-client-portal .qatra-dashboard-milestone-card span {
+	color: rgba(255, 255, 255, 0.58);
+	display: block;
+	font-size: 0.94rem;
+	line-height: 1.6;
+}
+
+.qatra-client-portal .qatra-dashboard-project-switcher {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 12px;
+	margin-top: 28px;
+}
+
+.qatra-client-portal .qatra-dashboard-project-tab {
+	background: var(--qatra-white);
+	border: 1px solid var(--qatra-border);
+	border-radius: 8px;
+	color: var(--qatra-ink);
+	display: grid;
+	gap: 4px;
+	min-width: 210px;
+	padding: 14px 18px;
+	text-decoration: none;
+	transition: border-color 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease;
+}
+
+.qatra-client-portal .qatra-dashboard-project-tab span {
+	color: var(--qatra-muted);
+	font-size: 0.76rem;
+	font-weight: 850;
+	text-transform: uppercase;
+}
+
+.qatra-client-portal .qatra-dashboard-project-tab strong {
+	color: var(--qatra-navy);
+	font-size: 0.96rem;
+	font-weight: 850;
+	overflow-wrap: anywhere;
+}
+
+.qatra-client-portal .qatra-dashboard-project-tab:hover,
+.qatra-client-portal .qatra-dashboard-project-tab--active {
+	background: var(--qatra-navy);
+	border-color: var(--qatra-navy);
+	box-shadow: 0 14px 34px rgba(11, 19, 36, 0.15);
+	color: var(--qatra-white);
+	text-decoration: none;
+	transform: translateY(-2px);
+}
+
+.qatra-client-portal .qatra-dashboard-project-tab:hover span,
+.qatra-client-portal .qatra-dashboard-project-tab--active span {
+	color: rgba(255, 255, 255, 0.58);
+}
+
+.qatra-client-portal .qatra-dashboard-project-tab:hover strong,
+.qatra-client-portal .qatra-dashboard-project-tab--active strong {
+	color: var(--qatra-white);
+}
+
+.qatra-client-portal .qatra-dashboard-portfolio-grid,
+.qatra-client-portal .qatra-dashboard-summary-grid,
+.qatra-client-portal .qatra-dashboard-financial-grid {
+	display: grid;
+	gap: 22px;
+	margin-top: 28px;
+}
+
+.qatra-client-portal .qatra-dashboard-portfolio-grid {
+	grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.qatra-client-portal .qatra-dashboard-summary-grid {
+	grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.qatra-client-portal .qatra-dashboard-financial-grid {
+	grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.qatra-client-portal .qatra-dashboard-metric,
+.qatra-client-portal .qatra-dashboard-summary-card,
+.qatra-client-portal .qatra-dashboard-white-card,
+.qatra-client-portal .qatra-dashboard-financial-card,
+.qatra-client-portal .qatra-dashboard-empty-state {
+	background: var(--qatra-white);
+	border: 1px solid var(--qatra-border);
+	border-radius: 8px;
+	box-shadow: 0 12px 32px rgba(15, 23, 42, 0.06);
+}
+
+.qatra-client-portal .qatra-dashboard-metric {
+	display: grid;
+	gap: 18px;
+	min-height: 132px;
+	padding: 24px;
+}
+
+.qatra-client-portal .qatra-dashboard-metric span,
+.qatra-client-portal .qatra-dashboard-financial-card span,
+.qatra-client-portal .qatra-dashboard-snapshot-list span,
+.qatra-client-portal .qatra-dashboard-activity-item span,
+.qatra-client-portal .qatra-dashboard-project-info-grid span {
+	color: var(--qatra-muted);
+	font-size: 0.84rem;
+	font-weight: 800;
+}
+
+.qatra-client-portal .qatra-dashboard-metric strong,
+.qatra-client-portal .qatra-dashboard-financial-card strong {
+	color: var(--qatra-navy);
+	font-size: 1.8rem;
+	font-weight: 850;
+	line-height: 1.12;
+	overflow-wrap: anywhere;
+}
+
+.qatra-client-portal .qatra-dashboard-metric--dark {
+	background: var(--qatra-navy);
+	border-color: var(--qatra-navy);
+}
+
+.qatra-client-portal .qatra-dashboard-metric--dark span {
+	color: rgba(255, 255, 255, 0.56);
+}
+
+.qatra-client-portal .qatra-dashboard-metric--dark strong {
+	color: var(--qatra-gold);
+}
+
+.qatra-client-portal .qatra-dashboard-summary-card {
+	color: var(--qatra-ink);
+	min-height: 160px;
+	padding: 28px;
+	position: relative;
+	text-decoration: none;
+	transition: border-color 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease;
+}
+
+.qatra-client-portal .qatra-dashboard-summary-card:hover {
+	border-color: rgba(216, 184, 95, 0.75);
+	box-shadow: 0 18px 40px rgba(15, 23, 42, 0.1);
+	color: var(--qatra-ink);
+	text-decoration: none;
+	transform: translateY(-4px);
+}
+
+.qatra-client-portal .qatra-dashboard-summary-card p {
+	color: var(--qatra-muted);
+	font-size: 0.9rem;
+	font-weight: 800;
+	margin: 0;
+}
+
+.qatra-client-portal .qatra-dashboard-summary-card h2 {
+	color: var(--qatra-navy);
+	font-size: 2.4rem;
+	font-weight: 850;
+	line-height: 1;
+	margin: 26px 0 10px;
+}
+
+.qatra-client-portal .qatra-dashboard-summary-card span {
+	color: var(--qatra-muted);
+	font-size: 0.95rem;
+}
+
+.qatra-client-portal .qatra-dashboard-summary-card b {
+	bottom: 24px;
+	color: var(--qatra-gold-dark);
+	font-size: 1.1rem;
+	position: absolute;
+	right: 26px;
+}
+
+.qatra-client-portal .qatra-dashboard-summary-card--dark {
+	background: var(--qatra-navy);
+	border-color: var(--qatra-navy);
+	color: var(--qatra-white);
+}
+
+.qatra-client-portal .qatra-dashboard-summary-card--dark:hover {
+	color: var(--qatra-white);
+}
+
+.qatra-client-portal .qatra-dashboard-summary-card--dark p,
+.qatra-client-portal .qatra-dashboard-summary-card--dark span {
+	color: rgba(255, 255, 255, 0.56);
+}
+
+.qatra-client-portal .qatra-dashboard-summary-card--dark h2 {
+	color: var(--qatra-gold);
+}
+
+.qatra-client-portal .qatra-dashboard-content-grid {
+	display: grid;
+	gap: 24px;
+	grid-template-columns: minmax(0, 1.3fr) minmax(300px, 0.7fr);
+	margin-top: 28px;
+}
+
+.qatra-client-portal .qatra-dashboard-white-card {
+	padding: 28px;
+}
+
+.qatra-client-portal .qatra-dashboard-soft-card {
+	background: var(--qatra-soft);
+}
+
+.qatra-client-portal .qatra-dashboard-section-title {
+	color: var(--qatra-navy);
+	font-size: 1.65rem;
+	font-weight: 850;
+	line-height: 1.25;
+	margin: 0;
+	overflow-wrap: anywhere;
+}
+
+.qatra-client-portal .qatra-dashboard-journey-grid {
+	display: grid;
+	gap: 16px;
+	grid-template-columns: repeat(5, minmax(0, 1fr));
+	margin-top: 30px;
+}
+
+.qatra-client-portal .qatra-dashboard-journey-step {
+	background: var(--qatra-soft);
+	border: 1px solid var(--qatra-border);
+	border-radius: 8px;
+	padding: 20px;
+}
+
+.qatra-client-portal .qatra-dashboard-journey-step--active {
+	background: var(--qatra-navy);
+	border-color: var(--qatra-gold);
+	color: var(--qatra-white);
+}
+
+.qatra-client-portal .qatra-dashboard-journey-step p {
+	color: var(--qatra-gold-dark);
+	font-size: 0.78rem;
+	font-weight: 850;
+	margin: 0;
+}
+
+.qatra-client-portal .qatra-dashboard-journey-step h4 {
+	color: var(--qatra-navy);
+	font-size: 1rem;
+	font-weight: 850;
+	line-height: 1.25;
+	margin: 20px 0 10px;
+	overflow-wrap: anywhere;
+}
+
+.qatra-client-portal .qatra-dashboard-journey-step span {
+	color: var(--qatra-muted);
+	font-size: 0.9rem;
+	font-weight: 750;
+}
+
+.qatra-client-portal .qatra-dashboard-journey-step--active h4 {
+	color: var(--qatra-white);
+}
+
+.qatra-client-portal .qatra-dashboard-journey-step--active span {
+	color: rgba(255, 255, 255, 0.62);
+}
+
+.qatra-client-portal .qatra-dashboard-snapshot-list {
+	display: grid;
+	margin-top: 24px;
+}
+
+.qatra-client-portal .qatra-dashboard-snapshot-list div {
+	align-items: center;
+	border-bottom: 1px solid var(--qatra-border);
+	display: flex;
+	gap: 16px;
+	justify-content: space-between;
+	padding: 16px 0;
+}
+
+.qatra-client-portal .qatra-dashboard-snapshot-list div:last-child {
+	border-bottom: 0;
+}
+
+.qatra-client-portal .qatra-dashboard-snapshot-list strong {
+	color: var(--qatra-navy);
+	font-size: 0.92rem;
+	font-weight: 850;
+	overflow-wrap: anywhere;
+	text-align: right;
+}
+
+.qatra-client-portal .qatra-dashboard-financial-card {
+	display: grid;
+	gap: 10px;
+	min-height: 116px;
+	padding: 22px;
+}
+
+.qatra-client-portal .qatra-dashboard-activity-list {
+	display: grid;
+	gap: 12px;
+	margin-top: 24px;
+}
+
+.qatra-client-portal .qatra-dashboard-activity-item {
+	align-items: center;
+	border: 1px solid var(--qatra-border);
+	border-radius: 8px;
+	display: grid;
+	gap: 14px;
+	grid-template-columns: 0.85fr 0.9fr minmax(0, 1.6fr) 0.9fr;
+	padding: 16px;
+}
+
+.qatra-client-portal .qatra-dashboard-activity-item strong {
+	color: var(--qatra-navy);
+	font-size: 0.95rem;
+	font-weight: 850;
+}
+
+.qatra-client-portal .qatra-dashboard-activity-item p {
+	color: var(--qatra-ink);
+	font-size: 0.92rem;
+	font-weight: 700;
+	margin: 0;
+	overflow-wrap: anywhere;
+}
+
+.qatra-client-portal .qatra-dashboard-activity-item em {
+	color: var(--qatra-navy);
+	font-style: normal;
+	font-weight: 850;
+	overflow-wrap: anywhere;
+	text-align: right;
+}
+
+.qatra-client-portal .qatra-dashboard-card-header {
+	align-items: flex-start;
+	display: flex;
+	justify-content: space-between;
+}
+
+.qatra-client-portal .qatra-dashboard-projects-card {
+	margin-top: 28px;
+}
+
+.qatra-client-portal .qatra-dashboard-project-grid {
+	display: grid;
+	gap: 24px;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	margin-top: 26px;
+}
+
+.qatra-client-portal .qatra-dashboard-project-card {
+	background: var(--qatra-white);
+	border: 1px solid var(--qatra-border);
+	border-radius: 8px;
+	color: var(--qatra-ink);
+	overflow: hidden;
+	text-decoration: none;
+	transition: border-color 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease;
+}
+
+.qatra-client-portal .qatra-dashboard-project-card:hover {
+	border-color: rgba(216, 184, 95, 0.75);
+	box-shadow: 0 18px 42px rgba(15, 23, 42, 0.1);
+	color: var(--qatra-ink);
+	text-decoration: none;
+	transform: translateY(-4px);
+}
+
+.qatra-client-portal .qatra-dashboard-project-card-top {
+	align-items: flex-start;
+	background: var(--qatra-navy);
+	color: var(--qatra-white);
+	display: flex;
+	gap: 24px;
+	justify-content: space-between;
+	padding: 28px;
+}
+
+.qatra-client-portal .qatra-dashboard-project-card-top span {
+	color: var(--qatra-gold);
+	font-size: 0.76rem;
+	font-weight: 850;
+	text-transform: uppercase;
+}
+
+.qatra-client-portal .qatra-dashboard-project-card-top h3 {
+	color: var(--qatra-white);
+	font-size: 1.45rem;
+	font-weight: 850;
+	line-height: 1.3;
+	margin: 12px 0 8px;
+	overflow-wrap: anywhere;
+}
+
+.qatra-client-portal .qatra-dashboard-project-card-top p {
+	color: rgba(255, 255, 255, 0.58);
+	font-size: 0.9rem;
+	margin: 0;
+	overflow-wrap: anywhere;
+}
+
+.qatra-client-portal .qatra-dashboard-mini-progress {
+	--value: calc(var(--progress) * 3.6deg);
+	background: conic-gradient(var(--qatra-gold) var(--value), rgba(255, 255, 255, 0.14) 0deg);
+	border-radius: 50%;
+	display: grid;
+	flex: 0 0 auto;
+	height: 88px;
+	place-items: center;
+	width: 88px;
+}
+
+.qatra-client-portal .qatra-dashboard-mini-progress strong {
+	background: var(--qatra-navy);
+	border-radius: 50%;
+	color: var(--qatra-gold);
+	display: grid;
+	font-size: 1rem;
+	font-weight: 850;
+	height: 64px;
+	place-items: center;
+	width: 64px;
+}
+
+.qatra-client-portal .qatra-dashboard-project-card-body {
+	padding: 26px;
+}
+
+.qatra-client-portal .qatra-dashboard-project-info-grid {
+	display: grid;
+	gap: 18px 22px;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.qatra-client-portal .qatra-dashboard-project-info-grid div {
+	border-bottom: 1px solid var(--qatra-border);
+	padding-bottom: 14px;
+}
+
+.qatra-client-portal .qatra-dashboard-project-info-grid strong {
+	color: var(--qatra-navy);
+	display: block;
+	font-size: 0.9rem;
+	font-weight: 850;
+	margin-top: 6px;
+	overflow-wrap: anywhere;
+}
+
+.qatra-client-portal .qatra-dashboard-progress-line {
+	background: var(--qatra-cream);
+	border-radius: 999px;
+	height: 10px;
+	margin-top: 26px;
+	overflow: hidden;
+}
+
+.qatra-client-portal .qatra-dashboard-progress-line div {
+	background: linear-gradient(90deg, var(--qatra-gold), var(--qatra-gold-dark));
+	border-radius: 999px;
+	height: 100%;
+}
+
+.qatra-client-portal .qatra-dashboard-project-link {
+	align-items: center;
+	background: var(--qatra-soft);
+	border-radius: 999px;
+	color: var(--qatra-navy);
+	display: flex;
+	font-size: 0.94rem;
+	font-weight: 850;
+	justify-content: space-between;
+	margin-top: 24px;
+	min-height: 50px;
+	padding: 0 20px;
+}
+
+.qatra-client-portal .qatra-dashboard-project-link b {
+	color: var(--qatra-gold-dark);
+}
+
+.qatra-client-portal .qatra-dashboard-empty-card,
+.qatra-client-portal .qatra-dashboard-empty-state {
+	padding: 24px;
+}
+
+.qatra-client-portal .qatra-dashboard-empty-card {
+	background: var(--qatra-soft);
+	border: 1px solid var(--qatra-border);
+	border-radius: 8px;
+	margin-top: 24px;
+}
+
+.qatra-client-portal .qatra-dashboard-empty-card p,
+.qatra-client-portal .qatra-dashboard-empty-state p {
+	color: var(--qatra-muted);
+	margin: 0;
+}
+
+.qatra-client-portal .qatra-dashboard-empty-state h1 {
+	color: var(--qatra-navy);
+	font-size: 2rem;
+	font-weight: 850;
+	margin: 0 0 10px;
+	overflow-wrap: anywhere;
+}
+
+.qatra-client-portal .qatra-dashboard-command-hero--compact {
+	padding: 38px;
+}
+
+.qatra-client-portal .qatra-dashboard-panel-label {
+	color: var(--qatra-gold);
+	font-size: 0.76rem;
+	font-weight: 850;
+	letter-spacing: 0;
+	margin: 0 0 14px;
+	text-transform: uppercase;
+}
+
+.qatra-client-portal .qatra-dashboard-progress-panel > h2 {
+	color: var(--qatra-white);
+	font-size: 1.7rem;
+	font-weight: 850;
+	line-height: 1.3;
+	margin: 0 0 12px;
+	overflow-wrap: anywhere;
+}
+
+.qatra-client-portal .qatra-dashboard-toolbar {
+	align-items: center;
+	background: var(--qatra-white);
+	border: 1px solid var(--qatra-border);
+	border-radius: 8px;
+	box-shadow: 0 12px 32px rgba(15, 23, 42, 0.06);
+	display: flex;
+	gap: 24px;
+	justify-content: space-between;
+	margin-top: 28px;
+	padding: 24px 28px;
+}
+
+.qatra-client-portal .qatra-dashboard-toolbar h2 {
+	color: var(--qatra-navy);
+	font-size: 1.75rem;
+	font-weight: 850;
+	line-height: 1.2;
+	margin: 0;
+}
+
+.qatra-client-portal .qatra-dashboard-toolbar p {
+	color: var(--qatra-muted);
+	font-size: 0.92rem;
+	margin: 8px 0 0;
+}
+
+.qatra-client-portal .qatra-dashboard-toolbar-actions {
+	align-items: end;
+	display: flex;
+	gap: 12px;
+}
+
+.qatra-client-portal .qatra-dashboard-toolbar-actions label {
+	display: grid;
+	gap: 7px;
+}
+
+.qatra-client-portal .qatra-dashboard-toolbar-actions label span {
+	color: var(--qatra-muted);
+	font-size: 0.72rem;
+	font-weight: 850;
+	text-transform: uppercase;
+}
+
+.qatra-client-portal .qatra-dashboard-toolbar-actions input,
+.qatra-client-portal .qatra-dashboard-toolbar-actions select {
+	background: var(--qatra-soft);
+	border: 1px solid var(--qatra-border);
+	border-radius: 999px;
+	color: var(--qatra-navy);
+	font-size: 0.92rem;
+	font-weight: 750;
+	height: 48px;
+	min-width: 190px;
+	outline: none;
+	padding: 0 18px;
+}
+
+.qatra-client-portal .qatra-dashboard-toolbar-actions input:focus,
+.qatra-client-portal .qatra-dashboard-toolbar-actions select:focus {
+	border-color: var(--qatra-gold-dark);
+	box-shadow: 0 0 0 3px rgba(216, 184, 95, 0.18);
+}
+
+.qatra-client-portal .qatra-dashboard-back-link {
+	color: var(--qatra-navy);
+	display: inline-flex;
+	font-size: 0.9rem;
+	font-weight: 850;
+	margin-bottom: 22px;
+	text-decoration: none;
+}
+
+.qatra-client-portal .qatra-dashboard-back-link:hover {
+	color: var(--qatra-gold-dark);
+	text-decoration: none;
+}
+
+.qatra-client-portal .qatra-dashboard-detail-stats-grid,
+.qatra-client-portal .qatra-dashboard-quick-access-grid {
+	display: grid;
+	gap: 18px;
+	grid-template-columns: repeat(4, minmax(0, 1fr));
+	margin-top: 28px;
+}
+
+.qatra-client-portal .qatra-dashboard-detail-stat-card,
+.qatra-client-portal .qatra-dashboard-quick-access-card {
+	background: var(--qatra-white);
+	border: 1px solid var(--qatra-border);
+	border-radius: 8px;
+	box-shadow: 0 12px 32px rgba(15, 23, 42, 0.06);
+}
+
+.qatra-client-portal .qatra-dashboard-detail-stat-card {
+	display: grid;
+	gap: 12px;
+	min-height: 112px;
+	padding: 22px;
+}
+
+.qatra-client-portal .qatra-dashboard-detail-stat-card span {
+	color: var(--qatra-muted);
+	font-size: 0.82rem;
+	font-weight: 800;
+}
+
+.qatra-client-portal .qatra-dashboard-detail-stat-card strong {
+	color: var(--qatra-navy);
+	font-size: 1.1rem;
+	font-weight: 850;
+	overflow-wrap: anywhere;
+}
+
+.qatra-client-portal .qatra-dashboard-detail-stat-card--dark {
+	background: var(--qatra-navy);
+	border-color: var(--qatra-navy);
+	color: var(--qatra-white);
+}
+
+.qatra-client-portal .qatra-dashboard-detail-stat-card--dark span {
+	color: rgba(255, 255, 255, 0.56);
+}
+
+.qatra-client-portal .qatra-dashboard-detail-stat-card--dark strong {
+	color: var(--qatra-gold);
+}
+
+.qatra-client-portal .qatra-dashboard-quick-access-card {
+	color: var(--qatra-ink);
+	min-height: 186px;
+	padding: 26px;
+	text-decoration: none;
+	transition: border-color 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease;
+}
+
+.qatra-client-portal .qatra-dashboard-quick-access-card:hover {
+	border-color: rgba(216, 184, 95, 0.75);
+	box-shadow: 0 18px 42px rgba(15, 23, 42, 0.1);
+	color: var(--qatra-ink);
+	text-decoration: none;
+	transform: translateY(-4px);
+}
+
+.qatra-client-portal .qatra-dashboard-quick-access-card p {
+	color: var(--qatra-gold-dark);
+	font-size: 0.76rem;
+	font-weight: 850;
+	letter-spacing: 0;
+	margin: 0 0 30px;
+	text-transform: uppercase;
+}
+
+.qatra-client-portal .qatra-dashboard-quick-access-card h3 {
+	color: var(--qatra-navy);
+	font-size: 1.3rem;
+	font-weight: 850;
+	line-height: 1.3;
+	margin: 0 0 12px;
+	overflow-wrap: anywhere;
+}
+
+.qatra-client-portal .qatra-dashboard-quick-access-card span {
+	color: var(--qatra-muted);
+	font-size: 0.92rem;
+	line-height: 1.6;
+}
+
+.qatra-client-portal .qatra-dashboard-quick-access-card--dark {
+	background: var(--qatra-navy);
+	border-color: var(--qatra-navy);
+	color: var(--qatra-white);
+}
+
+.qatra-client-portal .qatra-dashboard-quick-access-card--dark:hover {
+	color: var(--qatra-white);
+}
+
+.qatra-client-portal .qatra-dashboard-quick-access-card--dark h3 {
+	color: var(--qatra-white);
+}
+
+.qatra-client-portal .qatra-dashboard-quick-access-card--dark span {
+	color: rgba(255, 255, 255, 0.58);
+}
+
+.qatra-client-portal .qatra-dashboard-filter-empty[hidden],
+.qatra-client-portal [data-qatra-project-card][hidden] {
+	display: none;
+}
+
+.qatra-client-portal .qatra-dashboard-filter-button,
+.qatra-client-portal .qatra-dashboard-panel-button {
+	align-items: center;
+	background: var(--qatra-gold);
+	border: 0;
+	border-radius: 999px;
+	color: var(--qatra-navy);
+	cursor: pointer;
+	display: inline-flex;
+	font-size: 0.92rem;
+	font-weight: 850;
+	justify-content: center;
+	min-height: 48px;
+	padding: 0 22px;
+	text-decoration: none;
+}
+
+.qatra-client-portal .qatra-dashboard-filter-button:hover,
+.qatra-client-portal .qatra-dashboard-panel-button:hover {
+	color: var(--qatra-navy);
+	filter: brightness(0.98);
+	text-decoration: none;
+}
+
+.qatra-client-portal .qatra-dashboard-panel-button {
+	margin-top: 22px;
+}
+
+.qatra-client-portal .qatra-dashboard-report-grid {
+	display: grid;
+	gap: 24px;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	margin-top: 26px;
+}
+
+.qatra-client-portal .qatra-dashboard-report-card {
+	background: var(--qatra-white);
+	border: 1px solid var(--qatra-border);
+	border-radius: 8px;
+	box-shadow: 0 15px 40px rgba(15, 23, 42, 0.06);
+	display: flex;
+	flex-direction: column;
+	min-height: 330px;
+	padding: 30px;
+	transition: border-color 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease;
+}
+
+.qatra-client-portal .qatra-dashboard-report-card:hover {
+	border-color: rgba(216, 184, 95, 0.75);
+	box-shadow: 0 18px 42px rgba(15, 23, 42, 0.1);
+	transform: translateY(-4px);
+}
+
+.qatra-client-portal .qatra-dashboard-report-card--featured {
+	background: var(--qatra-navy);
+	border-color: var(--qatra-navy);
+	color: var(--qatra-white);
+}
+
+.qatra-client-portal .qatra-dashboard-report-card-top {
+	align-items: center;
+	display: flex;
+	gap: 18px;
+	justify-content: space-between;
+}
+
+.qatra-client-portal .qatra-dashboard-report-card-top p {
+	color: var(--qatra-gold-dark);
+	font-size: 0.76rem;
+	font-weight: 850;
+	letter-spacing: 0;
+	margin: 0;
+	text-transform: uppercase;
+}
+
+.qatra-client-portal .qatra-dashboard-report-card--featured .qatra-dashboard-report-card-top p {
+	color: var(--qatra-gold);
+}
+
+.qatra-client-portal .qatra-dashboard-report-card-top span {
+	background: rgba(216, 184, 95, 0.16);
+	border-radius: 999px;
+	color: var(--qatra-gold-dark);
+	font-size: 0.76rem;
+	font-weight: 850;
+	padding: 8px 12px;
+}
+
+.qatra-client-portal .qatra-dashboard-report-card--featured .qatra-dashboard-report-card-top span {
+	background: rgba(216, 184, 95, 0.18);
+	color: var(--qatra-gold);
+}
+
+.qatra-client-portal .qatra-dashboard-report-card h3 {
+	color: var(--qatra-navy);
+	font-size: 1.55rem;
+	font-weight: 850;
+	line-height: 1.3;
+	margin: 28px 0 14px;
+	overflow-wrap: anywhere;
+}
+
+.qatra-client-portal .qatra-dashboard-report-card--featured h3 {
+	color: var(--qatra-white);
+}
+
+.qatra-client-portal .qatra-dashboard-report-card > p {
+	color: var(--qatra-muted);
+	font-size: 0.95rem;
+	line-height: 1.8;
+	margin: 0;
+	overflow-wrap: anywhere;
+}
+
+.qatra-client-portal .qatra-dashboard-report-card--featured > p {
+	color: rgba(255, 255, 255, 0.58);
+}
+
+.qatra-client-portal .qatra-dashboard-report-meta {
+	display: grid;
+	gap: 18px;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	margin-top: 28px;
+}
+
+.qatra-client-portal .qatra-dashboard-report-meta div {
+	border-top: 1px solid var(--qatra-border);
+	padding-top: 16px;
+}
+
+.qatra-client-portal .qatra-dashboard-report-card--featured .qatra-dashboard-report-meta div {
+	border-top-color: rgba(255, 255, 255, 0.13);
+}
+
+.qatra-client-portal .qatra-dashboard-report-meta span {
+	color: var(--qatra-muted);
+	display: block;
+	font-size: 0.8rem;
+	font-weight: 800;
+	margin-bottom: 8px;
+}
+
+.qatra-client-portal .qatra-dashboard-report-card--featured .qatra-dashboard-report-meta span {
+	color: rgba(255, 255, 255, 0.44);
+}
+
+.qatra-client-portal .qatra-dashboard-report-meta strong {
+	color: var(--qatra-navy);
+	font-size: 0.9rem;
+	font-weight: 850;
+	overflow-wrap: anywhere;
+}
+
+.qatra-client-portal .qatra-dashboard-report-card--featured .qatra-dashboard-report-meta strong {
+	color: var(--qatra-white);
+}
+
+.qatra-client-portal .qatra-dashboard-report-link {
+	align-items: center;
+	background: var(--qatra-soft);
+	border-radius: 999px;
+	color: var(--qatra-navy);
+	display: flex;
+	font-size: 0.94rem;
+	font-weight: 850;
+	justify-content: space-between;
+	margin-top: auto;
+	min-height: 54px;
+	padding: 0 22px;
+	text-decoration: none;
+}
+
+.qatra-client-portal .qatra-dashboard-report-link:hover {
+	background: var(--qatra-gold);
+	color: var(--qatra-navy);
+	text-decoration: none;
+}
+
+.qatra-client-portal .qatra-dashboard-report-card--featured .qatra-dashboard-report-link {
+	background: rgba(255, 255, 255, 0.08);
+	color: var(--qatra-white);
+}
+
+.qatra-client-portal .qatra-dashboard-report-card--featured .qatra-dashboard-report-link:hover {
+	background: var(--qatra-gold);
+	color: var(--qatra-navy);
+}
+
+.qatra-client-portal .qatra-dashboard-rich-text {
+	color: var(--qatra-ink);
+	font-size: 0.98rem;
+	line-height: 1.8;
+	margin-top: 22px;
+	overflow-wrap: anywhere;
+}
+
+.qatra-client-portal .qatra-dashboard-rich-text p:last-child {
+	margin-bottom: 0;
+}
+
+.qatra-client-portal .qatra-dashboard-report-section {
+	margin-top: 28px;
+}
+
+.qatra-client-portal .qatra-report-data-table {
+	margin-top: 24px;
+}
+
+.qatra-client-portal .qatra-report-table-toolbar,
+.qatra-client-portal .qatra-report-table-footer {
+	align-items: center;
+	display: flex;
+	gap: 14px;
+	justify-content: space-between;
+}
+
+.qatra-client-portal .qatra-report-table-toolbar {
+	background: var(--qatra-soft);
+	border: 1px solid var(--qatra-border);
+	border-radius: 8px;
+	flex-wrap: wrap;
+	padding: 14px;
+}
+
+.qatra-client-portal .qatra-report-table-toolbar label {
+	display: grid;
+	gap: 6px;
+	min-width: min(260px, 100%);
+}
+
+.qatra-client-portal .qatra-report-table-toolbar label + label {
+	min-width: 96px;
+}
+
+.qatra-client-portal .qatra-report-table-toolbar span,
+.qatra-client-portal .qatra-report-table-footer span {
+	color: var(--qatra-muted);
+	font-size: 0.76rem;
+	font-weight: 850;
+	text-transform: uppercase;
+}
+
+.qatra-client-portal .qatra-report-table-toolbar input,
+.qatra-client-portal .qatra-report-table-toolbar select {
+	background: var(--qatra-white);
+	border: 1px solid var(--qatra-border);
+	border-radius: 8px;
+	color: var(--qatra-ink);
+	font-size: 0.92rem;
+	font-weight: 700;
+	height: 42px;
+	padding: 0 12px;
+}
+
+.qatra-client-portal .qatra-report-download-button,
+.qatra-client-portal .qatra-report-pagination button {
+	background: var(--qatra-navy);
+	border: 1px solid var(--qatra-navy);
+	border-radius: 8px;
+	color: var(--qatra-white);
+	cursor: pointer;
+	font-size: 0.84rem;
+	font-weight: 850;
+	min-height: 42px;
+	padding: 0 16px;
+}
+
+.qatra-client-portal .qatra-report-download-button:hover,
+.qatra-client-portal .qatra-report-pagination button:hover:not(:disabled) {
+	background: var(--qatra-gold);
+	border-color: var(--qatra-gold);
+	color: var(--qatra-navy);
+}
+
+.qatra-client-portal .qatra-report-pagination {
+	align-items: center;
+	display: flex;
+	gap: 10px;
+}
+
+.qatra-client-portal .qatra-report-pagination button:disabled {
+	cursor: not-allowed;
+	opacity: 0.42;
+}
+
+.qatra-client-portal .qatra-report-table-footer {
+	margin-top: 14px;
+}
+
+.qatra-client-portal .qatra-dashboard-report-table {
+	border: 1px solid var(--qatra-border);
+	border-radius: 8px;
+	margin-top: 24px;
+	overflow-x: auto;
+	overflow-y: hidden;
+}
+
+.qatra-client-portal .qatra-dashboard-report-row {
+	display: grid;
+	gap: 14px;
+	grid-template-columns: repeat(var(--qatra-report-columns, 4), minmax(0, 1fr));
+	min-width: calc(var(--qatra-report-columns, 4) * 140px);
+	padding: 14px 16px;
+}
+
+.qatra-client-portal .qatra-dashboard-report-metrics {
+	margin-top: 22px;
+}
+
+.qatra-client-portal .qatra-dashboard-report-row + .qatra-dashboard-report-row {
+	border-top: 1px solid var(--qatra-border);
+}
+
+.qatra-client-portal .qatra-dashboard-report-row--head {
+	background: #f8f5ef;
+}
+
+.qatra-client-portal .qatra-dashboard-report-row span {
+	color: var(--qatra-ink);
+	font-size: 0.9rem;
+	font-weight: 700;
+	overflow-wrap: anywhere;
+}
+
+.qatra-client-portal .qatra-dashboard-report-row--head span {
+	color: var(--qatra-muted);
+	font-size: 0.78rem;
+	font-weight: 850;
+	text-transform: uppercase;
+}
+
+.qatra-client-portal .qatra-dpr-report-section {
+	padding-bottom: 30px;
+}
+
+.qatra-client-portal .qatra-dpr-update-stack {
+	display: grid;
+	gap: 24px;
+	margin-top: 24px;
+}
+
+.qatra-client-portal .qatra-dpr-update-card {
+	background: #fffaf2;
+	border: 1px solid var(--qatra-border);
+	border-radius: 8px;
+	display: grid;
+	gap: 22px;
+	padding: 22px;
+}
+
+.qatra-client-portal .qatra-dpr-update-head {
+	align-items: flex-start;
+	border-bottom: 1px solid rgba(33, 52, 72, 0.12);
+	display: flex;
+	gap: 18px;
+	justify-content: space-between;
+	padding-bottom: 18px;
+}
+
+.qatra-client-portal .qatra-dpr-update-head > div:first-child {
+	display: grid;
+	gap: 6px;
+	min-width: 0;
+}
+
+.qatra-client-portal .qatra-dpr-update-head span,
+.qatra-client-portal .qatra-dpr-copy-panel span,
+.qatra-client-portal .qatra-dpr-subsection-head span,
+.qatra-client-portal .qatra-dpr-task-body > div > span,
+.qatra-client-portal .qatra-dpr-task-meta span {
+	color: var(--qatra-muted);
+	font-size: 0.76rem;
+	font-weight: 850;
+	text-transform: uppercase;
+}
+
+.qatra-client-portal .qatra-dpr-update-head h3 {
+	color: var(--qatra-navy);
+	font-size: clamp(1.25rem, 2vw, 1.8rem);
+	font-weight: 850;
+	line-height: 1.15;
+	margin: 0;
+}
+
+.qatra-client-portal .qatra-dpr-update-head p {
+	color: var(--qatra-muted);
+	font-size: 0.92rem;
+	font-weight: 700;
+	margin: 0;
+	overflow-wrap: anywhere;
+}
+
+.qatra-client-portal .qatra-dpr-update-counts {
+	display: grid;
+	gap: 10px;
+	grid-template-columns: repeat(2, minmax(86px, 1fr));
+	min-width: 190px;
+}
+
+.qatra-client-portal .qatra-dpr-update-counts div {
+	background: var(--qatra-white);
+	border: 1px solid var(--qatra-border);
+	border-radius: 8px;
+	display: grid;
+	gap: 2px;
+	padding: 12px;
+	text-align: center;
+}
+
+.qatra-client-portal .qatra-dpr-update-counts strong {
+	color: var(--qatra-navy);
+	font-size: 1.28rem;
+	font-weight: 900;
+}
+
+.qatra-client-portal .qatra-dpr-copy-grid {
+	display: grid;
+	gap: 16px;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.qatra-client-portal .qatra-dpr-copy-panel {
+	background: var(--qatra-white);
+	border: 1px solid var(--qatra-border);
+	border-radius: 8px;
+	display: grid;
+	gap: 10px;
+	padding: 18px;
+}
+
+.qatra-client-portal .qatra-dpr-copy-panel p {
+	color: var(--qatra-ink);
+	font-size: 0.96rem;
+	font-weight: 650;
+	line-height: 1.7;
+	margin: 0;
+	white-space: pre-wrap;
+}
+
+.qatra-client-portal .qatra-dpr-subsection {
+	display: grid;
+	gap: 14px;
+}
+
+.qatra-client-portal .qatra-dpr-subsection-head {
+	align-items: center;
+	display: flex;
+	gap: 12px;
+	justify-content: space-between;
+}
+
+.qatra-client-portal .qatra-dpr-subsection-head h4 {
+	color: var(--qatra-navy);
+	font-size: 1.02rem;
+	font-weight: 850;
+	margin: 0;
+}
+
+.qatra-client-portal .qatra-dpr-task-grid {
+	display: grid;
+	gap: 16px;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.qatra-client-portal .qatra-dpr-task-card {
+	background: var(--qatra-white);
+	border: 1px solid var(--qatra-border);
+	border-radius: 8px;
+	display: grid;
+	grid-template-columns: 1fr;
+	min-height: 190px;
+	overflow: hidden;
+}
+
+.qatra-client-portal .qatra-dpr-task-card--with-image {
+	grid-template-columns: minmax(150px, 0.42fr) minmax(0, 1fr);
+}
+
+.qatra-client-portal .qatra-dpr-task-image {
+	background: #f4efe6;
+	display: block;
+	min-height: 100%;
+	overflow: hidden;
+}
+
+.qatra-client-portal .qatra-dpr-task-image img {
+	display: block;
+	height: 100%;
+	min-height: 190px;
+	object-fit: cover;
+	width: 100%;
+}
+
+.qatra-client-portal .qatra-dpr-task-body {
+	display: flex;
+	flex-direction: column;
+	gap: 14px;
+	justify-content: space-between;
+	padding: 18px;
+}
+
+.qatra-client-portal .qatra-dpr-task-body h5 {
+	color: var(--qatra-navy);
+	font-size: 1.02rem;
+	font-weight: 850;
+	line-height: 1.3;
+	margin: 6px 0 0;
+}
+
+.qatra-client-portal .qatra-dpr-task-body p {
+	color: var(--qatra-muted);
+	font-size: 0.9rem;
+	font-weight: 650;
+	line-height: 1.55;
+	margin: 8px 0 0;
+}
+
+.qatra-client-portal .qatra-dpr-task-meta {
+	display: grid;
+	gap: 10px;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.qatra-client-portal .qatra-dpr-task-meta div {
+	background: var(--qatra-soft);
+	border: 1px solid var(--qatra-border);
+	border-radius: 8px;
+	display: grid;
+	gap: 4px;
+	padding: 10px;
+}
+
+.qatra-client-portal .qatra-dpr-task-meta strong {
+	color: var(--qatra-ink);
+	font-size: 0.88rem;
+	font-weight: 800;
+	overflow-wrap: anywhere;
+}
+
+.qatra-client-portal .qatra-dpr-task-note {
+	border-top: 1px solid var(--qatra-border);
+	padding-top: 12px;
+}
+
+.qatra-client-portal .qatra-dpr-photo-grid {
+	display: grid;
+	gap: 16px;
+	grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.qatra-client-portal .qatra-dpr-photo-grid figure {
+	background: var(--qatra-white);
+	border: 1px solid var(--qatra-border);
+	border-radius: 8px;
+	margin: 0;
+	overflow: hidden;
+}
+
+.qatra-client-portal .qatra-dpr-photo-grid a {
+	display: block;
+	overflow: hidden;
+}
+
+.qatra-client-portal .qatra-dpr-photo-grid img {
+	aspect-ratio: 4 / 3;
+	display: block;
+	height: auto;
+	object-fit: cover;
+	transition: transform 0.2s ease;
+	width: 100%;
+}
+
+.qatra-client-portal .qatra-dpr-photo-grid a:hover img {
+	transform: scale(1.03);
+}
+
+.qatra-client-portal .qatra-dpr-photo-grid figcaption {
+	display: grid;
+	gap: 4px;
+	padding: 14px;
+}
+
+.qatra-client-portal .qatra-dpr-photo-grid figcaption strong {
+	color: var(--qatra-navy);
+	font-size: 0.92rem;
+	font-weight: 850;
+}
+
+.qatra-client-portal .qatra-dpr-photo-grid figcaption span {
+	color: var(--qatra-muted);
+	font-size: 0.86rem;
+	line-height: 1.5;
+}
+
+.qatra-client-portal .qatra-payment-summary-grid,
+.qatra-client-portal .qatra-payments-grid {
+	display: grid;
+	gap: 22px;
+	margin-top: 28px;
+}
+
+.qatra-client-portal .qatra-payment-summary-grid {
+	grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.qatra-client-portal .qatra-payments-grid {
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.qatra-client-portal .qatra-payment-summary-card,
+.qatra-client-portal .qatra-payment-doc-card {
+	background: var(--qatra-white);
+	border: 1px solid var(--qatra-border);
+	border-radius: 8px;
+	box-shadow: 0 12px 32px rgba(15, 23, 42, 0.06);
+}
+
+.qatra-client-portal .qatra-payment-summary-card {
+	padding: 24px;
+}
+
+.qatra-client-portal .qatra-payment-summary-card--dark,
+.qatra-client-portal .qatra-payment-doc-card--featured {
+	background: var(--qatra-navy);
+	border-color: var(--qatra-navy);
+	color: var(--qatra-white);
+}
+
+.qatra-client-portal .qatra-payment-summary-card span,
+.qatra-client-portal .qatra-payment-doc-meta span {
+	color: var(--qatra-muted);
+	display: block;
+	font-size: 0.78rem;
+	font-weight: 850;
+	margin-bottom: 10px;
+	text-transform: uppercase;
+}
+
+.qatra-client-portal .qatra-payment-summary-card--dark span,
+.qatra-client-portal .qatra-payment-doc-card--featured .qatra-payment-doc-meta span {
+	color: rgba(255, 255, 255, 0.44);
+}
+
+.qatra-client-portal .qatra-payment-summary-card strong {
+	color: var(--qatra-navy);
+	display: block;
+	font-size: 1.35rem;
+	font-weight: 850;
+	overflow-wrap: anywhere;
+}
+
+.qatra-client-portal .qatra-payment-summary-card--dark strong {
+	color: var(--qatra-gold);
+}
+
+.qatra-client-portal .qatra-payment-summary-card p,
+.qatra-client-portal .qatra-payment-doc-card > p,
+.qatra-client-portal .qatra-payment-progress-box p {
+	color: var(--qatra-muted);
+	font-size: 0.92rem;
+	line-height: 1.7;
+	margin: 12px 0 0;
+}
+
+.qatra-client-portal .qatra-payment-summary-card--dark p,
+.qatra-client-portal .qatra-payment-doc-card--featured > p {
+	color: rgba(255, 255, 255, 0.58);
+}
+
+.qatra-client-portal .qatra-payment-card-large {
+	min-width: 0;
+}
+
+.qatra-client-portal .qatra-payment-progress-box {
+	background: var(--qatra-white);
+	border: 1px solid var(--qatra-border);
+	border-radius: 8px;
+	display: grid;
+	margin-top: 26px;
+	padding: 24px;
+	place-items: center;
+	text-align: center;
+}
+
+.qatra-client-portal .qatra-payment-circle {
+	height: 128px;
+	width: 128px;
+}
+
+.qatra-client-portal .qatra-payment-doc-card {
+	display: flex;
+	flex-direction: column;
+	min-height: 300px;
+	padding: 30px;
+	transition: border-color 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease;
+}
+
+.qatra-client-portal .qatra-payment-doc-card:hover {
+	border-color: rgba(216, 184, 95, 0.75);
+	box-shadow: 0 18px 42px rgba(15, 23, 42, 0.1);
+	transform: translateY(-4px);
+}
+
+.qatra-client-portal .qatra-payment-doc-top {
+	align-items: center;
+	display: flex;
+	gap: 18px;
+	justify-content: space-between;
+}
+
+.qatra-client-portal .qatra-payment-doc-top p {
+	color: var(--qatra-gold-dark);
+	font-size: 0.76rem;
+	font-weight: 850;
+	letter-spacing: 0;
+	margin: 0;
+	text-transform: uppercase;
+}
+
+.qatra-client-portal .qatra-payment-doc-card--featured .qatra-payment-doc-top p {
+	color: var(--qatra-gold);
+}
+
+.qatra-client-portal .qatra-payment-doc-top span {
+	background: rgba(216, 184, 95, 0.16);
+	border-radius: 999px;
+	color: var(--qatra-gold-dark);
+	font-size: 0.76rem;
+	font-weight: 850;
+	padding: 8px 12px;
+}
+
+.qatra-client-portal .qatra-payment-doc-card--featured .qatra-payment-doc-top span {
+	background: rgba(216, 184, 95, 0.18);
+	color: var(--qatra-gold);
+}
+
+.qatra-client-portal .qatra-payment-doc-card h3 {
+	color: var(--qatra-navy);
+	font-size: 1.45rem;
+	font-weight: 850;
+	line-height: 1.3;
+	margin: 28px 0 14px;
+	overflow-wrap: anywhere;
+}
+
+.qatra-client-portal .qatra-payment-doc-card--featured h3 {
+	color: var(--qatra-white);
+}
+
+.qatra-client-portal .qatra-payment-doc-meta {
+	display: grid;
+	gap: 18px;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	margin-top: auto;
+	padding-top: 28px;
+}
+
+.qatra-client-portal .qatra-payment-doc-meta div {
+	border-top: 1px solid var(--qatra-border);
+	padding-top: 16px;
+}
+
+.qatra-client-portal .qatra-payment-doc-card--featured .qatra-payment-doc-meta div {
+	border-top-color: rgba(255, 255, 255, 0.13);
+}
+
+.qatra-client-portal .qatra-payment-doc-meta strong {
+	color: var(--qatra-navy);
+	font-size: 0.9rem;
+	font-weight: 850;
+	overflow-wrap: anywhere;
+}
+
+.qatra-client-portal .qatra-payment-doc-card--featured .qatra-payment-doc-meta strong {
+	color: var(--qatra-white);
+}
+
+.qatra-client-portal .qatra-dashboard-photo-grid {
+	display: grid;
+	gap: 18px;
+	grid-template-columns: repeat(3, minmax(0, 1fr));
+	margin-top: 24px;
+}
+
+.qatra-client-portal .qatra-dashboard-photo-grid figure {
+	background: var(--qatra-soft);
+	border: 1px solid var(--qatra-border);
+	border-radius: 8px;
+	margin: 0;
+	overflow: hidden;
+}
+
+.qatra-client-portal .qatra-dashboard-photo-grid img {
+	aspect-ratio: 4 / 3;
+	display: block;
+	height: auto;
+	object-fit: cover;
+	width: 100%;
+}
+
+.qatra-client-portal .qatra-dashboard-photo-grid figcaption {
+	display: grid;
+	gap: 4px;
+	padding: 14px;
+}
+
+.qatra-client-portal .qatra-dashboard-photo-grid figcaption strong {
+	color: var(--qatra-navy);
+	font-size: 0.92rem;
+	font-weight: 850;
+}
+
+.qatra-client-portal .qatra-dashboard-photo-grid figcaption span {
+	color: var(--qatra-muted);
+	font-size: 0.86rem;
+	line-height: 1.5;
+}
+
+.qatra-client-portal .qatra-dashboard-attachment-list {
+	display: grid;
+	gap: 12px;
+	margin-top: 24px;
+}
+
+.qatra-client-portal .qatra-dashboard-attachment-list a {
+	align-items: center;
+	background: var(--qatra-soft);
+	border: 1px solid var(--qatra-border);
+	border-radius: 8px;
+	color: var(--qatra-navy);
+	display: flex;
+	font-size: 0.94rem;
+	font-weight: 850;
+	justify-content: space-between;
+	min-height: 54px;
+	padding: 0 18px;
+	text-decoration: none;
+}
+
+.qatra-client-portal .qatra-dashboard-attachment-list a:hover {
+	border-color: var(--qatra-gold-dark);
+	color: var(--qatra-navy);
+	text-decoration: none;
+}
+
+.qatra-client-portal .qatra-dashboard-attachment-list b {
+	color: var(--qatra-gold-dark);
+}
+
+@media (max-width: 920px) {
+	.qatra-client-portal .qatra-login-shell {
+		grid-template-columns: 1fr;
+	}
+
+	.qatra-client-portal .qatra-portal-sidebar {
+		box-shadow: 16px 0 44px rgba(11, 19, 36, 0.18);
+		transform: translateX(-100%);
+		transition: transform 0.2s ease;
+		width: min(300px, 84vw);
+	}
+
+	.qatra-client-portal .qatra-portal-collapse-button {
+		display: none;
+	}
+
+	.qatra-client-portal.qatra-portal-sidebar-collapsed .qatra-portal-sidebar {
+		width: min(300px, 84vw);
+	}
+
+	.qatra-client-portal.qatra-portal-sidebar-collapsed .qatra-portal-sidebar-inner {
+		align-items: stretch;
+		padding: 26px 20px;
+	}
+
+	.qatra-client-portal.qatra-portal-sidebar-collapsed .qatra-portal-sidebar-top {
+		align-items: flex-start;
+		flex-direction: row;
+	}
+
+	.qatra-client-portal.qatra-portal-sidebar-collapsed .qatra-portal-logo {
+		min-height: 64px;
+		width: auto;
+	}
+
+	.qatra-client-portal.qatra-portal-sidebar-collapsed .qatra-portal-logo img {
+		max-height: 64px;
+		max-width: 190px;
+		transform: none;
+	}
+
+	.qatra-client-portal.qatra-portal-sidebar-collapsed .qatra-portal-nav-link {
+		justify-content: flex-start;
+		padding: 10px 14px 10px 18px;
+	}
+
+	.qatra-client-portal.qatra-portal-sidebar-collapsed .qatra-portal-nav-link span,
+	.qatra-client-portal.qatra-portal-sidebar-collapsed .qatra-portal-user-name,
+	.qatra-client-portal.qatra-portal-sidebar-collapsed .qatra-portal-user-company,
+	.qatra-client-portal.qatra-portal-sidebar-collapsed .qatra-portal-signout {
+		font-size: inherit;
+		overflow: visible;
+	}
+
+	.qatra-client-portal.qatra-portal-sidebar-collapsed .qatra-portal-signout::before {
+		content: none;
+	}
+
+	.qatra-client-portal.qatra-portal-sidebar-collapsed .qatra-portal-content {
+		margin-left: 0;
+	}
+
+	.qatra-client-portal.qatra-portal-nav-open .qatra-portal-sidebar {
+		transform: translateX(0);
+	}
+
+	.qatra-client-portal.qatra-portal-nav-open .qatra-portal-backdrop {
+		display: block;
+	}
+
+	.qatra-client-portal .qatra-portal-content {
+		margin-left: 0;
+	}
+
+	.qatra-client-portal .qatra-portal-mobile-header {
+		display: flex;
+	}
+
+	.qatra-client-portal .qatra-portal-main {
+		padding: 28px 22px;
+	}
+
+	.qatra-client-portal .qatra-portal-hero {
+		padding: 34px 28px;
+	}
+
+	.qatra-client-portal .qatra-project-grid,
+	.qatra-client-portal .qatra-project-detail-grid,
+	.qatra-client-portal .qatra-financial-grid,
+	.qatra-client-portal .qatra-financial-progress,
+	.qatra-client-portal .qatra-financial-grid--four,
+	.qatra-client-portal .qatra-journey {
+		grid-template-columns: 1fr;
+	}
+
+	.qatra-client-portal .qatra-project-stats,
+	.qatra-client-portal .qatra-client-summary {
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+	}
+
+	.qatra-client-portal .qatra-financial-row,
+	.qatra-client-portal .qatra-statement-item,
+	.qatra-client-portal .qatra-dashboard-activity-item {
+		grid-template-columns: 1fr;
+	}
+
+	.qatra-client-portal .qatra-statement-item em,
+	.qatra-client-portal .qatra-dashboard-activity-item em {
+		text-align: left;
+	}
+
+	.qatra-client-portal .qatra-dashboard-hero-grid,
+	.qatra-client-portal .qatra-dashboard-content-grid,
+	.qatra-client-portal .qatra-dashboard-journey-grid,
+	.qatra-client-portal .qatra-dashboard-project-grid,
+	.qatra-client-portal .qatra-dashboard-portfolio-grid,
+	.qatra-client-portal .qatra-dashboard-summary-grid,
+	.qatra-client-portal .qatra-dashboard-financial-grid,
+	.qatra-client-portal .qatra-dashboard-detail-stats-grid,
+	.qatra-client-portal .qatra-dashboard-quick-access-grid,
+	.qatra-client-portal .qatra-dashboard-report-grid,
+	.qatra-client-portal .qatra-dashboard-report-meta,
+	.qatra-client-portal .qatra-dashboard-photo-grid,
+	.qatra-client-portal .qatra-payment-summary-grid,
+	.qatra-client-portal .qatra-payments-grid {
+		grid-template-columns: 1fr;
+	}
+
+	.qatra-client-portal .qatra-dashboard-toolbar {
+		align-items: flex-start;
+		flex-direction: column;
+	}
+
+	.qatra-client-portal .qatra-dashboard-toolbar-actions {
+		align-items: stretch;
+		flex-direction: column;
+		width: 100%;
+	}
+
+	.qatra-client-portal .qatra-report-table-toolbar,
+	.qatra-client-portal .qatra-report-table-footer {
+		align-items: stretch;
+		flex-direction: column;
+	}
+
+	.qatra-client-portal .qatra-report-table-toolbar label,
+	.qatra-client-portal .qatra-report-table-toolbar label + label,
+	.qatra-client-portal .qatra-report-download-button,
+	.qatra-client-portal .qatra-report-pagination {
+		width: 100%;
+	}
+
+	.qatra-client-portal .qatra-report-pagination {
+		justify-content: space-between;
+	}
+
+	.qatra-client-portal .qatra-dashboard-toolbar-actions input,
+	.qatra-client-portal .qatra-dashboard-toolbar-actions select,
+	.qatra-client-portal .qatra-dashboard-filter-button {
+		min-width: 0;
+		width: 100%;
+	}
+
+	.qatra-client-portal .qatra-dashboard-command-hero {
+		padding: 34px 28px;
+	}
+
+	.qatra-client-portal .qatra-dashboard-hero-copy h1 {
+		font-size: 2.45rem;
+	}
+
+	.qatra-client-portal .qatra-brand-panel__content {
+		min-height: auto;
+	}
+
+	.qatra-client-portal .qatra-building-visual {
+		min-height: 150px;
+	}
+
+	.qatra-client-portal .qatra-brand-copy h1 {
+		font-size: 3rem;
+	}
+
+	.qatra-client-portal .qatra-dashboard-panel h1 {
+		font-size: 2.25rem;
+	}
+
+	.qatra-client-portal .qatra-portal-hero h1 {
+		font-size: 2.25rem;
+	}
+
+	.qatra-client-portal .qatra-form-panel {
+		align-items: flex-start;
+	}
+}
+
+@media (max-width: 560px) {
+	.qatra-client-portal .qatra-brand-panel__content,
+	.qatra-client-portal .qatra-form-panel {
+		padding: 24px 18px;
+	}
+
+	.qatra-client-portal .qatra-brand-copy h1 {
+		font-size: 2.2rem;
+	}
+
+	.qatra-client-portal .qatra-brand-copy p {
+		font-size: 0.96rem;
+	}
+
+	.qatra-client-portal .qatra-building-visual {
+		display: none;
+	}
+
+	.qatra-client-portal .qatra-login-card {
+		box-shadow: 0 16px 38px rgba(11, 19, 36, 0.12);
+		padding: 24px 18px;
+	}
+
+	.qatra-client-portal .qatra-portal-sidebar {
+		max-width: calc(100vw - 48px);
+		width: 270px;
+	}
+
+	.qatra-client-portal .qatra-portal-main {
+		padding: 22px 16px;
+	}
+
+	.qatra-client-portal .qatra-portal-mobile-title {
+		display: none;
+	}
+
+	.qatra-client-portal .qatra-portal-hero {
+		padding: 28px 22px;
+	}
+
+	.qatra-client-portal .qatra-portal-hero::after {
+		height: 76px;
+		right: 22px;
+	}
+
+	.qatra-client-portal .qatra-portal-hero h1 {
+		font-size: 2rem;
+	}
+
+	.qatra-client-portal .qatra-project-card-header,
+	.qatra-client-portal .qatra-project-overview-header {
+		flex-direction: column;
+	}
+
+	.qatra-client-portal .qatra-project-meta,
+	.qatra-client-portal .qatra-project-stats,
+	.qatra-client-portal .qatra-client-summary,
+	.qatra-client-portal .qatra-financial-grid,
+	.qatra-client-portal .qatra-financial-progress,
+	.qatra-client-portal .qatra-financial-grid--four,
+	.qatra-client-portal .qatra-journey,
+	.qatra-client-portal .qatra-dashboard-portfolio-grid,
+	.qatra-client-portal .qatra-dashboard-summary-grid,
+	.qatra-client-portal .qatra-dashboard-content-grid,
+	.qatra-client-portal .qatra-dashboard-journey-grid,
+	.qatra-client-portal .qatra-dashboard-financial-grid,
+	.qatra-client-portal .qatra-dashboard-project-grid,
+	.qatra-client-portal .qatra-dashboard-project-info-grid,
+	.qatra-client-portal .qatra-dashboard-detail-stats-grid,
+	.qatra-client-portal .qatra-dashboard-quick-access-grid,
+	.qatra-client-portal .qatra-dashboard-report-grid,
+	.qatra-client-portal .qatra-dashboard-report-meta,
+	.qatra-client-portal .qatra-dashboard-photo-grid,
+	.qatra-client-portal .qatra-payment-summary-grid,
+	.qatra-client-portal .qatra-payments-grid,
+	.qatra-client-portal .qatra-payment-doc-meta,
+	.qatra-client-portal .qatra-dashboard-report-row {
+		grid-template-columns: 1fr;
+	}
+
+	.qatra-client-portal .qatra-dashboard-command-hero {
+		padding: 28px 22px;
+	}
+
+	.qatra-client-portal .qatra-dashboard-command-hero::before {
+		right: 22px;
+	}
+
+	.qatra-client-portal .qatra-dashboard-hero-copy h1 {
+		font-size: 2rem;
+	}
+
+	.qatra-client-portal .qatra-dashboard-progress-top,
+	.qatra-client-portal .qatra-dashboard-project-card-top,
+	.qatra-client-portal .qatra-dashboard-snapshot-list div {
+		align-items: flex-start;
+		flex-direction: column;
+	}
+
+	.qatra-client-portal .qatra-dashboard-snapshot-list strong {
+		text-align: left;
+	}
+
+	.qatra-client-portal .qatra-dashboard-circle-progress {
+		height: 112px;
+		width: 112px;
+	}
+
+	.qatra-client-portal .qatra-dashboard-circle-progress div {
+		height: 78px;
+		width: 78px;
+	}
+
+	.qatra-client-portal .qatra-form-options,
+	.qatra-client-portal .qatra-dashboard-panel {
+		align-items: flex-start;
+		flex-direction: column;
+	}
+
+	.qatra-client-portal .qatra-sign-out-button {
+		max-width: none;
+	}
+}
