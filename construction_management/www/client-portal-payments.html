@@ -1,0 +1,383 @@
+{% extends "construction_management/templates/client_portal/base.html" %}
+
+{% block portal_content %}
+{% if selected_project and financial_summary %}
+<section class="qatra-dashboard-command-hero qatra-dashboard-command-hero--compact qatra-payments-hero">
+	<div class="qatra-dashboard-hero-grid">
+		<div class="qatra-dashboard-hero-copy">
+			<div class="qatra-section-kicker qatra-section-kicker--light">
+				<span></span>
+				<p>Client Payments</p>
+			</div>
+			<h1>Clear financial visibility for every client account.</h1>
+			<p class="qatra-dashboard-hero-text">
+				{{ selected_project.display_name }} &middot; invoices, receipts, outstanding balances, and account statement.
+			</p>
+
+			<div class="qatra-dashboard-pill-row">
+				<div class="qatra-dashboard-info-pill">
+					<span>Contract</span>
+					<strong>{{ financial_summary.display_contract_value }}</strong>
+				</div>
+				<div class="qatra-dashboard-info-pill">
+					<span>Paid</span>
+					<strong>{{ financial_summary.display_total_received }}</strong>
+				</div>
+				<div class="qatra-dashboard-info-pill">
+					<span>Outstanding</span>
+					<strong>{{ financial_summary.display_invoice_outstanding }}</strong>
+				</div>
+			</div>
+		</div>
+
+		<div class="qatra-dashboard-progress-panel">
+			<p class="qatra-dashboard-panel-label">Statement Summary</p>
+			<div class="qatra-dashboard-progress-top">
+				<div>
+					<h2>{{ payment_view.display_payment_progress }}</h2>
+					<p class="qatra-dashboard-muted">paid against the project contract value.</p>
+				</div>
+				<div class="qatra-dashboard-circle-progress" style="--progress: {{ payment_view.payment_progress or 0 }};">
+					<div>
+						<strong>{{ payment_view.display_payment_progress }}</strong>
+					</div>
+				</div>
+			</div>
+			<a class="qatra-dashboard-panel-button" href="#statement">Open Statement</a>
+		</div>
+	</div>
+</section>
+
+{% if projects %}
+<nav class="qatra-dashboard-project-switcher" aria-label="Project payments">
+	{% for project in projects %}
+	<a
+		href="/client-portal/payments?project={{ project.name | urlencode }}"
+		class="{% if selected_project and selected_project.name == project.name %}qatra-dashboard-project-tab qatra-dashboard-project-tab--active{% else %}qatra-dashboard-project-tab{% endif %}"
+	>
+		<span>{{ project.display_status }}</span>
+		<strong>{{ project.display_name }}</strong>
+	</a>
+	{% endfor %}
+</nav>
+{% endif %}
+
+<section class="qatra-payment-summary-grid">
+	<div class="qatra-payment-summary-card">
+		<span>Total Contract Value</span>
+		<strong>{{ financial_summary.display_contract_value }}</strong>
+		<p>Approved project value</p>
+	</div>
+	<div class="qatra-payment-summary-card">
+		<span>Total Invoiced</span>
+		<strong>{{ financial_summary.display_total_invoiced }}</strong>
+		<p>Invoices issued to client</p>
+	</div>
+	<div class="qatra-payment-summary-card">
+		<span>Total Paid</span>
+		<strong>{{ financial_summary.display_total_received }}</strong>
+		<p>Received payments</p>
+	</div>
+	<div class="qatra-payment-summary-card qatra-payment-summary-card--dark">
+		<span>Outstanding Balance</span>
+		<strong>{{ financial_summary.display_invoice_outstanding }}</strong>
+		<p>Remaining client balance</p>
+	</div>
+</section>
+
+<section class="qatra-dashboard-content-grid">
+	<div class="qatra-dashboard-white-card qatra-payment-card-large" id="statement">
+		<div class="qatra-section-kicker">
+			<span></span>
+			<p>Statement of Account</p>
+		</div>
+		<h2 class="qatra-dashboard-section-title">Recent financial transactions</h2>
+
+		{% if payment_view.statement_rows %}
+		<div class="qatra-report-data-table" data-qatra-report-table data-qatra-report-title="Statement of Account">
+			<div class="qatra-report-table-toolbar">
+				<label>
+					<span>Search</span>
+					<input type="search" placeholder="Search statement..." data-qatra-report-search>
+				</label>
+				<label>
+					<span>Rows</span>
+					<select data-qatra-report-page-size>
+						<option value="10">10</option>
+						<option value="25">25</option>
+						<option value="50">50</option>
+						<option value="100">100</option>
+					</select>
+				</label>
+				<button class="qatra-report-download-button" type="button" data-qatra-report-download>Download CSV</button>
+			</div>
+
+			<div class="qatra-dashboard-report-table">
+				<div class="qatra-dashboard-report-row qatra-dashboard-report-row--head" style="--qatra-report-columns: 7;" data-qatra-report-header>
+					<span>Date</span>
+					<span>Document</span>
+					<span>Reference</span>
+					<span>Description</span>
+					<span>Debit</span>
+					<span>Credit</span>
+					<span>Balance</span>
+				</div>
+				{% for row in payment_view.statement_rows %}
+				<div class="qatra-dashboard-report-row" style="--qatra-report-columns: 7;" data-qatra-report-row>
+					<span>{{ row.display_date }}</span>
+					<span>{{ row.document_type }}</span>
+					<span>{{ row.reference }}</span>
+					<span>{{ row.description }}</span>
+					<span>{{ row.display_debit }}</span>
+					<span>{{ row.display_credit }}</span>
+					<span>{{ row.display_balance }}</span>
+				</div>
+				{% endfor %}
+			</div>
+
+			<div class="qatra-report-table-footer">
+				<span data-qatra-report-count></span>
+				<div class="qatra-report-pagination">
+					<button type="button" data-qatra-report-prev>Previous</button>
+					<span data-qatra-report-page></span>
+					<button type="button" data-qatra-report-next>Next</button>
+				</div>
+			</div>
+		</div>
+		{% else %}
+		<div class="qatra-dashboard-empty-card">
+			<p>No invoices or payments have been recorded for this project yet.</p>
+		</div>
+		{% endif %}
+	</div>
+
+	<div class="qatra-dashboard-white-card qatra-dashboard-soft-card">
+		<div class="qatra-section-kicker">
+			<span></span>
+			<p>Payment Status</p>
+		</div>
+		<h2 class="qatra-dashboard-section-title">Client overview</h2>
+
+		<div class="qatra-payment-progress-box">
+			<div class="qatra-dashboard-circle-progress qatra-payment-circle" style="--progress: {{ payment_view.payment_progress or 0 }};">
+				<div>
+					<strong>{{ payment_view.display_payment_progress }}</strong>
+				</div>
+			</div>
+			<p>Payment progress against total contract value.</p>
+		</div>
+
+		<div class="qatra-dashboard-snapshot-list">
+			<div>
+				<span>Last Invoice</span>
+				<strong>{{ payment_view.latest_invoice.name if payment_view.latest_invoice else "Not issued" }}</strong>
+			</div>
+			<div>
+				<span>Last Payment</span>
+				<strong>{{ payment_view.latest_payment.display_date if payment_view.latest_payment else "Not received" }}</strong>
+			</div>
+			<div>
+				<span>Payment Method</span>
+				<strong>{{ payment_view.latest_payment_method }}</strong>
+			</div>
+			<div>
+				<span>Status</span>
+				<strong>{{ payment_view.payment_status }}</strong>
+			</div>
+		</div>
+	</div>
+</section>
+
+<section class="qatra-financial-section">
+	<div class="qatra-project-overview-header">
+		<div>
+			<p class="qatra-eyebrow">Invoices</p>
+			<h2>Invoice History</h2>
+		</div>
+	</div>
+	{% if financial_summary.invoices %}
+	<div class="qatra-report-data-table" data-qatra-report-table data-qatra-report-title="Invoice History">
+		<div class="qatra-report-table-toolbar">
+			<label>
+				<span>Search</span>
+				<input type="search" placeholder="Search invoices..." data-qatra-report-search>
+			</label>
+			<label>
+				<span>Rows</span>
+				<select data-qatra-report-page-size>
+					<option value="10">10</option>
+					<option value="25">25</option>
+					<option value="50">50</option>
+					<option value="100">100</option>
+				</select>
+			</label>
+			<button class="qatra-report-download-button" type="button" data-qatra-report-download>Download CSV</button>
+		</div>
+		<div class="qatra-dashboard-report-table">
+			<div class="qatra-dashboard-report-row qatra-dashboard-report-row--head" style="--qatra-report-columns: 7;" data-qatra-report-header>
+				<span>Invoice</span>
+				<span>Date</span>
+				<span>Due Date</span>
+				<span>Description</span>
+				<span>Amount</span>
+				<span>Outstanding</span>
+				<span>Status</span>
+			</div>
+			{% for invoice in financial_summary.invoices | reverse %}
+			<div class="qatra-dashboard-report-row" style="--qatra-report-columns: 7;" data-qatra-report-row>
+				<span>{{ invoice.name }}</span>
+				<span>{{ invoice.display_date }}</span>
+				<span>{{ invoice.display_due_date }}</span>
+				<span>{{ invoice.description }}</span>
+				<span>{{ invoice.display_invoice_amount }}</span>
+				<span>{{ invoice.display_outstanding_amount }}</span>
+				<span>{{ invoice.status }}</span>
+			</div>
+			{% endfor %}
+		</div>
+		<div class="qatra-report-table-footer">
+			<span data-qatra-report-count></span>
+			<div class="qatra-report-pagination">
+				<button type="button" data-qatra-report-prev>Previous</button>
+				<span data-qatra-report-page></span>
+				<button type="button" data-qatra-report-next>Next</button>
+			</div>
+		</div>
+	</div>
+	{% else %}
+	<div class="qatra-empty-state qatra-empty-state--compact">
+		<p>No invoices have been issued for this project yet.</p>
+	</div>
+	{% endif %}
+</section>
+
+<section class="qatra-financial-section">
+	<div class="qatra-project-overview-header">
+		<div>
+			<p class="qatra-eyebrow">Receipts</p>
+			<h2>Payment History</h2>
+		</div>
+	</div>
+	{% if payment_view.payment_rows %}
+	<div class="qatra-report-data-table" data-qatra-report-table data-qatra-report-title="Payment History">
+		<div class="qatra-report-table-toolbar">
+			<label>
+				<span>Search</span>
+				<input type="search" placeholder="Search payments..." data-qatra-report-search>
+			</label>
+			<label>
+				<span>Rows</span>
+				<select data-qatra-report-page-size>
+					<option value="10">10</option>
+					<option value="25">25</option>
+					<option value="50">50</option>
+					<option value="100">100</option>
+				</select>
+			</label>
+			<button class="qatra-report-download-button" type="button" data-qatra-report-download>Download CSV</button>
+		</div>
+		<div class="qatra-dashboard-report-table">
+			<div class="qatra-dashboard-report-row qatra-dashboard-report-row--head" style="--qatra-report-columns: 7;" data-qatra-report-header>
+				<span>Payment Entry</span>
+				<span>Date</span>
+				<span>Type</span>
+				<span>Allocated Reference</span>
+				<span>Amount</span>
+				<span>Mode</span>
+				<span>Status</span>
+			</div>
+			{% for payment in payment_view.payment_rows %}
+			<div class="qatra-dashboard-report-row" style="--qatra-report-columns: 7;" data-qatra-report-row>
+				<span>{{ payment.name }}</span>
+				<span>{{ payment.display_date }}</span>
+				<span>{{ payment.transaction_type }}</span>
+				<span>{{ payment.allocated_reference }}</span>
+				<span>{{ payment.display_allocated_amount }}</span>
+				<span>{{ payment.mode_of_payment or "Not specified" }}</span>
+				<span>{{ payment.status }}</span>
+			</div>
+			{% endfor %}
+		</div>
+		<div class="qatra-report-table-footer">
+			<span data-qatra-report-count></span>
+			<div class="qatra-report-pagination">
+				<button type="button" data-qatra-report-prev>Previous</button>
+				<span data-qatra-report-page></span>
+				<button type="button" data-qatra-report-next>Next</button>
+			</div>
+		</div>
+	</div>
+	{% else %}
+	<div class="qatra-empty-state qatra-empty-state--compact">
+		<p>No payments have been recorded for this project yet.</p>
+	</div>
+	{% endif %}
+</section>
+
+<section class="qatra-payments-grid">
+	{% for invoice in payment_view.invoice_cards %}
+	<article class="{% if loop.first %}qatra-payment-doc-card qatra-payment-doc-card--featured{% else %}qatra-payment-doc-card{% endif %}">
+		<div class="qatra-payment-doc-top">
+			<p>Invoice</p>
+			<span>{{ invoice.status }}</span>
+		</div>
+		<h3>{{ invoice.description or invoice.name }}</h3>
+		<p>Issued against {{ selected_project.display_name }}.</p>
+		<div class="qatra-payment-doc-meta">
+			<div>
+				<span>Invoice No.</span>
+				<strong>{{ invoice.name }}</strong>
+			</div>
+			<div>
+				<span>Amount</span>
+				<strong>{{ invoice.display_invoice_amount }}</strong>
+			</div>
+			<div>
+				<span>Due Date</span>
+				<strong>{{ invoice.display_due_date }}</strong>
+			</div>
+			<div>
+				<span>Outstanding</span>
+				<strong>{{ invoice.display_outstanding_amount }}</strong>
+			</div>
+		</div>
+	</article>
+	{% endfor %}
+
+	{% for payment in payment_view.receipt_cards %}
+	<article class="qatra-payment-doc-card">
+		<div class="qatra-payment-doc-top">
+			<p>Receipt Voucher</p>
+			<span>{{ payment.status }}</span>
+		</div>
+		<h3>{{ payment.transaction_type }}</h3>
+		<p>Payment confirmation against {{ payment.allocated_reference }}.</p>
+		<div class="qatra-payment-doc-meta">
+			<div>
+				<span>Voucher No.</span>
+				<strong>{{ payment.name }}</strong>
+			</div>
+			<div>
+				<span>Amount</span>
+				<strong>{{ payment.display_allocated_amount }}</strong>
+			</div>
+			<div>
+				<span>Date</span>
+				<strong>{{ payment.display_date }}</strong>
+			</div>
+			<div>
+				<span>Mode</span>
+				<strong>{{ payment.mode_of_payment or "Not specified" }}</strong>
+			</div>
+		</div>
+	</article>
+	{% endfor %}
+</section>
+
+{% else %}
+<section class="qatra-dashboard-empty-state">
+	<h1>No projects found</h1>
+	<p>No payment information is available because no projects are linked to your client account.</p>
+</section>
+{% endif %}
+{% endblock %}

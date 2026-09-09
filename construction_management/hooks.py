@@ -34,6 +34,20 @@ portal_menu_items = [
     },
 ]
 
+website_route_rules = [
+    {"from_route": "/client-portal", "to_route": "client-portal"},
+    {"from_route": "/client-portal/dashboard", "to_route": "client-portal-dashboard"},
+    {"from_route": "/client-portal/project/<path:name>", "to_route": "client-portal-project"},
+    {"from_route": "/client-portal/projects", "to_route": "client-portal-projects"},
+    {"from_route": "/client-portal/report/<path:name>", "to_route": "client-portal-report"},
+    {"from_route": "/client-portal/reports", "to_route": "client-portal-reports"},
+    {"from_route": "/client-portal/documents", "to_route": "client-portal-documents"},
+    {"from_route": "/client-portal/gallery", "to_route": "client-portal-gallery"},
+    {"from_route": "/client-portal/approvals", "to_route": "client-portal-approvals"},
+    {"from_route": "/client-portal/payments", "to_route": "client-portal-payments"},
+    {"from_route": "/client-portal/logout", "to_route": "client-portal-logout"},
+]
+
 # Apps
 # ------------------
 

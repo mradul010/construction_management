@@ -1,0 +1,37 @@
+<aside class="qatra-portal-sidebar" id="qatra-portal-sidebar" aria-label="Client portal navigation">
+	<div class="qatra-portal-sidebar-inner">
+		<div class="qatra-portal-sidebar-top">
+			<a class="qatra-portal-logo" href="/client-portal/dashboard" aria-label="{{ qatra_company_name or 'QATRA' }} Client Portal Dashboard">
+				<img src="{{ qatra_logo }}" alt="{{ qatra_company_name or 'QATRA Building Contracting' }}" onerror="this.onerror=null; this.src='{{ qatra_fallback_logo }}';">
+			</a>
+			<button
+				class="qatra-portal-collapse-button"
+				type="button"
+				aria-label="Collapse navigation"
+				aria-expanded="true"
+				data-qatra-portal-collapse
+			>
+				<span data-qatra-collapse-icon>&lt;&lt;</span>
+			</button>
+		</div>
+
+		<nav class="qatra-portal-nav" aria-label="Client portal sections">
+			{% for item in qatra_portal_nav_items %}
+			<a
+				class="qatra-portal-nav-link{% if active_page == item.key %} qatra-portal-nav-link--active{% endif %}"
+				href="{{ item.route }}"
+				title="{{ item.title }}"
+				{% if active_page == item.key %}aria-current="page"{% endif %}
+			>
+				<span data-qatra-nav-initial="{{ item.title[:1] }}">{{ item.title }}</span>
+			</a>
+			{% endfor %}
+		</nav>
+
+		<div class="qatra-portal-user">
+			<div class="qatra-portal-user-name">{{ full_name }}</div>
+			<div class="qatra-portal-user-company">{{ customer_name or "Client Portal" }}</div>
+			<button class="qatra-portal-signout" type="button" title="Sign Out" data-qatra-portal-signout>Sign Out</button>
+		</div>
+	</div>
+</aside>

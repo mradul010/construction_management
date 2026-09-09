@@ -1,0 +1,124 @@
+{% extends "construction_management/templates/client_portal/base.html" %}
+
+{% block portal_content %}
+<section class="qatra-dashboard-command-hero qatra-dashboard-command-hero--compact">
+	<div class="qatra-dashboard-hero-grid">
+		<div class="qatra-dashboard-hero-copy">
+			<div class="qatra-section-kicker qatra-section-kicker--light">
+				<span></span>
+				<p>Project Reports</p>
+			</div>
+			<h1>Clear project reports for every client update.</h1>
+			<p class="qatra-dashboard-hero-text">
+				{{ customer_name }} &middot; {{ report_summary.total }} available
+				report view{% if report_summary.total != 1 %}s{% endif %}
+			</p>
+
+			<div class="qatra-dashboard-pill-row">
+				<div class="qatra-dashboard-info-pill">
+					<span>Available</span>
+					<strong>{{ report_summary.total }}</strong>
+				</div>
+				<div class="qatra-dashboard-info-pill">
+					<span>Types</span>
+					<strong>{{ report_summary.available_types }}</strong>
+				</div>
+				<div class="qatra-dashboard-info-pill">
+					<span>Projects</span>
+					<strong>{{ report_summary.projects_with_reports }} / {{ report_summary.total_projects }}</strong>
+				</div>
+			</div>
+		</div>
+
+		<div class="qatra-dashboard-progress-panel">
+			<p class="qatra-dashboard-panel-label">Latest Report</p>
+			<h2>{{ report_summary.latest_title }}</h2>
+			<p class="qatra-dashboard-muted">{{ report_summary.latest_date }}</p>
+			{% if report_summary.latest %}
+			<a class="qatra-dashboard-panel-button" href="{{ report_summary.latest.detail_route }}">Open Latest Report</a>
+			{% endif %}
+		</div>
+	</div>
+</section>
+
+<form class="qatra-dashboard-toolbar" method="get" action="/client-portal/reports">
+	<div>
+		<h2>Reports Library</h2>
+		<p>Client-visible views generated from Construction Management project data.</p>
+	</div>
+	<div class="qatra-dashboard-toolbar-actions">
+		<label>
+			<span>Search</span>
+			<input type="search" name="search" value="{{ filters.search }}" placeholder="Search reports...">
+		</label>
+		<label>
+			<span>Project</span>
+			<select name="project">
+				<option value="">All Projects</option>
+				{% for project in projects %}
+				<option value="{{ project.name }}" {{ "selected" if filters.project == project.name else "" }}>{{ project.display_name }}</option>
+				{% endfor %}
+			</select>
+		</label>
+		<label>
+			<span>Type</span>
+			<select name="type">
+				<option value="">All Types</option>
+				{% for report_type in report_types %}
+				<option value="{{ report_type.key }}" {{ "selected" if filters.type == report_type.key or filters.type == report_type.label else "" }}>{{ report_type.label }}</option>
+				{% endfor %}
+			</select>
+		</label>
+		<label>
+			<span>Date</span>
+			<input type="date" name="date" value="{{ filters.date }}">
+		</label>
+		<button class="qatra-dashboard-filter-button" type="submit">Filter</button>
+	</div>
+</form>
+
+{% if reports %}
+<section class="qatra-dashboard-report-grid">
+	{% for report in reports %}
+	<article class="{% if loop.first %}qatra-dashboard-report-card qatra-dashboard-report-card--featured{% else %}qatra-dashboard-report-card{% endif %}">
+		<div class="qatra-dashboard-report-card-top">
+			<p>{{ report.report_type }}</p>
+			<span>{{ report.display_status }}</span>
+		</div>
+
+		<h3>{{ report.display_title }}</h3>
+		<p>{{ report.display_summary }}</p>
+
+		<div class="qatra-dashboard-report-meta">
+			<div>
+				<span>Project</span>
+				<strong>{{ report.project_display_name }}</strong>
+			</div>
+			<div>
+				<span>Date</span>
+				<strong>{{ report.display_date }}</strong>
+			</div>
+			<div>
+				<span>{{ report.primary_metric_label }}</span>
+				<strong>{{ report.primary_metric_value }}</strong>
+			</div>
+			<div>
+				<span>{{ report.secondary_metric_label }}</span>
+				<strong>{{ report.secondary_metric_value }}</strong>
+			</div>
+		</div>
+
+		<a class="qatra-dashboard-report-link" href="{{ report.detail_route }}">
+			<span>View Report</span>
+			<b>&rarr;</b>
+		</a>
+	</article>
+	{% endfor %}
+</section>
+{% else %}
+<section class="qatra-dashboard-empty-state">
+	<h1>No published reports found</h1>
+	<p>Report views will appear after a project is linked to your client account.</p>
+</section>
+{% endif %}
+{% endblock %}

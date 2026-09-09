@@ -1,0 +1,394 @@
+{% extends "construction_management/templates/client_portal/base.html" %}
+
+{% block portal_content %}
+<a href="/client-portal/reports?project={{ project.name | urlencode }}" class="qatra-dashboard-back-link">&larr; Back to reports</a>
+
+<section class="qatra-dashboard-command-hero qatra-dashboard-command-hero--compact">
+	<div class="qatra-dashboard-hero-grid">
+		<div class="qatra-dashboard-hero-copy">
+			<div class="qatra-section-kicker qatra-section-kicker--light">
+				<span></span>
+				<p>Project Report</p>
+			</div>
+			<h1>{{ report.display_title }}</h1>
+			<p class="qatra-dashboard-hero-text">
+				{{ report.name }} &middot; {{ report.project_display_name }}
+			</p>
+
+			<div class="qatra-dashboard-pill-row">
+				<div class="qatra-dashboard-info-pill">
+					<span>Date</span>
+					<strong>{{ report.display_date }}</strong>
+				</div>
+				<div class="qatra-dashboard-info-pill">
+					<span>Status</span>
+					<strong>{{ report.display_status }}</strong>
+				</div>
+				<div class="qatra-dashboard-info-pill">
+					<span>Prepared By</span>
+					<strong>{{ report.prepared_by or "Not specified" }}</strong>
+				</div>
+			</div>
+		</div>
+
+		<div class="qatra-dashboard-progress-panel">
+			<p class="qatra-dashboard-panel-label">Report Contents</p>
+			{% if report.is_virtual %}
+			<h2>{{ report.primary_metric_value }} {{ report.primary_metric_label }}</h2>
+			<p class="qatra-dashboard-muted">{{ report.secondary_metric_value }} {{ report.secondary_metric_label }}</p>
+			{% else %}
+			<h2>{{ tasks | length }} tasks &middot; {{ photos | length }} photos</h2>
+			<p class="qatra-dashboard-muted">{{ attachments | length }} attachment{% if attachments | length != 1 %}s{% endif %}</p>
+			{% endif %}
+			<a class="qatra-dashboard-panel-button" href="{{ project.detail_route }}">Open Project</a>
+		</div>
+	</div>
+</section>
+
+<section class="qatra-dashboard-content-grid">
+	<div class="qatra-dashboard-white-card">
+		<div class="qatra-section-kicker">
+			<span></span>
+			<p>Summary</p>
+		</div>
+		<h2 class="qatra-dashboard-section-title">Project Update</h2>
+		<div class="qatra-dashboard-rich-text">
+			{{ report.summary or "No summary provided." }}
+		</div>
+	</div>
+
+	<div class="qatra-dashboard-white-card qatra-dashboard-soft-card">
+		<div class="qatra-section-kicker">
+			<span></span>
+			<p>Report Info</p>
+		</div>
+		<h2 class="qatra-dashboard-section-title">Overview</h2>
+		<div class="qatra-dashboard-snapshot-list">
+			<div>
+				<span>Project</span>
+				<strong>{{ report.project_display_name }}</strong>
+			</div>
+			<div>
+				<span>Report</span>
+				<strong>{{ report.name }}</strong>
+			</div>
+			{% if report.is_virtual %}
+			<div>
+				<span>{{ report.primary_metric_label }}</span>
+				<strong>{{ report.primary_metric_value }}</strong>
+			</div>
+			<div>
+				<span>{{ report.secondary_metric_label }}</span>
+				<strong>{{ report.secondary_metric_value }}</strong>
+			</div>
+			{% else %}
+			<div>
+				<span>Tasks</span>
+				<strong>{{ tasks | length }}</strong>
+			</div>
+			<div>
+				<span>Photos</span>
+				<strong>{{ photos | length }}</strong>
+			</div>
+			{% endif %}
+		</div>
+	</div>
+</section>
+
+{% if report.daily_updates %}
+<section class="qatra-dashboard-white-card qatra-dashboard-report-section qatra-dpr-report-section">
+	<div class="qatra-section-kicker">
+		<span></span>
+		<p>Daily Updates</p>
+	</div>
+	<h2 class="qatra-dashboard-section-title">Site Notes, Tasks and Photos</h2>
+
+	<div class="qatra-dpr-update-stack">
+		{% for update in report.daily_updates %}
+		<article class="qatra-dpr-update-card">
+			<div class="qatra-dpr-update-head">
+				<div>
+					<span>{{ update.display_date }}</span>
+					<h3>{{ update.title }}</h3>
+					<p>{{ update.name }} &middot; {{ update.display_status }}</p>
+				</div>
+				<div class="qatra-dpr-update-counts">
+					<div>
+						<strong>{{ update.task_count }}</strong>
+						<span>Tasks</span>
+					</div>
+					<div>
+						<strong>{{ update.photo_count }}</strong>
+						<span>Photos</span>
+					</div>
+				</div>
+			</div>
+
+			<div class="qatra-dpr-copy-grid">
+				<div class="qatra-dpr-copy-panel">
+					<span>Summary</span>
+					<p>{{ update.summary or "No summary provided." }}</p>
+				</div>
+				<div class="qatra-dpr-copy-panel">
+					<span>Notes</span>
+					<p>{{ update.notes or "No notes provided." }}</p>
+				</div>
+			</div>
+
+			{% if update.tasks %}
+			<div class="qatra-dpr-subsection">
+				<div class="qatra-dpr-subsection-head">
+					<h4>Tasks Completed</h4>
+					<span>{{ update.task_photo_count }} with photos</span>
+				</div>
+				<div class="qatra-dpr-task-grid">
+					{% for task in update.tasks %}
+					<div class="qatra-dpr-task-card{% if task.photo %} qatra-dpr-task-card--with-image{% endif %}">
+						{% if task.photo %}
+						<a class="qatra-dpr-task-image" href="{{ task.photo }}" target="_blank" rel="noopener">
+							<img src="{{ task.photo }}" alt="{{ task.display_title }}">
+						</a>
+						{% endif %}
+						<div class="qatra-dpr-task-body">
+							<div>
+								<span>{{ task.display_status }}</span>
+								<h5>{{ task.display_title }}</h5>
+								{% if task.display_description %}
+								<p>{{ task.display_description }}</p>
+								{% endif %}
+							</div>
+							<div class="qatra-dpr-task-meta">
+								<div>
+									<span>Quantity</span>
+									<strong>{{ task.display_quantity }}</strong>
+								</div>
+								<div>
+									<span>Location</span>
+									<strong>{{ task.display_location }}</strong>
+								</div>
+							</div>
+							{% if task.notes and task.notes != task.display_description %}
+							<p class="qatra-dpr-task-note">{{ task.notes }}</p>
+							{% endif %}
+						</div>
+					</div>
+					{% endfor %}
+				</div>
+			</div>
+			{% endif %}
+
+			{% if update.photos %}
+			<div class="qatra-dpr-subsection">
+				<div class="qatra-dpr-subsection-head">
+					<h4>Site Photos</h4>
+					<span>{{ update.photo_count }} image{% if update.photo_count != 1 %}s{% endif %}</span>
+				</div>
+				<div class="qatra-dpr-photo-grid">
+					{% for photo in update.photos %}
+					<figure>
+						<a href="{{ photo.photo }}" target="_blank" rel="noopener">
+							<img src="{{ photo.photo }}" alt="{{ photo.display_caption }}">
+						</a>
+						<figcaption>
+							<strong>{{ photo.display_caption }}</strong>
+							{% if photo.display_notes %}<span>{{ photo.display_notes }}</span>{% endif %}
+						</figcaption>
+					</figure>
+					{% endfor %}
+				</div>
+			</div>
+			{% endif %}
+		</article>
+		{% endfor %}
+	</div>
+</section>
+{% endif %}
+
+{% if report.is_virtual %}
+{% for section in report.sections %}
+<section class="qatra-dashboard-white-card qatra-dashboard-report-section">
+	<div class="qatra-section-kicker">
+		<span></span>
+		<p>{{ section.kicker }}</p>
+	</div>
+	<h2 class="qatra-dashboard-section-title">{{ section.title }}</h2>
+
+	{% if section.metrics %}
+	<div class="qatra-dashboard-snapshot-list qatra-dashboard-report-metrics">
+		{% for metric in section.metrics %}
+		<div>
+			<span>{{ metric.label }}</span>
+			<strong>{{ metric.value }}</strong>
+		</div>
+		{% endfor %}
+	</div>
+	{% endif %}
+
+	{% if section.table %}
+	{% if section.table.rows %}
+	<div class="qatra-report-data-table" data-qatra-report-table data-qatra-report-title="{{ section.title }}">
+		<div class="qatra-report-table-toolbar">
+			<label>
+				<span>Search</span>
+				<input type="search" placeholder="Search this table..." data-qatra-report-search>
+			</label>
+			<label>
+				<span>Rows</span>
+				<select data-qatra-report-page-size>
+					<option value="10">10</option>
+					<option value="25">25</option>
+					<option value="50">50</option>
+					<option value="100">100</option>
+				</select>
+			</label>
+			<button class="qatra-report-download-button" type="button" data-qatra-report-download>Download CSV</button>
+		</div>
+
+		<div class="qatra-dashboard-report-table">
+			<div class="qatra-dashboard-report-row qatra-dashboard-report-row--head" style="--qatra-report-columns: {{ section.table.columns | length }};" data-qatra-report-header>
+				{% for column in section.table.columns %}
+				<span>{{ column }}</span>
+				{% endfor %}
+			</div>
+			{% for row in section.table.rows %}
+			<div class="qatra-dashboard-report-row" style="--qatra-report-columns: {{ section.table.columns | length }};" data-qatra-report-row>
+				{% for value in row %}
+				<span>{{ value or "-" }}</span>
+				{% endfor %}
+			</div>
+			{% endfor %}
+		</div>
+
+		<div class="qatra-report-table-footer">
+			<span data-qatra-report-count></span>
+			<div class="qatra-report-pagination">
+				<button type="button" data-qatra-report-prev>Previous</button>
+				<span data-qatra-report-page></span>
+				<button type="button" data-qatra-report-next>Next</button>
+			</div>
+		</div>
+	</div>
+	{% else %}
+	<div class="qatra-dashboard-empty-card">
+		<p>No data found for this report section.</p>
+	</div>
+	{% endif %}
+	{% endif %}
+</section>
+{% endfor %}
+{% else %}
+{% if not report.daily_updates %}
+<section class="qatra-dashboard-white-card qatra-dashboard-report-section">
+	<div class="qatra-section-kicker">
+		<span></span>
+		<p>Completed Tasks</p>
+	</div>
+	<h2 class="qatra-dashboard-section-title">Site Progress</h2>
+
+	{% if tasks %}
+	<div class="qatra-report-data-table" data-qatra-report-table data-qatra-report-title="Site Progress">
+		<div class="qatra-report-table-toolbar">
+			<label>
+				<span>Search</span>
+				<input type="search" placeholder="Search this table..." data-qatra-report-search>
+			</label>
+			<label>
+				<span>Rows</span>
+				<select data-qatra-report-page-size>
+					<option value="10">10</option>
+					<option value="25">25</option>
+					<option value="50">50</option>
+					<option value="100">100</option>
+				</select>
+			</label>
+			<button class="qatra-report-download-button" type="button" data-qatra-report-download>Download CSV</button>
+		</div>
+
+		<div class="qatra-dashboard-report-table">
+			<div class="qatra-dashboard-report-row qatra-dashboard-report-row--head" data-qatra-report-header>
+				<span>Task</span>
+				<span>Status</span>
+				<span>Quantity</span>
+				<span>Location</span>
+			</div>
+			{% for row in tasks %}
+			<div class="qatra-dashboard-report-row" data-qatra-report-row>
+				<span>{{ row.task_title or row.description or "-" }}</span>
+				<span>{{ row.status or "-" }}</span>
+				<span>{{ row.quantity or "" }} {{ row.uom or "" }}</span>
+				<span>{{ row.location or "-" }}</span>
+			</div>
+			{% endfor %}
+		</div>
+
+		<div class="qatra-report-table-footer">
+			<span data-qatra-report-count></span>
+			<div class="qatra-report-pagination">
+				<button type="button" data-qatra-report-prev>Previous</button>
+				<span data-qatra-report-page></span>
+				<button type="button" data-qatra-report-next>Next</button>
+			</div>
+		</div>
+	</div>
+	{% else %}
+	<div class="qatra-dashboard-empty-card">
+		<p>No completed tasks recorded.</p>
+	</div>
+	{% endif %}
+</section>
+{% endif %}
+
+{% if not report.daily_updates %}
+<section class="qatra-dashboard-white-card qatra-dashboard-report-section">
+	<div class="qatra-section-kicker">
+		<span></span>
+		<p>Photos</p>
+	</div>
+	<h2 class="qatra-dashboard-section-title">Site Photos</h2>
+
+	{% if photos %}
+	<div class="qatra-dashboard-photo-grid">
+		{% for row in photos %}
+		<figure>
+			<img src="{{ row.photo }}" alt="{{ row.caption or report.name }}">
+			{% if row.caption or row.notes %}
+			<figcaption>
+				{% if row.caption %}<strong>{{ row.caption }}</strong>{% endif %}
+				{% if row.notes %}<span>{{ row.notes }}</span>{% endif %}
+			</figcaption>
+			{% endif %}
+		</figure>
+		{% endfor %}
+	</div>
+	{% else %}
+	<div class="qatra-dashboard-empty-card">
+		<p>No photos attached.</p>
+	</div>
+	{% endif %}
+</section>
+{% endif %}
+
+<section class="qatra-dashboard-white-card qatra-dashboard-report-section">
+	<div class="qatra-section-kicker">
+		<span></span>
+		<p>Attachments</p>
+	</div>
+	<h2 class="qatra-dashboard-section-title">Files</h2>
+
+	{% if attachments %}
+	<div class="qatra-dashboard-attachment-list">
+		{% for file in attachments %}
+		<a href="{{ file.file_url }}" target="_blank" rel="noopener">
+			<span>{{ file.file_name }}</span>
+			<b>&rarr;</b>
+		</a>
+		{% endfor %}
+	</div>
+	{% else %}
+	<div class="qatra-dashboard-empty-card">
+		<p>No attachments found.</p>
+	</div>
+	{% endif %}
+</section>
+{% endif %}
+{% endblock %}

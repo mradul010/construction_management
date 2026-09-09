@@ -1,0 +1,45 @@
+{% extends "templates/web.html" %}
+
+{% block navbar %}{% endblock %}
+{% block footer %}{% endblock %}
+
+{% block head_include %}
+{{ super() }}
+<link rel="stylesheet" href="/assets/construction_management/css/qatra_client_portal.css?v={{ qatra_client_portal_asset_version or '1' }}">
+{% endblock %}
+
+{% block page_content %}
+<div class="qatra-client-portal-page qatra-portal-shell">
+	{% include "construction_management/templates/client_portal/sidebar.html" %}
+
+	<div class="qatra-portal-backdrop" data-qatra-portal-close></div>
+
+	<div class="qatra-portal-content">
+		<header class="qatra-portal-mobile-header">
+			<img class="qatra-portal-mobile-logo" src="{{ qatra_logo }}" alt="{{ qatra_company_name or 'QATRA Building Contracting' }}" onerror="this.onerror=null; this.src='{{ qatra_fallback_logo }}';">
+			<div class="qatra-portal-mobile-title">{{ page_title }}</div>
+			<button
+				class="qatra-portal-menu-button"
+				type="button"
+				aria-label="Open navigation"
+				aria-controls="qatra-portal-sidebar"
+				aria-expanded="false"
+				data-qatra-portal-open
+			>
+				<span></span>
+				<span></span>
+				<span></span>
+			</button>
+		</header>
+
+		<main class="qatra-portal-main">
+			{% block portal_content %}{% endblock %}
+		</main>
+	</div>
+</div>
+{% endblock %}
+
+{% block script %}
+{{ super() }}
+<script src="/assets/construction_management/js/qatra_client_portal.js?v={{ qatra_client_portal_asset_version or '1' }}"></script>
+{% endblock %}
