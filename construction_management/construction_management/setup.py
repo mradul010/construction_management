@@ -951,7 +951,7 @@ def ensure_purchase_invoice_site_material_consumption_fields():
 			"fieldtype": "Link",
 			"options": "Site Material Consumption",
 			"insert_after": "consume_site_materials_on_submit",
-			"read_only": 1,
+			"read_only": 0,
 			"no_copy": 1,
 			"module": "Construction Management",
 		},
