@@ -18,7 +18,18 @@ CONSTRUCTION_PORTAL_ITEMS = [
 ]
 
 QATRA_CLIENT_PORTAL_FALLBACK_LOGO = "/assets/construction_management/images/qatra-logo.svg"
-QATRA_CLIENT_PORTAL_ASSET_VERSION = "20260909-login-error"
+QATRA_CLIENT_PORTAL_ASSET_VERSION = "20260910-invoice-title"
+SALES_INVOICE_DISPLAY_REFERENCE_FIELDS = (
+	"title",
+	"custom_user_invoice_number",
+	"user_invoice_number",
+	"customer_invoice_number",
+	"custom_customer_invoice_number",
+	"invoice_number",
+	"custom_invoice_number",
+	"invoice_no",
+	"custom_invoice_no",
+)
 
 QATRA_CLIENT_PORTAL_ITEMS = [
 	{"key": "dashboard", "title": _("Dashboard"), "route": "/client-portal/dashboard"},
@@ -595,6 +606,26 @@ def get_dashboard_financials_for_projects(project_names, customers):
 		],
 		ignore_permissions=True,
 	)
+	sales_invoice_meta = frappe.get_meta("Sales Invoice")
+	invoice_fields = [
+		"name",
+		"project",
+		"customer",
+		"currency",
+		"net_total",
+		"grand_total",
+		"rounded_total",
+		"outstanding_amount",
+		"is_return",
+		"return_against",
+		"posting_date",
+		"creation",
+		"status",
+	]
+	for fieldname in get_sales_invoice_optional_fields(sales_invoice_meta):
+		if sales_invoice_meta.has_field(fieldname):
+			invoice_fields.append(fieldname)
+
 	invoices = frappe.get_all(
 		"Sales Invoice",
 		filters={
@@ -602,23 +633,10 @@ def get_dashboard_financials_for_projects(project_names, customers):
 			"customer": ["in", customers],
 			"docstatus": 1,
 		},
-		fields=[
-			"name",
-			"project",
-			"customer",
-			"currency",
-			"net_total",
-			"grand_total",
-			"rounded_total",
-			"outstanding_amount",
-			"is_return",
-			"return_against",
-			"posting_date",
-			"creation",
-			"status",
-		],
+		fields=list(dict.fromkeys(invoice_fields)),
 		ignore_permissions=True,
 	)
+	add_invoice_display_references(invoices)
 	invoices_by_name = {invoice.name: invoice for invoice in invoices}
 	sales_orders_by_name = {sales_order.name: sales_order for sales_order in sales_orders}
 	payment_refs = get_dashboard_payment_references(invoices_by_name, sales_orders_by_name, customers)
@@ -1850,13 +1868,14 @@ def get_dashboard_recent_activity(project_name, customers, financial_summary=Non
 
 	invoices = financial_summary.invoices if financial_summary else get_project_sales_invoices(project_name, customers)
 	for row in invoices:
+		display_reference = get_invoice_display_reference(row)
 		activity.append(
 			get_activity_row(
 				row.posting_date,
 				row.creation,
 				_("Sales Invoice"),
-				row.name,
-				_("Sales Invoice {0} issued").format(row.name),
+				display_reference,
+				_("Sales Invoice {0} issued").format(display_reference),
 				row.status,
 				row.invoice_amount,
 				row.currency,
@@ -1871,13 +1890,14 @@ def get_dashboard_recent_activity(project_name, customers, financial_summary=Non
 			project_name, customers
 		)
 	for row in payments:
+		display_reference = row.get("display_allocated_reference") or row.allocated_reference
 		activity.append(
 			get_activity_row(
 				row.posting_date,
 				row.creation,
 				_("Payment"),
 				row.name,
-				_("Payment received against {0}").format(row.allocated_reference),
+				_("Payment received against {0}").format(display_reference),
 				row.status,
 				row.allocated_amount,
 				financial_summary.currency if financial_summary else None,
@@ -2306,7 +2326,7 @@ def get_project_sales_invoices(project_name, customers):
 		"remarks",
 		"creation",
 	]
-	for fieldname in ("ra_bill", "boq", "sales_order"):
+	for fieldname in get_sales_invoice_optional_fields(sales_invoice_meta):
 		if sales_invoice_meta.has_field(fieldname):
 			fields.append(fieldname)
 
@@ -2332,6 +2352,7 @@ def get_project_sales_invoices(project_name, customers):
 		invoice.display_outstanding_amount = format_currency_value(
 			get_signed_amount(invoice, "outstanding_amount"), invoice.currency
 		)
+		invoice.display_invoice_reference = get_invoice_display_reference(invoice)
 		invoice.ra_bill_label = invoice.get("ra_bill") or None
 		invoice.description = get_invoice_description(invoice)
 
@@ -2345,6 +2366,7 @@ def get_project_invoice_payments(project_name, customers, invoices=None):
 	if not invoice_names:
 		return []
 
+	invoice_reference_map = {invoice.name: get_invoice_display_reference(invoice) for invoice in invoices}
 	references = frappe.get_all(
 		"Payment Entry Reference",
 		filters={
@@ -2361,7 +2383,11 @@ def get_project_invoice_payments(project_name, customers, invoices=None):
 		order_by="parent asc, idx asc",
 		ignore_permissions=True,
 	)
-	return get_payment_rows_from_references(references, customers, "Invoice Payment")
+	rows = get_payment_rows_from_references(references, customers, "Invoice Payment")
+	for row in rows:
+		row.display_allocated_reference = invoice_reference_map.get(row.allocated_reference) or row.allocated_reference
+
+	return rows
 
 
 def get_project_advance_payments(project_name, customers, sales_orders=None):
@@ -2428,6 +2454,7 @@ def get_payment_rows_from_references(references, customers, transaction_type):
 		row = frappe._dict(payment.copy())
 		row.transaction_type = transaction_type
 		row.allocated_reference = reference.reference_name
+		row.display_allocated_reference = reference.reference_name
 		row.allocated_amount = flt(reference.allocated_amount)
 		row.display_date = formatdate(row.posting_date) if row.posting_date else _("Not specified")
 		row.display_allocated_amount = format_currency_value(row.allocated_amount, None)
@@ -2447,7 +2474,7 @@ def get_project_statement(summary):
 					"name": invoice.name,
 					"type": _("Invoice"),
 					"description": invoice.description,
-					"reference": invoice.name,
+					"reference": invoice.display_invoice_reference,
 					"amount": invoice.invoice_amount,
 					"display_amount": format_currency_value(invoice.invoice_amount, summary.currency),
 					"status": invoice.status,
@@ -2464,8 +2491,8 @@ def get_project_statement(summary):
 					"creation": payment.creation,
 					"name": payment.name,
 					"type": payment.transaction_type,
-					"description": payment.allocated_reference,
-					"reference": payment.name,
+					"description": _("Payment Entry {0}").format(payment.name),
+					"reference": payment.display_allocated_reference,
 					"amount": payment.allocated_amount,
 					"display_amount": format_currency_value(payment.allocated_amount, summary.currency),
 					"status": payment.status,
@@ -2501,6 +2528,26 @@ def get_invoice_description(invoice):
 	if invoice.get("remarks"):
 		return invoice.remarks
 	return _("Sales Invoice")
+
+
+def get_invoice_display_reference(invoice):
+	for fieldname in SALES_INVOICE_DISPLAY_REFERENCE_FIELDS:
+		value = invoice.get(fieldname)
+		if value not in (None, ""):
+			value = str(value).strip()
+			if value:
+				return value
+
+	return invoice.get("name")
+
+
+def add_invoice_display_references(invoices):
+	for invoice in invoices or []:
+		invoice.display_invoice_reference = get_invoice_display_reference(invoice)
+
+
+def get_sales_invoice_optional_fields(sales_invoice_meta):
+	return SALES_INVOICE_DISPLAY_REFERENCE_FIELDS + ("ra_bill", "boq", "sales_order")
 
 
 def get_invoice_receivable_amount(invoice):

@@ -11,7 +11,11 @@
 				aria-expanded="true"
 				data-qatra-portal-collapse
 			>
-				<span data-qatra-collapse-icon>&lt;&lt;</span>
+				<span class="qatra-portal-collapse-icon" aria-hidden="true" data-qatra-collapse-icon>
+					<span></span>
+					<span></span>
+					<span></span>
+				</span>
 			</button>
 		</div>
 
@@ -31,7 +35,6 @@
 		<div class="qatra-portal-user">
 			<div class="qatra-portal-user-name">{{ full_name }}</div>
 			<div class="qatra-portal-user-company">{{ customer_name or "Client Portal" }}</div>
-			<button class="qatra-portal-signout" type="button" title="Sign Out" data-qatra-portal-signout>Sign Out</button>
 		</div>
 	</div>
 </aside>

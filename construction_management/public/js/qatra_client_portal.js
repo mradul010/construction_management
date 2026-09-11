@@ -16,7 +16,7 @@
 		const collapseIcon = document.querySelector("[data-qatra-collapse-icon]");
 		const closeTargets = document.querySelectorAll("[data-qatra-portal-close]");
 		const navLinks = document.querySelectorAll(".qatra-portal-nav-link");
-		const signOutButton = document.querySelector("[data-qatra-portal-signout]");
+		const signOutButtons = document.querySelectorAll("[data-qatra-portal-signout]");
 		const sidebarStorageKey = "qatraClientPortalSidebarCollapsed";
 
 		function setNavigation(open) {
@@ -45,11 +45,11 @@
 			});
 		});
 
-		if (signOutButton) {
-			signOutButton.addEventListener("click", function () {
+		signOutButtons.forEach(function (button) {
+			button.addEventListener("click", function () {
 				window.location.href = "/client-portal/logout";
 			});
-		}
+		});
 
 		function setSidebarCollapsed(collapsed, persist) {
 			body.classList.toggle("qatra-portal-sidebar-collapsed", collapsed);
@@ -61,7 +61,7 @@
 				);
 			}
 			if (collapseIcon) {
-				collapseIcon.textContent = collapsed ? ">>" : "<<";
+				collapseIcon.classList.toggle("qatra-portal-collapse-icon--collapsed", collapsed);
 			}
 			if (persist && window.localStorage) {
 				window.localStorage.setItem(sidebarStorageKey, collapsed ? "1" : "0");
