@@ -547,6 +547,40 @@
 	border-color: var(--qatra-gold-dark);
 }
 
+.qatra-client-portal .qatra-portal-collapse-icon {
+	align-items: center;
+	display: inline-flex;
+	flex-direction: column;
+	gap: 4px;
+	height: 18px;
+	justify-content: center;
+	position: relative;
+	width: 18px;
+}
+
+.qatra-client-portal .qatra-portal-collapse-icon span {
+	background: currentColor;
+	border-radius: 999px;
+	display: block;
+	height: 2px;
+	transition: transform 0.16s ease, width 0.16s ease;
+	width: 18px;
+}
+
+.qatra-client-portal .qatra-portal-collapse-icon--collapsed span:nth-child(1) {
+	transform: translateY(3px) rotate(35deg);
+	width: 12px;
+}
+
+.qatra-client-portal .qatra-portal-collapse-icon--collapsed span:nth-child(2) {
+	width: 18px;
+}
+
+.qatra-client-portal .qatra-portal-collapse-icon--collapsed span:nth-child(3) {
+	transform: translateY(-3px) rotate(-35deg);
+	width: 12px;
+}
+
 .qatra-client-portal .qatra-portal-nav {
 	display: grid;
 	gap: 8px;
@@ -647,6 +681,74 @@
 
 .qatra-client-portal .qatra-portal-main {
 	padding: 40px;
+}
+
+.qatra-client-portal .qatra-portal-topbar {
+	align-items: center;
+	background: rgba(255, 255, 255, 0.96);
+	border-bottom: 1px solid var(--qatra-border);
+	display: flex;
+	gap: 18px;
+	justify-content: space-between;
+	min-height: 72px;
+	padding: 14px 40px;
+	position: sticky;
+	top: 0;
+	z-index: 28;
+}
+
+.qatra-client-portal .qatra-portal-topbar-title {
+	display: grid;
+	gap: 3px;
+	min-width: 0;
+}
+
+.qatra-client-portal .qatra-portal-topbar-title span {
+	color: var(--qatra-navy);
+	font-size: 1rem;
+	font-weight: 850;
+	line-height: 1.25;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.qatra-client-portal .qatra-portal-topbar-title strong {
+	color: var(--qatra-muted);
+	font-size: 0.84rem;
+	font-weight: 700;
+	line-height: 1.25;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.qatra-client-portal .qatra-portal-topbar-signout,
+.qatra-client-portal .qatra-portal-header-signout {
+	background: var(--qatra-navy);
+	border: 1px solid var(--qatra-navy);
+	border-radius: 8px;
+	color: var(--qatra-white);
+	cursor: pointer;
+	font-size: 0.86rem;
+	font-weight: 850;
+	min-height: 42px;
+	padding: 0 16px;
+	transition: background 0.16s ease, border-color 0.16s ease, color 0.16s ease;
+	white-space: nowrap;
+}
+
+.qatra-client-portal .qatra-portal-topbar-signout:hover,
+.qatra-client-portal .qatra-portal-header-signout:hover {
+	background: var(--qatra-gold);
+	border-color: var(--qatra-gold);
+	color: var(--qatra-navy);
+}
+
+.qatra-client-portal .qatra-portal-header-signout {
+	display: none;
+	min-height: 38px;
+	padding: 0 12px;
 }
 
 .qatra-client-portal.qatra-portal-sidebar-collapsed .qatra-portal-sidebar {
@@ -3077,6 +3179,15 @@
 		display: flex;
 	}
 
+	.qatra-client-portal .qatra-portal-topbar {
+		display: none;
+	}
+
+	.qatra-client-portal .qatra-portal-header-signout {
+		display: inline-flex;
+		align-items: center;
+	}
+
 	.qatra-client-portal .qatra-portal-main {
 		padding: 28px 22px;
 	}
@@ -3229,6 +3340,12 @@
 
 	.qatra-client-portal .qatra-portal-mobile-title {
 		display: none;
+	}
+
+	.qatra-client-portal .qatra-portal-header-signout {
+		font-size: 0.78rem;
+		min-height: 36px;
+		padding: 0 10px;
 	}
 
 	.qatra-client-portal .qatra-portal-hero {

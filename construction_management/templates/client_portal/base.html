@@ -18,6 +18,7 @@
 		<header class="qatra-portal-mobile-header">
 			<img class="qatra-portal-mobile-logo" src="{{ qatra_logo }}" alt="{{ qatra_company_name or 'QATRA Building Contracting' }}" onerror="this.onerror=null; this.src='{{ qatra_fallback_logo }}';">
 			<div class="qatra-portal-mobile-title">{{ page_title }}</div>
+			<button class="qatra-portal-header-signout" type="button" data-qatra-portal-signout>Sign Out</button>
 			<button
 				class="qatra-portal-menu-button"
 				type="button"
@@ -30,6 +31,14 @@
 				<span></span>
 				<span></span>
 			</button>
+		</header>
+
+		<header class="qatra-portal-topbar">
+			<div class="qatra-portal-topbar-title">
+				<span>{{ page_title }}</span>
+				<strong>{{ customer_name or "Client Portal" }}</strong>
+			</div>
+			<button class="qatra-portal-topbar-signout" type="button" data-qatra-portal-signout>Sign Out</button>
 		</header>
 
 		<main class="qatra-portal-main">

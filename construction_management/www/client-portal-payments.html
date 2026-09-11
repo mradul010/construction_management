@@ -170,7 +170,7 @@
 		<div class="qatra-dashboard-snapshot-list">
 			<div>
 				<span>Last Invoice</span>
-				<strong>{{ payment_view.latest_invoice.name if payment_view.latest_invoice else "Not issued" }}</strong>
+				<strong>{{ payment_view.latest_invoice.display_invoice_reference if payment_view.latest_invoice else "Not issued" }}</strong>
 			</div>
 			<div>
 				<span>Last Payment</span>
@@ -225,7 +225,7 @@
 			</div>
 			{% for invoice in financial_summary.invoices | reverse %}
 			<div class="qatra-dashboard-report-row" style="--qatra-report-columns: 7;" data-qatra-report-row>
-				<span>{{ invoice.name }}</span>
+				<span>{{ invoice.display_invoice_reference }}</span>
 				<span>{{ invoice.display_date }}</span>
 				<span>{{ invoice.display_due_date }}</span>
 				<span>{{ invoice.description }}</span>
@@ -291,7 +291,7 @@
 				<span>{{ payment.name }}</span>
 				<span>{{ payment.display_date }}</span>
 				<span>{{ payment.transaction_type }}</span>
-				<span>{{ payment.allocated_reference }}</span>
+				<span>{{ payment.display_allocated_reference }}</span>
 				<span>{{ payment.display_allocated_amount }}</span>
 				<span>{{ payment.mode_of_payment or "Not specified" }}</span>
 				<span>{{ payment.status }}</span>
@@ -326,7 +326,7 @@
 		<div class="qatra-payment-doc-meta">
 			<div>
 				<span>Invoice No.</span>
-				<strong>{{ invoice.name }}</strong>
+				<strong>{{ invoice.display_invoice_reference }}</strong>
 			</div>
 			<div>
 				<span>Amount</span>
@@ -351,7 +351,7 @@
 			<span>{{ payment.status }}</span>
 		</div>
 		<h3>{{ payment.transaction_type }}</h3>
-		<p>Payment confirmation against {{ payment.allocated_reference }}.</p>
+		<p>Payment confirmation against {{ payment.display_allocated_reference }}.</p>
 		<div class="qatra-payment-doc-meta">
 			<div>
 				<span>Voucher No.</span>
