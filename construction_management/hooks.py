@@ -68,8 +68,14 @@ required_apps = ["erpnext"]
 # ------------------
 
 # include js, css files in header of desk.html
-app_include_css = "/assets/construction_management/css/report.css"
-app_include_js = "/assets/construction_management/js/report_summary.js"
+app_include_css = [
+    "/assets/construction_management/css/report.css",
+    "/assets/construction_management/css/enhanced_list_view/enhanced_list_view.css",
+]
+app_include_js = [
+    "/assets/construction_management/js/report_summary.js",
+    "/assets/construction_management/js/enhanced_list_view/enhanced_list_view.js",
+]
 
 doctype_js = {
     "Company": "public/js/company.js",
