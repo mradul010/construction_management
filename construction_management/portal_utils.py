@@ -18,7 +18,7 @@ CONSTRUCTION_PORTAL_ITEMS = [
 ]
 
 QATRA_CLIENT_PORTAL_FALLBACK_LOGO = "/assets/construction_management/images/qatra-logo.svg"
-QATRA_CLIENT_PORTAL_ASSET_VERSION = "20260910-invoice-title"
+QATRA_CLIENT_PORTAL_ASSET_VERSION = "20260922-progress-responsive"
 SALES_INVOICE_DISPLAY_REFERENCE_FIELDS = (
 	"title",
 	"custom_user_invoice_number",
@@ -730,6 +730,10 @@ def build_dashboard_financials(project_name, sales_orders, ra_bills, invoices, p
 	mixed_currency = has_mixed_currency(sales_orders, ra_bills, invoices)
 	contract_value = sum(flt(row.base_net_total if mixed_currency else row.net_total) for row in sales_orders)
 	certified_work_value = sum(flt(row.gross_amount) for row in ra_bills)
+	work_progress = get_project_work_progress_summary(
+		project_name,
+		fallback_progress=get_financial_physical_progress(certified_work_value, contract_value),
+	)
 	total_invoiced = sum(get_signed_amount(row, "net_total") for row in invoices)
 	total_invoice_receivable = sum(get_invoice_receivable_amount(row) for row in invoices)
 	invoice_outstanding = sum(get_signed_amount(row, "outstanding_amount") for row in invoices)
@@ -754,15 +758,14 @@ def build_dashboard_financials(project_name, sales_orders, ra_bills, invoices, p
 			"total_received": total_received,
 			"invoice_outstanding": invoice_outstanding,
 			"remaining_contract_value": max(contract_value - total_invoiced, 0),
-			"physical_progress": clamp_percent(certified_work_value / contract_value * 100)
-			if certified_work_value and contract_value
-			else 0,
+			"physical_progress": work_progress.physical_progress,
 			"billing_progress": clamp_percent(total_invoiced / contract_value * 100)
 			if total_invoiced and contract_value
 			else 0,
 			"collection_progress": clamp_percent(received_against_invoices / total_invoice_receivable * 100)
 			if received_against_invoices and total_invoice_receivable
 			else 0,
+			"physical_progress_source": work_progress.physical_progress_source,
 		}
 	)
 	add_financial_display_values(financials)
@@ -814,11 +817,13 @@ def get_dashboard_client_financial_summary(financials_by_project):
 		}
 	)
 	summary.remaining_contract_value = max(summary.contract_value - summary.total_invoiced, 0)
-	summary.physical_progress = (
-		clamp_percent(summary.certified_work_value / summary.contract_value * 100)
-		if summary.certified_work_value and summary.contract_value
-		else 0
-	)
+	progress_values = [
+		flt(row.get("physical_progress"))
+		for row in financials_by_project.values()
+		if row.get("physical_progress") is not None
+	]
+	summary.physical_progress = sum(progress_values) / len(progress_values) if progress_values else 0
+	summary.physical_progress_source = _("Average Construction Project Progress Report completion")
 	summary.billing_progress = (
 		clamp_percent(summary.total_invoiced / summary.contract_value * 100)
 		if summary.total_invoiced and summary.contract_value
@@ -2036,22 +2041,84 @@ def get_project_progress_summary(project_name, customers, project=None):
 
 	contract = get_project_contract_summary(project_name, customers, project=project)
 	certified_work_value = get_project_certified_work_value(project_name, customers)
-	project_percent = clamp_percent(project.get("percent_complete"))
-
-	if certified_work_value and contract.contract_value:
-		physical_progress = clamp_percent(certified_work_value / contract.contract_value * 100)
-		source = _("RA Bill certified work")
-	else:
-		physical_progress = project_percent
-		source = _("Project percent complete")
+	work_progress = get_project_work_progress_summary(
+		project_name,
+		fallback_progress=get_financial_physical_progress(certified_work_value, contract.contract_value),
+		project=project,
+	)
 
 	return frappe._dict(
 		{
-			"physical_progress": physical_progress,
-			"physical_progress_source": source,
+			"physical_progress": work_progress.physical_progress,
+			"physical_progress_source": work_progress.physical_progress_source,
 			"certified_work_value": certified_work_value,
 			"contract_value": contract.contract_value,
 		}
+	)
+
+
+def get_project_work_progress_summary(project_name, fallback_progress=None, project=None):
+	if not project_name:
+		return frappe._dict(
+			{
+				"physical_progress": clamp_percent(fallback_progress),
+				"physical_progress_source": _("Construction Project Progress Report completion"),
+				"work_progress_rows": 0,
+			}
+		)
+
+	try:
+		from construction_management.construction_management.page.construction_project_progress_report.construction_project_progress_report import (
+			_get_boq_detail_rows,
+			_get_project_doc,
+			_get_summary,
+		)
+
+		project_doc = project or _get_project_doc(project_name)
+		if not project_doc:
+			return get_project_work_progress_fallback(project_name, fallback_progress, project=project)
+
+		summary = _get_summary(project_name, project_doc, _get_boq_detail_rows(project_name), frappe._dict())
+		progress = summary.get("completion_percent")
+		if progress is None:
+			return get_project_work_progress_fallback(project_name, fallback_progress, project=project)
+
+		return frappe._dict(
+			{
+				"physical_progress": clamp_percent(progress),
+				"physical_progress_source": _("Construction Project Progress Report completion"),
+				"work_progress_rows": 1,
+			}
+		)
+	except Exception:
+		return get_project_work_progress_fallback(project_name, fallback_progress, project=project)
+
+
+def get_project_work_progress_fallback(project_name, fallback_progress=None, project=None):
+	if fallback_progress is not None:
+		return frappe._dict(
+			{
+				"physical_progress": clamp_percent(fallback_progress),
+				"physical_progress_source": _("Certified work progress"),
+				"work_progress_rows": 0,
+			}
+		)
+
+	project_percent = project.get("percent_complete") if project else frappe.db.get_value("Project", project_name, "percent_complete")
+	return frappe._dict(
+		{
+			"physical_progress": clamp_percent(project_percent),
+			"physical_progress_source": _("Project percent complete"),
+			"work_progress_rows": 0,
+		}
+	)
+
+
+def get_financial_physical_progress(certified_work_value, contract_value):
+	return (
+		clamp_percent(flt(certified_work_value) / flt(contract_value) * 100)
+		if certified_work_value and contract_value
+		else None
 	)
 
 
@@ -2072,6 +2139,11 @@ def get_project_financial_summary(project_name, customers, project=None):
 	mixed_currency = has_mixed_currency(contract.sales_orders, ra_bills, invoices)
 
 	certified_work_value = sum(flt(row.gross_amount) for row in ra_bills)
+	work_progress = get_project_work_progress_summary(
+		project.name,
+		fallback_progress=get_financial_physical_progress(certified_work_value, contract.contract_value),
+		project=project,
+	)
 	total_invoiced = sum(get_signed_amount(row, "net_total") for row in invoices)
 	total_invoice_receivable = sum(get_invoice_receivable_amount(row) for row in invoices)
 	invoice_outstanding = sum(get_signed_amount(row, "outstanding_amount") for row in invoices)
@@ -2080,11 +2152,7 @@ def get_project_financial_summary(project_name, customers, project=None):
 	total_received = received_against_invoices + advance_received
 	remaining_contract_value = max(flt(contract.contract_value) - flt(total_invoiced), 0)
 
-	physical_progress = (
-		clamp_percent(certified_work_value / contract.contract_value * 100)
-		if certified_work_value and contract.contract_value
-		else clamp_percent(project.get("percent_complete"))
-	)
+	physical_progress = work_progress.physical_progress
 	billing_progress = (
 		clamp_percent(total_invoiced / contract.contract_value * 100)
 		if total_invoiced and contract.contract_value
@@ -2113,9 +2181,7 @@ def get_project_financial_summary(project_name, customers, project=None):
 			"physical_progress": physical_progress,
 			"billing_progress": billing_progress,
 			"collection_progress": collection_progress,
-			"physical_progress_source": _("RA Bill certified work")
-			if certified_work_value and contract.contract_value
-			else _("Project percent complete"),
+			"physical_progress_source": work_progress.physical_progress_source,
 			"sales_orders": contract.sales_orders,
 			"ra_bills": ra_bills,
 			"invoices": invoices,

@@ -99,6 +99,7 @@ def get_payment_statement_rows(financial_summary):
 					"document_type": row.type,
 					"reference": row.reference,
 					"description": row.description,
+					"display_description": get_statement_description(row),
 					"display_debit": format_currency_value(debit, financial_summary.currency) if debit else "-",
 					"display_credit": format_currency_value(credit, financial_summary.currency) if credit else "-",
 					"display_balance": format_currency_value(running_balance, financial_summary.currency),
@@ -108,3 +109,13 @@ def get_payment_statement_rows(financial_summary):
 		)
 
 	return sorted(rows, key=lambda row: getdate(row.posting_date) if row.posting_date else getdate("1900-01-01"), reverse=True)
+
+
+def get_statement_description(row):
+	parts = []
+	if row.get("reference"):
+		parts.append(str(row.reference))
+	if row.get("description") and row.description not in parts:
+		parts.append(str(row.description))
+
+	return " - ".join(parts) if parts else row.get("document_type") or _("Transaction")
