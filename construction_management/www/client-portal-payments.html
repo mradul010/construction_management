@@ -113,24 +113,20 @@
 			</div>
 
 			<div class="qatra-dashboard-report-table">
-				<div class="qatra-dashboard-report-row qatra-dashboard-report-row--head" style="--qatra-report-columns: 7;" data-qatra-report-header>
+				<div class="qatra-dashboard-report-row qatra-statement-report-row qatra-dashboard-report-row--head" data-qatra-report-header>
 					<span>Date</span>
-					<span>Document</span>
-					<span>Reference</span>
 					<span>Description</span>
 					<span>Debit</span>
 					<span>Credit</span>
 					<span>Balance</span>
 				</div>
 				{% for row in payment_view.statement_rows %}
-				<div class="qatra-dashboard-report-row" style="--qatra-report-columns: 7;" data-qatra-report-row>
-					<span>{{ row.display_date }}</span>
-					<span>{{ row.document_type }}</span>
-					<span>{{ row.reference }}</span>
-					<span>{{ row.description }}</span>
-					<span>{{ row.display_debit }}</span>
-					<span>{{ row.display_credit }}</span>
-					<span>{{ row.display_balance }}</span>
+				<div class="qatra-dashboard-report-row qatra-statement-report-row" data-qatra-report-row>
+					<span data-label="Date">{{ row.display_date }}</span>
+					<span data-label="Description">{{ row.display_description }}</span>
+					<span data-label="Debit">{{ row.display_debit }}</span>
+					<span data-label="Credit">{{ row.display_credit }}</span>
+					<span data-label="Balance">{{ row.display_balance }}</span>
 				</div>
 				{% endfor %}
 			</div>

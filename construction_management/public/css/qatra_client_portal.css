@@ -13,6 +13,7 @@
 	color: var(--qatra-ink);
 	font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 	min-height: 100vh;
+	overflow-x: clip;
 }
 
 .qatra-client-portal,
@@ -507,20 +508,23 @@
 
 .qatra-client-portal .qatra-portal-logo {
 	align-items: center;
+	background: linear-gradient(135deg, var(--qatra-navy), var(--qatra-navy-soft));
+	border: 1px solid rgba(216, 184, 95, 0.34);
+	border-radius: 8px;
 	display: flex;
+	justify-content: center;
 	min-height: 64px;
 	min-width: 0;
+	padding: 10px 12px;
 	text-decoration: none;
 }
 
 .qatra-client-portal .qatra-portal-logo img {
-	background: var(--qatra-navy);
 	display: block;
 	height: auto;
-	max-height: 64px;
-	max-width: 190px;
+	max-height: 44px;
+	max-width: 166px;
 	object-fit: contain;
-	padding: 10px 12px;
 	width: auto;
 }
 
@@ -769,14 +773,14 @@
 .qatra-client-portal.qatra-portal-sidebar-collapsed .qatra-portal-logo {
 	min-height: 46px;
 	overflow: hidden;
+	padding: 8px;
 	width: 48px;
 }
 
 .qatra-client-portal.qatra-portal-sidebar-collapsed .qatra-portal-logo img {
-	max-height: 46px;
-	max-width: 120px;
-	padding: 8px;
-	transform: translateX(-8px);
+	max-height: 30px;
+	max-width: 90px;
+	transform: translateX(-10px);
 }
 
 .qatra-client-portal.qatra-portal-sidebar-collapsed .qatra-portal-collapse-button {
@@ -831,7 +835,9 @@
 }
 
 .qatra-client-portal .qatra-portal-mobile-logo {
-	background: var(--qatra-navy);
+	background: linear-gradient(135deg, var(--qatra-navy), var(--qatra-navy-soft));
+	border: 1px solid rgba(216, 184, 95, 0.34);
+	border-radius: 8px;
 	height: 42px;
 	object-fit: contain;
 	padding: 6px 8px;
@@ -2556,6 +2562,11 @@
 	padding: 14px 16px;
 }
 
+.qatra-client-portal .qatra-statement-report-row {
+	grid-template-columns: minmax(92px, 0.75fr) minmax(220px, 2.4fr) repeat(3, minmax(112px, 0.95fr));
+	min-width: 700px;
+}
+
 .qatra-client-portal .qatra-dashboard-report-metrics {
 	margin-top: 22px;
 }
@@ -3110,7 +3121,7 @@
 		box-shadow: 16px 0 44px rgba(11, 19, 36, 0.18);
 		transform: translateX(-100%);
 		transition: transform 0.2s ease;
-		width: min(300px, 84vw);
+		width: min(276px, 76vw);
 	}
 
 	.qatra-client-portal .qatra-portal-collapse-button {
@@ -3118,7 +3129,7 @@
 	}
 
 	.qatra-client-portal.qatra-portal-sidebar-collapsed .qatra-portal-sidebar {
-		width: min(300px, 84vw);
+		width: min(276px, 76vw);
 	}
 
 	.qatra-client-portal.qatra-portal-sidebar-collapsed .qatra-portal-sidebar-inner {
@@ -3190,6 +3201,7 @@
 
 	.qatra-client-portal .qatra-portal-main {
 		padding: 28px 22px;
+		width: 100%;
 	}
 
 	.qatra-client-portal .qatra-portal-hero {
@@ -3304,6 +3316,15 @@
 	.qatra-client-portal .qatra-form-panel {
 		align-items: flex-start;
 	}
+
+	.qatra-client-portal .qatra-dashboard-white-card,
+	.qatra-client-portal .qatra-dashboard-soft-card,
+	.qatra-client-portal .qatra-payment-summary-card,
+	.qatra-client-portal .qatra-payment-doc-card,
+	.qatra-client-portal .qatra-dashboard-project-card,
+	.qatra-client-portal .qatra-dashboard-command-hero {
+		min-width: 0;
+	}
 }
 
 @media (max-width: 560px) {
@@ -3330,8 +3351,8 @@
 	}
 
 	.qatra-client-portal .qatra-portal-sidebar {
-		max-width: calc(100vw - 48px);
-		width: 270px;
+		max-width: 72vw;
+		width: 232px;
 	}
 
 	.qatra-client-portal .qatra-portal-main {
@@ -3390,6 +3411,37 @@
 	.qatra-client-portal .qatra-payment-doc-meta,
 	.qatra-client-portal .qatra-dashboard-report-row {
 		grid-template-columns: 1fr;
+		min-width: 0;
+	}
+
+	.qatra-client-portal .qatra-dashboard-report-row--head.qatra-statement-report-row {
+		display: none;
+	}
+
+	.qatra-client-portal .qatra-statement-report-row {
+		gap: 10px;
+	}
+
+	.qatra-client-portal .qatra-statement-report-row span {
+		align-items: baseline;
+		display: flex;
+		gap: 12px;
+		justify-content: space-between;
+	}
+
+	.qatra-client-portal .qatra-statement-report-row span::before {
+		color: var(--qatra-muted);
+		content: attr(data-label);
+		flex: 0 0 94px;
+		font-size: 0.72rem;
+		font-weight: 850;
+		text-transform: uppercase;
+	}
+
+	.qatra-client-portal .qatra-report-data-table,
+	.qatra-client-portal .qatra-dashboard-report-table {
+		min-width: 0;
+		width: 100%;
 	}
 
 	.qatra-client-portal .qatra-dashboard-command-hero {
