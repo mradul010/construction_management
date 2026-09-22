@@ -80,7 +80,7 @@ def is_checked(value):
 	return value not in (None, "", "0", 0, False)
 
 
-def get_list(doctype, filters=None, fields=None, order_by=None):
+def get_list(doctype, filters=None, fields=None, order_by=None, ignore_permissions=False):
 	fields = existing_fields(doctype, fields or ["name"]) or ["name"]
 	kwargs = {
 		"filters": filters or {},
@@ -89,6 +89,9 @@ def get_list(doctype, filters=None, fields=None, order_by=None):
 	}
 	if order_by:
 		kwargs["order_by"] = order_by
+
+	if ignore_permissions:
+		return frappe.get_all(doctype, **kwargs)
 
 	return frappe.get_list(doctype, **kwargs)
 
@@ -204,6 +207,7 @@ def get_project_rows(filters):
 		filters=project_filters,
 		fields=project_fields,
 		order_by="modified desc",
+		ignore_permissions=filters.get("_ignore_permissions"),
 	)
 
 
@@ -257,6 +261,7 @@ def get_boq_rows(filters, fields=None, project_names=None, include_cancelled=Fal
 		filters=boq_filters,
 		fields=fields,
 		order_by="project asc, revision_no desc, modified desc",
+		ignore_permissions=filters.get("_ignore_permissions"),
 	)
 
 
@@ -318,6 +323,7 @@ def get_ra_bill_rows(filters, fields=None, project_names=None, submitted_only=Fa
 		filters=rb_filters,
 		fields=fields,
 		order_by="billing_period_to desc, bill_no desc, modified desc",
+		ignore_permissions=filters.get("_ignore_permissions"),
 	)
 	return filter_rows_by_dates(rows, filters)
 

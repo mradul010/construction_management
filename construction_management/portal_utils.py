@@ -730,10 +730,7 @@ def build_dashboard_financials(project_name, sales_orders, ra_bills, invoices, p
 	mixed_currency = has_mixed_currency(sales_orders, ra_bills, invoices)
 	contract_value = sum(flt(row.base_net_total if mixed_currency else row.net_total) for row in sales_orders)
 	certified_work_value = sum(flt(row.gross_amount) for row in ra_bills)
-	work_progress = get_project_work_progress_summary(
-		project_name,
-		fallback_progress=get_financial_physical_progress(certified_work_value, contract_value),
-	)
+	work_progress = get_project_work_progress_summary(project_name)
 	total_invoiced = sum(get_signed_amount(row, "net_total") for row in invoices)
 	total_invoice_receivable = sum(get_invoice_receivable_amount(row) for row in invoices)
 	invoice_outstanding = sum(get_signed_amount(row, "outstanding_amount") for row in invoices)
@@ -2043,7 +2040,6 @@ def get_project_progress_summary(project_name, customers, project=None):
 	certified_work_value = get_project_certified_work_value(project_name, customers)
 	work_progress = get_project_work_progress_summary(
 		project_name,
-		fallback_progress=get_financial_physical_progress(certified_work_value, contract.contract_value),
 		project=project,
 	)
 
@@ -2062,32 +2058,26 @@ def get_project_work_progress_summary(project_name, fallback_progress=None, proj
 		return frappe._dict(
 			{
 				"physical_progress": clamp_percent(fallback_progress),
-				"physical_progress_source": _("Construction Project Progress Report completion"),
+				"physical_progress_source": _("Work Progress Report average completion"),
 				"work_progress_rows": 0,
 			}
 		)
 
 	try:
-		from construction_management.construction_management.page.construction_project_progress_report.construction_project_progress_report import (
-			_get_boq_detail_rows,
-			_get_project_doc,
-			_get_summary,
+		from construction_management.construction_management.report.report_utils import (
+			average_field,
+			get_work_progress_rows,
 		)
 
-		project_doc = project or _get_project_doc(project_name)
-		if not project_doc:
-			return get_project_work_progress_fallback(project_name, fallback_progress, project=project)
-
-		summary = _get_summary(project_name, project_doc, _get_boq_detail_rows(project_name), frappe._dict())
-		progress = summary.get("completion_percent")
-		if progress is None:
+		rows = get_work_progress_rows(frappe._dict({"project": project_name, "_ignore_permissions": True}))
+		if not rows:
 			return get_project_work_progress_fallback(project_name, fallback_progress, project=project)
 
 		return frappe._dict(
 			{
-				"physical_progress": clamp_percent(progress),
-				"physical_progress_source": _("Construction Project Progress Report completion"),
-				"work_progress_rows": 1,
+				"physical_progress": clamp_percent(average_field(rows, "completion_percent")),
+				"physical_progress_source": _("Work Progress Report average completion"),
+				"work_progress_rows": len(rows),
 			}
 		)
 	except Exception:
@@ -2114,14 +2104,6 @@ def get_project_work_progress_fallback(project_name, fallback_progress=None, pro
 	)
 
 
-def get_financial_physical_progress(certified_work_value, contract_value):
-	return (
-		clamp_percent(flt(certified_work_value) / flt(contract_value) * 100)
-		if certified_work_value and contract_value
-		else None
-	)
-
-
 def get_project_financial_summary(project_name, customers, project=None):
 	customers = [customer for customer in (customers or []) if customer]
 	if not project:
@@ -2141,7 +2123,6 @@ def get_project_financial_summary(project_name, customers, project=None):
 	certified_work_value = sum(flt(row.gross_amount) for row in ra_bills)
 	work_progress = get_project_work_progress_summary(
 		project.name,
-		fallback_progress=get_financial_physical_progress(certified_work_value, contract.contract_value),
 		project=project,
 	)
 	total_invoiced = sum(get_signed_amount(row, "net_total") for row in invoices)
