@@ -1,8 +1,7 @@
 {
  "actions": [],
- "allow_rename": 0,
  "autoname": "naming_series:",
- "creation": "2026-08-10 00:00:00.000000",
+ "creation": "2026-08-10 00:00:00",
  "doctype": "DocType",
  "engine": "InnoDB",
  "field_order": [
@@ -10,17 +9,26 @@
   "naming_series",
   "company",
   "project",
-  "source_warehouse",
+  "transaction_type",
+  "return_against",
   "posting_date",
   "posting_time",
   "set_posting_time",
   "cost_center",
+  "employee_information_section",
+  "employee",
+  "employee_name",
+  "column_break_employee",
+  "subcontractor_supplier",
+  "subcontractor_supplier_name",
   "items_section",
+  "type_of_issued",
   "items",
   "accounting_section",
   "total_qty",
   "total_amount",
   "references_section",
+  "source_warehouse",
   "stock_entry",
   "amended_from",
   "remarks"
@@ -61,13 +69,30 @@
    "search_index": 1
   },
   {
-   "fieldname": "source_warehouse",
-   "fieldtype": "Link",
+   "default": "Material Issue",
+   "fieldname": "transaction_type",
+   "fieldtype": "Select",
    "in_list_view": 1,
    "in_standard_filter": 1,
+   "label": "Transaction Type",
+   "options": "Material Issue\nMaterial Return",
+   "reqd": 1
+  },
+  {
+   "depends_on": "eval:doc.transaction_type == 'Material Return'",
+   "fieldname": "return_against",
+   "fieldtype": "Link",
+   "in_standard_filter": 1,
+   "label": "Return Against",
+   "options": "Site Material Consumption"
+  },
+  {
+   "fieldname": "source_warehouse",
+   "fieldtype": "Link",
+   "hidden": 1,
    "label": "Site Warehouse",
+   "no_copy": 1,
    "options": "Warehouse",
-   "reqd": 1,
    "search_index": 1
   },
   {
@@ -101,9 +126,56 @@
    "options": "Cost Center"
   },
   {
+   "fieldname": "employee_information_section",
+   "fieldtype": "Section Break",
+   "label": "Employee Information"
+  },
+  {
+   "fieldname": "employee",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Employee",
+   "options": "Employee"
+  },
+  {
+   "fetch_from": "employee.employee_name",
+   "fieldname": "employee_name",
+   "fieldtype": "Data",
+   "label": "Employee Name",
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_employee",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "subcontractor_supplier",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Subcontractor / Supplier",
+   "options": "Supplier"
+  },
+  {
+   "fetch_from": "subcontractor_supplier.supplier_name",
+   "fieldname": "subcontractor_supplier_name",
+   "fieldtype": "Data",
+   "label": "Subcontractor / Supplier Name",
+   "read_only": 1
+  },
+  {
    "fieldname": "items_section",
    "fieldtype": "Section Break",
    "label": "Materials"
+  },
+  {
+   "fieldname": "type_of_issued",
+   "fieldtype": "Link",
+   "in_standard_filter": 1,
+   "label": "Type of Issued",
+   "options": "Item",
+   "read_only": 1
   },
   {
    "fieldname": "items",
@@ -159,13 +231,8 @@
   }
  ],
  "is_submittable": 1,
- "links": [
-  {
-   "link_doctype": "Stock Entry",
-   "link_fieldname": "stock_entry"
-  }
- ],
- "modified": "2026-08-10 00:00:00.000000",
+ "links": [],
+ "modified": "2026-09-18 23:19:37.229208",
  "modified_by": "Administrator",
  "module": "Construction Management",
  "name": "Site Material Consumption",
@@ -231,7 +298,7 @@
    "role": "Accounts Manager"
   }
  ],
- "quick_entry": 0,
+ "row_format": "Dynamic",
  "sort_field": "posting_date",
  "sort_order": "DESC",
  "states": [],

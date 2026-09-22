@@ -40,7 +40,23 @@ def get_columns():
 			"width": 170,
 		},
 		{"label": _("Project"), "fieldname": "project", "fieldtype": "Link", "options": "Project", "width": 150},
-		{"label": _("Warehouse"), "fieldname": "warehouse", "fieldtype": "Link", "options": "Warehouse", "width": 180},
+		{"label": _("Transaction Type"), "fieldname": "transaction_type", "fieldtype": "Data", "width": 130},
+		{
+			"label": _("Return Against"),
+			"fieldname": "return_against",
+			"fieldtype": "Link",
+			"options": "Site Material Consumption",
+			"width": 170,
+		},
+		{"label": _("Employee"), "fieldname": "employee", "fieldtype": "Link", "options": "Employee", "width": 150},
+		{
+			"label": _("Subcontractor / Supplier"),
+			"fieldname": "subcontractor_supplier",
+			"fieldtype": "Link",
+			"options": "Supplier",
+			"width": 170,
+		},
+		{"label": _("Type of Issued"), "fieldname": "type_of_issued", "fieldtype": "Link", "options": "Item", "width": 140},
 		{"label": _("Item Code"), "fieldname": "item_code", "fieldtype": "Link", "options": "Item", "width": 150},
 		{"label": _("Item Name"), "fieldname": "item_name", "fieldtype": "Data", "width": 180},
 		{"label": _("Consumed Qty"), "fieldname": "consumed_qty", "fieldtype": "Float", "width": 120},
@@ -69,9 +85,9 @@ def get_data(filters):
 	if filters.get("project"):
 		conditions.append("smc.project = %(project)s")
 		values["project"] = filters.project
-	if filters.get("warehouse"):
-		conditions.append("smc.source_warehouse = %(warehouse)s")
-		values["warehouse"] = filters.warehouse
+	if filters.get("transaction_type"):
+		conditions.append("ifnull(smc.transaction_type, 'Material Issue') = %(transaction_type)s")
+		values["transaction_type"] = filters.transaction_type
 	if filters.get("item"):
 		conditions.append("item.item_code = %(item)s")
 		values["item"] = filters.item
@@ -88,7 +104,11 @@ def get_data(filters):
 			smc.posting_date,
 			smc.name as consumption_no,
 			smc.project,
-			smc.source_warehouse as warehouse,
+			ifnull(smc.transaction_type, 'Material Issue') as transaction_type,
+			smc.return_against,
+			smc.employee,
+			smc.subcontractor_supplier,
+			smc.type_of_issued,
 			item.item_code,
 			item.item_name,
 			item.qty as consumed_qty,

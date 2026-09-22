@@ -1,0 +1,42 @@
+{
+ "actions": [],
+ "allow_import": 1,
+ "autoname": "naming_series:",
+ "creation": "2026-09-21 00:00:00.000000",
+ "doctype": "DocType",
+ "document_type": "Transaction",
+ "engine": "InnoDB",
+ "field_order": ["naming_series", "details_section", "company", "project", "building_number", "column_break_1", "activity_date", "vehicle_no", "items_section", "items", "remarks_section", "remarks", "amended_from"],
+ "fields": [
+  {"default": "UNL-.YYYY.-.#####", "fieldname": "naming_series", "fieldtype": "Select", "label": "Series", "options": "UNL-.YYYY.-.#####", "reqd": 1, "set_only_once": 1},
+  {"fieldname": "details_section", "fieldtype": "Section Break", "label": "Details"},
+  {"fieldname": "company", "fieldtype": "Link", "in_list_view": 1, "in_standard_filter": 1, "label": "Company", "options": "Company"},
+  {"fieldname": "project", "fieldtype": "Link", "in_list_view": 1, "in_standard_filter": 1, "label": "Project", "options": "Project", "reqd": 1},
+  {"fieldname": "building_number", "fieldtype": "Link", "in_list_view": 1, "in_standard_filter": 1, "label": "Building Number", "options": "Building Number", "reqd": 1},
+  {"fieldname": "column_break_1", "fieldtype": "Column Break"},
+  {"default": "Today", "fieldname": "activity_date", "fieldtype": "Date", "in_list_view": 1, "in_standard_filter": 1, "label": "Unloading Date", "reqd": 1},
+  {"fieldname": "vehicle_no", "fieldtype": "Data", "in_list_view": 1, "label": "Vehicle No."},
+  {"fieldname": "items_section", "fieldtype": "Section Break", "label": "Items"},
+  {"fieldname": "items", "fieldtype": "Table", "label": "Items", "options": "Construction Activity Item", "reqd": 1},
+  {"fieldname": "remarks_section", "fieldtype": "Section Break", "label": "Remarks"},
+  {"fieldname": "remarks", "fieldtype": "Small Text", "label": "Remarks"},
+  {"fieldname": "amended_from", "fieldtype": "Link", "label": "Amended From", "no_copy": 1, "options": "Unloading", "print_hide": 1, "read_only": 1}
+ ],
+ "is_submittable": 1,
+ "links": [],
+ "modified": "2026-09-22 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Construction Activity",
+ "name": "Unloading",
+ "naming_rule": "By \"Naming Series\" field",
+ "owner": "Administrator",
+ "permissions": [
+  {"role": "System Manager", "read": 1, "write": 1, "create": 1, "delete": 1, "submit": 1, "cancel": 1, "amend": 1, "print": 1, "email": 1, "report": 1, "export": 1, "share": 1},
+  {"role": "Construction Manager", "read": 1, "write": 1, "create": 1, "delete": 1, "submit": 1, "cancel": 1, "amend": 1, "print": 1, "email": 1, "report": 1, "export": 1, "share": 1},
+  {"role": "Site Engineer", "read": 1, "write": 1, "create": 1, "submit": 1, "print": 1, "email": 1, "report": 1, "export": 1}
+ ],
+ "sort_field": "activity_date",
+ "sort_order": "DESC",
+ "states": [],
+ "track_changes": 1
+}

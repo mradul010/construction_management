@@ -20,6 +20,12 @@ function smcRecalculateTotals(frm) {
 	frm.refresh_field("items");
 }
 
+function smcUpdateIssueType(frm) {
+	const itemCodes = (frm.doc.items || []).map((row) => row.item_code).filter(Boolean);
+	const unique = [...new Set(itemCodes)];
+	frm.set_value("type_of_issued", unique.length === 1 ? unique[0] : null);
+}
+
 function smcUpdateItemDetails(frm, cdt, cdn) {
 	const row = locals[cdt][cdn];
 	if (!row || !row.item_code) return;
@@ -47,6 +53,7 @@ function smcUpdateItemDetails(frm, cdt, cdn) {
 				smcNumber(row.qty) * smcNumber(values.conversion_factor || row.conversion_factor || 1) * smcNumber(values.valuation_rate),
 			);
 			smcRecalculateTotals(frm);
+			smcUpdateIssueType(frm);
 		},
 	});
 }
@@ -60,11 +67,6 @@ function smcRefreshItemBalances(frm) {
 }
 
 function smcGetAvailableMaterials(frm) {
-	if (!frm.doc.source_warehouse) {
-		frappe.msgprint(__("Please select a Site Warehouse first."));
-		return;
-	}
-
 	frappe.call({
 		method: `${SMC_METHOD}.get_available_materials`,
 		args: {
@@ -97,6 +99,104 @@ function smcGetAvailableMaterials(frm) {
 	});
 }
 
+function smcGetReturnableItems(frm) {
+	if (!frm.doc.return_against) {
+		frappe.msgprint(__("Please select Return Against first."));
+		return;
+	}
+
+	frappe.call({
+		method: `${SMC_METHOD}.get_returnable_items`,
+		args: {
+			return_against: frm.doc.return_against,
+			exclude_return: frm.is_new() ? null : frm.doc.name,
+		},
+		freeze: true,
+		freeze_message: __("Getting returnable items..."),
+		callback: function (r) {
+			const data = r.message || {};
+			frm.clear_table("items");
+			(data.items || []).forEach((item) => {
+				const row = frm.add_child("items");
+				Object.assign(row, item);
+			});
+			const updates = {};
+			["company", "project", "source_warehouse", "cost_center"].forEach((fieldname) => {
+				if (data[fieldname]) updates[fieldname] = data[fieldname];
+			});
+			if (Object.keys(updates).length) frm.set_value(updates);
+			frm.refresh_field("items");
+			smcRecalculateTotals(frm);
+			smcUpdateIssueType(frm);
+		},
+	});
+}
+
+function smcRefreshActionButtons(frm) {
+	if (frm.doc.docstatus !== 1 || frm.doc.transaction_type === "Material Return") return;
+
+	frappe.call({
+		method: `${SMC_METHOD}.get_stock_entry_action_status`,
+		args: {
+			name: frm.doc.name,
+		},
+		callback: function (r) {
+			const status = r.message || {};
+
+			if (status.can_create_stock_entry) {
+				frm.add_custom_button(__("Stock Entry"), function () {
+					frappe.call({
+						method: `${SMC_METHOD}.create_stock_entry_from_consumption`,
+						args: {
+							name: frm.doc.name,
+						},
+						freeze: true,
+						freeze_message: __("Creating Stock Entry..."),
+						callback: function () {
+							frappe.show_alert({
+								message: __("Stock Entry created."),
+								indicator: "green",
+							});
+							frm.reload_doc();
+						},
+					});
+				});
+				return;
+			}
+
+			if (status.can_open_stock_entry && status.stock_entry) {
+				frm.add_custom_button(__("Open Stock Entry"), function () {
+					frappe.set_route("Form", "Stock Entry", status.stock_entry);
+				});
+				return;
+			}
+
+			if (status.can_return_material) {
+				frm.add_custom_button(__("Return Material"), function () {
+					frappe.call({
+						method: `${SMC_METHOD}.make_return_stock_entry`,
+						args: {
+							name: frm.doc.name,
+						},
+						freeze: true,
+						freeze_message: __("Preparing Return Stock Entry..."),
+						callback: function (r) {
+							frappe.model.sync(r.message);
+							frappe.set_route("Form", r.message.doctype, r.message.name);
+						},
+					});
+				});
+			}
+
+			if (status.can_view_stock_entry && status.stock_entry) {
+				frm.add_custom_button(__("View Stock Entry"), function () {
+					frappe.set_route("Form", "Stock Entry", status.stock_entry);
+				});
+			}
+		},
+	});
+}
+
 frappe.ui.form.on("Site Material Consumption", {
 	setup: function (frm) {
 		frm.set_query("project", function () {
@@ -115,7 +215,19 @@ frappe.ui.form.on("Site Material Consumption", {
 			return { filters };
 		});
 		frm.set_query("item_code", "items", function () {
-			return { filters: { is_stock_item: 1, disabled: 0 } };
+			return { filters: { disabled: 0 } };
+		});
+		frm.set_query("type_of_issued", function () {
+			return { filters: { disabled: 0 } };
+		});
+		frm.set_query("return_against", function () {
+			const filters = {
+				docstatus: 1,
+				transaction_type: "Material Issue",
+			};
+			if (frm.doc.company) filters.company = frm.doc.company;
+			if (frm.doc.project) filters.project = frm.doc.project;
+			return { filters };
 		});
 		frm.set_query("expense_account", "items", function () {
 			const filters = { is_group: 0 };
@@ -133,16 +245,33 @@ frappe.ui.form.on("Site Material Consumption", {
 	},
 
 	refresh: function (frm) {
-		if (frm.doc.docstatus === 0) {
+		if (frm.doc.docstatus === 0 && frm.doc.transaction_type !== "Material Return") {
 			frm.add_custom_button(__("Get Available Materials"), function () {
 				smcGetAvailableMaterials(frm);
 			});
 		}
-		if (frm.doc.stock_entry) {
-			frm.add_custom_button(__("Stock Entry"), function () {
-				frappe.set_route("Form", "Stock Entry", frm.doc.stock_entry);
+		if (frm.doc.docstatus === 0 && frm.doc.transaction_type === "Material Return") {
+			frm.add_custom_button(__("Get Items from Original Consumption"), function () {
+				smcGetReturnableItems(frm);
 			});
 		}
+		smcRefreshActionButtons(frm);
+	},
+
+	transaction_type: function (frm) {
+		if (frm.doc.transaction_type !== "Material Return") {
+			frm.set_value("return_against", null);
+		}
+		frm.refresh();
+	},
+
+	return_against: function (frm) {
+		if (!frm.doc.return_against) return;
+		if (frm.doc.transaction_type !== "Material Return") {
+			frm.set_value("transaction_type", "Material Return").then(() => smcGetReturnableItems(frm));
+			return;
+		}
+		smcGetReturnableItems(frm);
 	},
 
 	project: function (frm) {
@@ -153,6 +282,35 @@ frappe.ui.form.on("Site Material Consumption", {
 			if (project.company && !frm.doc.company) updates.company = project.company;
 			if (project.cost_center && !frm.doc.cost_center) updates.cost_center = project.cost_center;
 			if (Object.keys(updates).length) frm.set_value(updates);
+		});
+	},
+
+	employee: function (frm) {
+		if (!frm.doc.employee) {
+			frm.set_value("employee_name", null);
+			frm.set_value("subcontractor_supplier", null);
+			frm.set_value("subcontractor_supplier_name", null);
+			return;
+		}
+
+		frappe.db
+			.get_value("Employee", frm.doc.employee, ["employee_name", "subcontractor_supplier"])
+			.then((r) => {
+				const employee = r.message || {};
+				frm.set_value("employee_name", employee.employee_name);
+				if (employee.subcontractor_supplier) {
+					frm.set_value("subcontractor_supplier", employee.subcontractor_supplier);
+				}
+			});
+	},
+
+	subcontractor_supplier: function (frm) {
+		if (!frm.doc.subcontractor_supplier) {
+			frm.set_value("subcontractor_supplier_name", null);
+			return;
+		}
+		frappe.db.get_value("Supplier", frm.doc.subcontractor_supplier, "supplier_name").then((r) => {
+			frm.set_value("subcontractor_supplier_name", r.message?.supplier_name);
 		});
 	},
 
@@ -170,6 +328,7 @@ frappe.ui.form.on("Site Material Consumption", {
 
 	validate: function (frm) {
 		smcRecalculateTotals(frm);
+		smcUpdateIssueType(frm);
 	},
 });
 
@@ -185,5 +344,6 @@ frappe.ui.form.on("Site Material Consumption Item", {
 			smcNumber(row.qty) * smcNumber(row.conversion_factor || 1) * smcNumber(row.valuation_rate),
 		);
 		smcRecalculateTotals(frm);
+		smcUpdateIssueType(frm);
 	},
 });

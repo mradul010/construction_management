@@ -13,14 +13,18 @@
   "uom",
   "stock_uom",
   "conversion_factor",
-  "available_qty",
-  "qty",
-  "valuation_rate",
-  "amount",
+        "available_qty",
+        "qty",
+        "issued_qty",
+        "previously_returned_qty",
+        "returnable_qty",
+        "valuation_rate",
+        "amount",
   "expense_account",
-  "project",
-  "cost_center",
-  "remarks"
+        "project",
+        "cost_center",
+        "original_consumption_item",
+        "remarks"
  ],
  "fields": [
   {
@@ -72,16 +76,34 @@
    "fieldname": "available_qty",
    "fieldtype": "Float",
    "in_list_view": 1,
-   "label": "Available",
+   "label": "Previous Qty",
    "read_only": 1
   },
-  {
-   "fieldname": "qty",
-   "fieldtype": "Float",
-   "in_list_view": 1,
-   "label": "Consume Qty",
-   "reqd": 1
-  },
+        {
+            "fieldname": "qty",
+            "fieldtype": "Float",
+            "in_list_view": 1,
+            "label": "Consume Qty",
+            "reqd": 1
+        },
+        {
+            "fieldname": "issued_qty",
+            "fieldtype": "Float",
+            "label": "Issued Qty",
+            "read_only": 1
+        },
+        {
+            "fieldname": "previously_returned_qty",
+            "fieldtype": "Float",
+            "label": "Previously Returned Qty",
+            "read_only": 1
+        },
+        {
+            "fieldname": "returnable_qty",
+            "fieldtype": "Float",
+            "label": "Returnable Qty",
+            "read_only": 1
+        },
   {
    "fieldname": "valuation_rate",
    "fieldtype": "Currency",
@@ -108,13 +130,20 @@
    "label": "Project",
    "options": "Project"
   },
-  {
-   "fieldname": "cost_center",
-   "fieldtype": "Link",
-   "label": "Cost Center",
-   "options": "Cost Center"
-  },
-  {
+        {
+            "fieldname": "cost_center",
+            "fieldtype": "Link",
+            "label": "Cost Center",
+            "options": "Cost Center"
+        },
+        {
+            "fieldname": "original_consumption_item",
+            "fieldtype": "Data",
+            "label": "Original Consumption Item",
+            "no_copy": 1,
+            "read_only": 1
+        },
+        {
    "fieldname": "remarks",
    "fieldtype": "Small Text",
    "label": "Remarks"

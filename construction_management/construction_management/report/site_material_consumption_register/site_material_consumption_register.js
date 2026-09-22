@@ -13,13 +13,10 @@ frappe.query_reports["Site Material Consumption Register"] = {
 			options: "Project",
 		},
 		{
-			fieldname: "warehouse",
-			label: __("Warehouse"),
-			fieldtype: "Link",
-			options: "Warehouse",
-			get_query: function () {
-				return { filters: { is_group: 0 } };
-			},
+			fieldname: "transaction_type",
+			label: __("Transaction Type"),
+			fieldtype: "Select",
+			options: "\nMaterial Issue\nMaterial Return",
 		},
 		{
 			fieldname: "item",

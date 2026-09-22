@@ -13,15 +13,6 @@ frappe.query_reports["Project Material Balance"] = {
 			options: "Project",
 		},
 		{
-			fieldname: "warehouse",
-			label: __("Warehouse"),
-			fieldtype: "Link",
-			options: "Warehouse",
-			get_query: function () {
-				return { filters: { is_group: 0 } };
-			},
-		},
-		{
 			fieldname: "item",
 			label: __("Item"),
 			fieldtype: "Link",

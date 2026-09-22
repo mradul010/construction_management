@@ -12,6 +12,7 @@
   "default_boq_price_list",
   "stock_settings_section",
   "default_material_consumption_expense_account",
+  "default_site_material_warehouse",
   "require_project_warehouse",
   "naming_series_section",
   "boq_naming_series",
@@ -66,6 +67,13 @@
    "fieldtype": "Link",
    "label": "Default Material Consumption Expense Account",
    "options": "Account"
+  },
+  {
+   "description": "Fallback warehouse used by Site Material Consumption when the Project does not define a Site Material Warehouse.",
+   "fieldname": "default_site_material_warehouse",
+   "fieldtype": "Link",
+   "label": "Default Site Material Warehouse",
+   "options": "Warehouse"
   },
   {
    "default": "1",

@@ -35,7 +35,6 @@ def ensure_access():
 def get_columns():
 	return [
 		{"label": _("Project"), "fieldname": "project", "fieldtype": "Link", "options": "Project", "width": 150},
-		{"label": _("Warehouse"), "fieldname": "warehouse", "fieldtype": "Link", "options": "Warehouse", "width": 180},
 		{"label": _("Item"), "fieldname": "item_code", "fieldtype": "Link", "options": "Item", "width": 150},
 		{"label": _("Item Name"), "fieldname": "item_name", "fieldtype": "Data", "width": 180},
 		{"label": _("UOM"), "fieldname": "uom", "fieldtype": "Link", "options": "UOM", "width": 90},
@@ -66,13 +65,12 @@ def get_data(filters):
 		rows[key]["current_stock_qty"] = flt(row.current_stock_qty)
 		rows[key]["stock_value"] = flt(row.stock_value)
 
-	return sorted(rows.values(), key=lambda d: (d.get("project") or "", d.get("warehouse") or "", d.get("item_code") or ""))
+	return sorted(rows.values(), key=lambda d: (d.get("project") or "", d.get("item_code") or ""))
 
 
 def base_row(row):
 	return {
 		"project": row.get("project"),
-		"warehouse": row.get("warehouse"),
 		"item_code": row.get("item_code"),
 		"item_name": row.get("item_name"),
 		"uom": row.get("uom"),
@@ -84,10 +82,10 @@ def base_row(row):
 
 
 def get_key(row):
-	return (row.get("project"), row.get("warehouse"), row.get("item_code"))
+	return (row.get("project"), row.get("item_code"))
 
 
-def get_conditions(filters, alias, warehouse_field="warehouse", item_field="item_code", date_field=None):
+def get_conditions(filters, alias, item_field="item_code", date_field=None):
 	conditions = []
 	values = {}
 
@@ -97,9 +95,6 @@ def get_conditions(filters, alias, warehouse_field="warehouse", item_field="item
 	if filters.get("project") and frappe.get_meta("Stock Ledger Entry").has_field("project"):
 		conditions.append(f"{alias}.project = %(project)s")
 		values["project"] = filters.project
-	if filters.get("warehouse"):
-		conditions.append(f"{alias}.`{warehouse_field}` = %(warehouse)s")
-		values["warehouse"] = filters.warehouse
 	if filters.get("item"):
 		conditions.append(f"{alias}.`{item_field}` = %(item)s")
 		values["item"] = filters.item
@@ -123,7 +118,6 @@ def get_received_rows(filters):
 		f"""
 		select
 			sle.project,
-			sle.warehouse,
 			sle.item_code,
 			item.item_name,
 			sle.stock_uom as uom,
@@ -131,7 +125,7 @@ def get_received_rows(filters):
 		from `tabStock Ledger Entry` sle
 		inner join `tabItem` item on item.name = sle.item_code
 		where {where}
-		group by sle.project, sle.warehouse, sle.item_code, item.item_name, sle.stock_uom
+		group by sle.project, sle.item_code, item.item_name, sle.stock_uom
 		""",
 		values,
 		as_dict=True,
@@ -148,9 +142,6 @@ def get_consumed_rows(filters):
 	if filters.get("project"):
 		conditions.append("smc.project = %(project)s")
 		values["project"] = filters.project
-	if filters.get("warehouse"):
-		conditions.append("smc.source_warehouse = %(warehouse)s")
-		values["warehouse"] = filters.warehouse
 	if filters.get("item"):
 		conditions.append("item.item_code = %(item)s")
 		values["item"] = filters.item
@@ -165,15 +156,17 @@ def get_consumed_rows(filters):
 		f"""
 		select
 			smc.project,
-			smc.source_warehouse as warehouse,
 			item.item_code,
 			item.item_name,
 			item.stock_uom as uom,
-			sum(item.qty * ifnull(item.conversion_factor, 1)) as consumed_qty
+			sum(
+				case when ifnull(smc.transaction_type, 'Material Issue') = 'Material Return'
+				then -1 else 1 end * item.qty * ifnull(item.conversion_factor, 1)
+			) as consumed_qty
 		from `tabSite Material Consumption` smc
 		inner join `tabSite Material Consumption Item` item on item.parent = smc.name
 		where {" and ".join(conditions)}
-		group by smc.project, smc.source_warehouse, item.item_code, item.item_name, item.stock_uom
+		group by smc.project, item.item_code, item.item_name, item.stock_uom
 		""",
 		values,
 		as_dict=True,
@@ -187,9 +180,6 @@ def get_current_stock_rows(filters):
 	if filters.get("company"):
 		conditions.append("wh.company = %(company)s")
 		values["company"] = filters.company
-	if filters.get("warehouse"):
-		conditions.append("bin.warehouse = %(warehouse)s")
-		values["warehouse"] = filters.warehouse
 	if filters.get("item"):
 		conditions.append("bin.item_code = %(item)s")
 		values["item"] = filters.item
@@ -198,17 +188,17 @@ def get_current_stock_rows(filters):
 		f"""
 		select
 			%(project)s as project,
-			bin.warehouse,
 			bin.item_code,
 			item.item_name,
 			item.stock_uom as uom,
-			bin.actual_qty as current_stock_qty,
-			bin.stock_value
+			sum(bin.actual_qty) as current_stock_qty,
+			sum(bin.stock_value) as stock_value
 		from `tabBin` bin
 		inner join `tabItem` item on item.name = bin.item_code
 		inner join `tabWarehouse` wh on wh.name = bin.warehouse
 		where {" and ".join(conditions)}
 			and (bin.actual_qty != 0 or bin.stock_value != 0)
+		group by bin.item_code, item.item_name, item.stock_uom
 		""",
 		{**values, "project": filters.get("project")},
 		as_dict=True,

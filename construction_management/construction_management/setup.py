@@ -7,11 +7,14 @@ from frappe.utils import flt
 
 def after_install():
 	create_boq_client_script()
+	ensure_ra_bill_print_formats()
 	ensure_construction_desktop_icons()
 	ensure_design_management_setup()
 	ensure_company_construction_accounting_fields()
 	ensure_construction_company_settings()
 	ensure_project_current_boq_field()
+	ensure_project_site_material_warehouse_field()
+	ensure_store_reconciliation_report_ownership()
 	ensure_sales_invoice_ra_bill_field()
 	ensure_sales_invoice_retention_records_field()
 	ensure_sales_invoice_payment_breakdown_field()
@@ -28,11 +31,14 @@ def after_install():
 
 def after_migrate():
 	create_boq_client_script()
+	ensure_ra_bill_print_formats()
 	ensure_construction_desktop_icons()
 	ensure_design_management_setup()
 	ensure_company_construction_accounting_fields()
 	ensure_construction_company_settings()
 	ensure_project_current_boq_field()
+	ensure_project_site_material_warehouse_field()
+	ensure_store_reconciliation_report_ownership()
 	ensure_sales_invoice_ra_bill_field()
 	ensure_sales_invoice_retention_records_field()
 	ensure_sales_invoice_payment_breakdown_field()
@@ -73,6 +79,51 @@ def create_boq_client_script():
 		doc.insert()
 	frappe.db.commit()
 	print("BOQ client script created/updated successfully")
+
+
+PRINT_FORMAT_SOURCES = {
+	"RA Bill Certificate": "ra_bill_certificate",
+	"RA Bill": "ra_bill",
+	"RA Bill Print Format": "ra_bill_print_format",
+	"BOQ Print Formate": "boq_print_formate",
+}
+
+
+PRINT_FORMAT_METADATA = {
+	"RA Bill Certificate": {"doc_type": "Sales Invoice", "custom_format": 1},
+	"RA Bill": {"doc_type": "RA Bill", "custom_format": 0},
+	"RA Bill Print Format": {"doc_type": "RA Bill", "custom_format": 0},
+	"BOQ Print Formate": {"doc_type": "BOQ", "custom_format": 0},
+}
+
+
+def ensure_ra_bill_print_formats():
+	for print_format_name, folder_name in PRINT_FORMAT_SOURCES.items():
+		if not frappe.db.exists("Print Format", print_format_name):
+			print_format_path = frappe.get_app_path(
+				"construction_management",
+				"construction_management",
+				"print_format",
+				folder_name,
+				f"{folder_name}.json",
+			)
+			with open(print_format_path) as print_format_file:
+				print_format = frappe.get_doc(json.load(print_format_file))
+			print_format.insert(ignore_permissions=True)
+
+		values = {
+			"module": "Construction Management",
+			"disabled": 0,
+			"print_format_type": "Jinja",
+			"print_format_builder": 0,
+			"print_format_builder_beta": 0,
+			**PRINT_FORMAT_METADATA[print_format_name],
+		}
+		if frappe.get_meta("Print Format").has_field("print_designer"):
+			values["print_designer"] = 0
+		frappe.db.set_value("Print Format", print_format_name, values, update_modified=False)
+
+	frappe.db.commit()
 
 
 def ensure_construction_desktop_icons():
@@ -1017,6 +1068,113 @@ def ensure_purchase_invoice_site_material_consumption_fields():
 	frappe.clear_cache(doctype="Purchase Invoice")
 	frappe.db.commit()
 	print("Purchase Invoice site material consumption fields are ready")
+
+
+def ensure_project_site_material_warehouse_field():
+	"""
+	Allow Site Material Consumption to resolve the project warehouse internally.
+	"""
+	ensure_custom_field(
+		"Project",
+		"site_material_warehouse",
+		{
+			"label": "Site Material Warehouse",
+			"fieldtype": "Link",
+			"options": "Warehouse",
+			"insert_after": "cost_center",
+			"module": "Construction Management",
+		},
+	)
+
+	frappe.clear_cache(doctype="Project")
+	frappe.db.commit()
+	print("Project Site Material Warehouse custom field is ready")
+
+
+def ensure_store_reconciliation_report_ownership():
+	report_name = "Store Reconciliation"
+	if not frappe.db.exists("Report", report_name):
+		return
+
+	frappe.db.set_value(
+		"Report",
+		report_name,
+		{
+			"module": "Construction Management",
+			"report_type": "Script Report",
+			"ref_doctype": "Site Material Consumption",
+			"is_standard": "Yes",
+			"disabled": 0,
+		},
+		update_modified=False,
+	)
+	add_roles_to_parent(
+		"Report",
+		report_name,
+		(
+			"System Manager",
+			"Construction Manager",
+			"Site Engineer",
+			"Stock Manager",
+			"Accounts Manager",
+			"Projects Manager",
+			"Projects User",
+		),
+	)
+	remove_store_reconciliation_workspace_links(report_name)
+	frappe.db.commit()
+	print("Store Reconciliation report ownership is ready")
+
+
+def add_roles_to_parent(parenttype, parent, roles):
+	existing_roles = set(
+		frappe.get_all(
+			"Has Role",
+			filters={"parenttype": parenttype, "parent": parent},
+			pluck="role",
+		)
+	)
+	for role in roles:
+		if role in existing_roles or not frappe.db.exists("Role", role):
+			continue
+		frappe.get_doc(
+			{
+				"doctype": "Has Role",
+				"parent": parent,
+				"parenttype": parenttype,
+				"parentfield": "roles",
+				"role": role,
+			}
+		).insert(ignore_permissions=True)
+
+
+def remove_store_reconciliation_workspace_links(report_name):
+	if frappe.db.exists("Workspace", "Material Management"):
+		workspace = frappe.get_doc("Workspace", "Material Management")
+		changed = False
+		for child_table in ("links", "shortcuts"):
+			rows = []
+			for row in workspace.get(child_table, []):
+				if row.get("link_to") == report_name or row.get("label") == report_name:
+					changed = True
+					continue
+				rows.append(row)
+			workspace.set(child_table, rows)
+		if changed:
+			for row in workspace.get("links", []):
+				if row.get("type") == "Card Break" and row.get("label") == "Reports":
+					row.link_count = sum(
+						1
+						for link in workspace.get("links", [])
+						if link.get("type") == "Link" and link.get("link_type") == "Report"
+					)
+			workspace.save(ignore_permissions=True)
+
+	for doctype in ("Workspace Link", "Workspace Shortcut", "Workspace Sidebar Item"):
+		if not frappe.db.table_exists(f"tab{doctype}"):
+			continue
+		frappe.db.delete(doctype, {"parent": "Material Management", "link_to": report_name})
+		frappe.db.delete(doctype, {"parent": "Material Management", "label": report_name})
 
 
 def ensure_purchase_order_subcontract_fields():

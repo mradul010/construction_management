@@ -13,7 +13,6 @@ fixtures = [
     {"dt": "Workspace", "filters": [["name", "in", ["Construction Management"]]]},
     {"dt": "Workspace Sidebar", "filters": [["name", "in", ["Construction Management"]]]},
     {"dt": "Desktop Icon", "filters": [["app", "=", "construction_management"]]},
-    {"dt": "Print Format", "filters": [["name", "in", ["RA Bill Certificate"]]]},
 ]
 
 add_to_apps_screen = [
@@ -71,6 +70,7 @@ doctype_js = {
     "RA Bill": "public/js/design_reference_filters.js",
     "SC Work Order": "public/js/design_reference_filters.js",
     "SC Bill": "public/js/design_reference_filters.js",
+    "Print Format": "public/js/print_format.js",
     "Design Package": "public/js/design_management_buttons.js",
     "Design Discipline": "public/js/design_management_buttons.js",
     "Drawing Register": "public/js/design_management_buttons.js",
@@ -287,7 +287,10 @@ doc_events = {
 		"validate": "construction_management.design_management.design_management.validate_design_references",
 	},
 	"Stock Entry": {
-		"validate": "construction_management.design_management.design_management.validate_design_references",
+		"validate": [
+			"construction_management.design_management.design_management.validate_design_references",
+			"construction_management.construction_management.doctype.site_material_consumption.site_material_consumption.validate_site_material_return_stock_entry",
+		],
 	},
 	"Purchase Receipt": {
 		"validate": "construction_management.design_management.design_management.validate_design_references",

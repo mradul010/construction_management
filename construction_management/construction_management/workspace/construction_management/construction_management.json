@@ -1,7 +1,7 @@
 {
  "app": "construction_management",
  "charts": [],
- "content": "[{\"id\":\"cm_header\",\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h4\\\"><b>Construction Management</b></span>\",\"col\":12}},{\"id\":\"new_boq\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"New BOQ\",\"col\":3}},{\"id\":\"new_ra_bill\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"New RA Bill\",\"col\":3}},{\"id\":\"new_dpr\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"New DPR\",\"col\":3}},{\"id\":\"new_sc_work_order\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"New SC Work Order\",\"col\":3}},{\"id\":\"project\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Project\",\"col\":3}},{\"id\":\"design_package\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Design Package\",\"col\":3}},{\"id\":\"drawing_register\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Drawing Register\",\"col\":3}},{\"id\":\"request_for_information\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Request For Information\",\"col\":3}},{\"id\":\"design_change_request\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Design Change Request\",\"col\":3}},{\"id\":\"drawing_transmittal\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Drawing Transmittal\",\"col\":3}},{\"id\":\"purchase_order\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Purchase Order\",\"col\":3}},{\"id\":\"sales_invoice\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Sales Invoice\",\"col\":3}},{\"id\":\"project_management\",\"type\":\"card\",\"data\":{\"card_name\":\"Project Management\",\"col\":4}},{\"id\":\"planning\",\"type\":\"card\",\"data\":{\"card_name\":\"Planning\",\"col\":4}},{\"id\":\"design_management\",\"type\":\"card\",\"data\":{\"card_name\":\"Design Management\",\"col\":4}},{\"id\":\"execution\",\"type\":\"card\",\"data\":{\"card_name\":\"Execution\",\"col\":4}},{\"id\":\"retention\",\"type\":\"card\",\"data\":{\"card_name\":\"Retention\",\"col\":4}},{\"id\":\"commercial\",\"type\":\"card\",\"data\":{\"card_name\":\"Commercial\",\"col\":4}},{\"id\":\"reports\",\"type\":\"card\",\"data\":{\"card_name\":\"Reports\",\"col\":4}}]",
+ "content": "[{\"id\":\"cm_header\",\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h4\\\"><b>Construction Management</b></span>\",\"col\":12}},{\"id\":\"new_boq\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"New BOQ\",\"col\":3}},{\"id\":\"construction_bom\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Construction BOM\",\"col\":3}},{\"id\":\"new_ra_bill\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"New RA Bill\",\"col\":3}},{\"id\":\"new_dpr\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"New DPR\",\"col\":3}},{\"id\":\"new_sc_work_order\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"New SC Work Order\",\"col\":3}},{\"id\":\"project\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Project\",\"col\":3}},{\"id\":\"design_package\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Design Package\",\"col\":3}},{\"id\":\"drawing_register\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Drawing Register\",\"col\":3}},{\"id\":\"request_for_information\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Request For Information\",\"col\":3}},{\"id\":\"design_change_request\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Design Change Request\",\"col\":3}},{\"id\":\"drawing_transmittal\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Drawing Transmittal\",\"col\":3}},{\"id\":\"purchase_order\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Purchase Order\",\"col\":3}},{\"id\":\"sales_invoice\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Sales Invoice\",\"col\":3}},{\"id\":\"project_management\",\"type\":\"card\",\"data\":{\"card_name\":\"Project Management\",\"col\":4}},{\"id\":\"planning\",\"type\":\"card\",\"data\":{\"card_name\":\"Planning\",\"col\":4}},{\"id\":\"design_management\",\"type\":\"card\",\"data\":{\"card_name\":\"Design Management\",\"col\":4}},{\"id\":\"execution\",\"type\":\"card\",\"data\":{\"card_name\":\"Execution\",\"col\":4}},{\"id\":\"retention\",\"type\":\"card\",\"data\":{\"card_name\":\"Retention\",\"col\":4}},{\"id\":\"commercial\",\"type\":\"card\",\"data\":{\"card_name\":\"Commercial\",\"col\":4}},{\"id\":\"reports\",\"type\":\"card\",\"data\":{\"card_name\":\"Reports\",\"col\":4}},{\"id\":\"site_activities\",\"type\":\"card\",\"data\":{\"card_name\":\"Site Activities\",\"col\":4}}]",
  "creation": "2026-07-09 11:57:10.554586",
  "custom_blocks": [],
  "docstatus": 0,
@@ -34,6 +34,17 @@
    "onboard": 1,
    "type": "Link",
    "dependencies": "Project"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Construction BOM",
+   "link_count": 0,
+   "link_to": "Construction BOM",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link",
+   "dependencies": "Project, BOQ"
   },
   {
    "hidden": 0,
@@ -109,7 +120,7 @@
    "hidden": 0,
    "is_query_report": 0,
    "label": "Planning",
-   "link_count": 5,
+   "link_count": 7,
    "link_type": "DocType",
    "onboard": 0,
    "type": "Card Break"
@@ -140,6 +151,26 @@
    "label": "BOQ Category",
    "link_count": 0,
    "link_to": "BOQ Category",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "BOM",
+   "link_count": 0,
+   "link_to": "BOM",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Work Order",
+   "link_count": 0,
+   "link_to": "Work Order",
    "link_type": "DocType",
    "onboard": 0,
    "type": "Link"
@@ -778,6 +809,60 @@
    "link_type": "Report",
    "onboard": 0,
    "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Site Activities",
+   "link_count": 4,
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Card Break",
+   "link_to": null
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Unloading",
+   "link_count": 0,
+   "link_to": "Unloading",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link",
+   "dependencies": null
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Assembly",
+   "link_count": 0,
+   "link_to": "Assembly",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link",
+   "dependencies": null
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Erection",
+   "link_count": 0,
+   "link_to": "Erection",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link",
+   "dependencies": null
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Alignment",
+   "link_count": 0,
+   "link_to": "Alignment",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link",
+   "dependencies": null
   }
  ],
  "modified": "2026-07-24 13:23:53.915832",
@@ -799,6 +884,14 @@
    "label": "New BOQ",
    "type": "URL",
    "url": "/app/boq/new-boq"
+  },
+  {
+   "color": "Grey",
+   "doc_view": "List",
+   "label": "Construction BOM",
+   "link_to": "Construction BOM",
+   "stats_filter": "[]",
+   "type": "DocType"
   },
   {
    "color": "Grey",
