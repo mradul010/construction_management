@@ -13,6 +13,9 @@ from erpnext.accounts.report.general_ledger.general_ledger import get_accounts_w
 
 
 ROOT_TYPES = {"Asset", "Liability", "Equity", "Income", "Expense"}
+MANAGEMENT_SUMMARY_VIEW = "Cost Summary"
+ACCOUNTING_SUMMARY_VIEW = "Accounting Summary"
+DETAIL_VIEW = "Transaction Details"
 
 
 def execute(filters=None):
@@ -27,12 +30,16 @@ def execute(filters=None):
 
 
 def validate_filters(filters):
+	normalize_view_mode(filters)
+
 	if filters.get("include_child_cost_centers") is None:
 		filters.include_child_cost_centers = 1
 	if filters.get("include_default_book_entries") is None:
 		filters.include_default_book_entries = 1
 	if filters.get("show_cancelled_entries") is None:
 		filters.show_cancelled_entries = 0
+	if filters.get("account_type") is None and filters.view_mode != ACCOUNTING_SUMMARY_VIEW:
+		filters.account_type = "Expense"
 
 	if not filters.get("company"):
 		frappe.throw(_("{0} is mandatory").format(_("Company")))
@@ -60,13 +67,53 @@ def validate_filters(filters):
 			frappe.throw(_("Account {0} does not belong to company {1}").format(filters.account, filters.company))
 
 
+def normalize_view_mode(filters):
+	if filters.get("view_mode") in (None, "", "Summary"):
+		filters.view_mode = MANAGEMENT_SUMMARY_VIEW
+
+
 def get_columns(filters):
-	if filters.get("view_mode") == "Transaction Details":
+	if filters.get("view_mode") == DETAIL_VIEW:
 		return get_detail_columns()
+	if filters.get("view_mode") == ACCOUNTING_SUMMARY_VIEW:
+		return get_accounting_summary_columns()
 	return get_summary_columns()
 
 
 def get_summary_columns():
+	return [
+		{
+			"label": _("Cost Center"),
+			"fieldname": "cost_center",
+			"fieldtype": "Link",
+			"options": "Cost Center",
+			"width": 240,
+		},
+		{
+			"label": _("Parent Cost Center"),
+			"fieldname": "parent_cost_center",
+			"fieldtype": "Link",
+			"options": "Cost Center",
+			"width": 220,
+		},
+		{
+			"label": _("Cost Spent"),
+			"fieldname": "cost_spent",
+			"fieldtype": "Currency",
+			"options": "currency",
+			"width": 170,
+		},
+		{
+			"label": _("Currency"),
+			"fieldname": "currency",
+			"fieldtype": "Link",
+			"options": "Currency",
+			"hidden": 1,
+		},
+	]
+
+
+def get_accounting_summary_columns():
 	return [
 		{
 			"label": _("Cost Center"),
@@ -140,18 +187,8 @@ def get_detail_columns():
 			"width": 180,
 		},
 		{"label": _("Against"), "fieldname": "against", "fieldtype": "Data", "width": 170},
-		{"label": _("Party Type"), "fieldname": "party_type", "fieldtype": "Data", "width": 120},
-		{
-			"label": _("Party"),
-			"fieldname": "party",
-			"fieldtype": "Dynamic Link",
-			"options": "party_type",
-			"width": 160,
-		},
 		{"label": _("Remarks"), "fieldname": "remarks", "fieldtype": "Data", "width": 260},
-		{"label": _("Debit"), "fieldname": "debit", "fieldtype": "Currency", "options": "currency", "width": 130},
-		{"label": _("Credit"), "fieldname": "credit", "fieldtype": "Currency", "options": "currency", "width": 130},
-		{"label": _("Net Amount"), "fieldname": "net_amount", "fieldtype": "Currency", "options": "currency", "width": 130},
+		{"label": _("Cost Spent"), "fieldname": "cost_spent", "fieldtype": "Currency", "options": "currency", "width": 140},
 	]
 
 	if frappe.get_meta("GL Entry").has_field("project"):
@@ -181,7 +218,7 @@ def get_detail_columns():
 
 
 def get_data(filters):
-	if filters.get("view_mode") == "Transaction Details":
+	if filters.get("view_mode") == DETAIL_VIEW:
 		return get_detail_data(filters)
 	return get_summary_data(filters)
 
@@ -198,6 +235,7 @@ def get_summary_data(filters):
 			COALESCE(SUM(`tabGL Entry`.`debit`), 0) AS total_debit,
 			COALESCE(SUM(`tabGL Entry`.`credit`), 0) AS total_credit,
 			COALESCE(SUM(`tabGL Entry`.`debit` - `tabGL Entry`.`credit`), 0) AS net_balance,
+			COALESCE(SUM(`tabGL Entry`.`debit` - `tabGL Entry`.`credit`), 0) AS cost_spent,
 			%(currency)s AS currency
 		FROM `tabGL Entry`
 		LEFT JOIN `tabCost Center` cc ON cc.`name` = `tabGL Entry`.`cost_center`
@@ -237,6 +275,7 @@ def get_detail_data(filters):
 			`tabGL Entry`.`debit`,
 			`tabGL Entry`.`credit`,
 			(`tabGL Entry`.`debit` - `tabGL Entry`.`credit`) AS net_amount,
+			(`tabGL Entry`.`debit` - `tabGL Entry`.`credit`) AS cost_spent,
 			{project_field}
 			`tabGL Entry`.`creation`,
 			%(currency)s AS currency
@@ -372,6 +411,7 @@ def get_zero_activity_cost_center_rows(filters, currency):
 			"total_debit": 0,
 			"total_credit": 0,
 			"net_balance": 0,
+			"cost_spent": 0,
 			"currency": currency,
 		}
 		for row in rows
@@ -407,11 +447,30 @@ def add_finance_book_conditions(filters, conditions, values):
 
 def get_report_summary(data, filters):
 	currency = get_company_currency(filters.company)
-	debit_field = "total_debit" if filters.get("view_mode") != "Transaction Details" else "debit"
-	credit_field = "total_credit" if filters.get("view_mode") != "Transaction Details" else "credit"
+	total_cost_spent = sum(flt(row.get("cost_spent")) for row in data)
+	cost_centers = {row.get("cost_center") for row in data if row.get("cost_center")}
+
+	if filters.get("view_mode") != ACCOUNTING_SUMMARY_VIEW:
+		return [
+			{
+				"value": total_cost_spent,
+				"label": _("Cost Spent"),
+				"datatype": "Currency",
+				"currency": currency,
+				"indicator": "Blue",
+			},
+			{
+				"value": len(cost_centers),
+				"label": _("Cost Centers"),
+				"datatype": "Int",
+				"indicator": "Blue",
+			},
+		]
+
+	debit_field = "total_debit"
+	credit_field = "total_credit"
 	total_debit = sum(flt(row.get(debit_field)) for row in data)
 	total_credit = sum(flt(row.get(credit_field)) for row in data)
-	cost_centers = {row.get("cost_center") for row in data if row.get("cost_center")}
 
 	return [
 		{

@@ -26,8 +26,8 @@ frappe.query_reports["Cost Center Transaction Analysis"] = {
 			fieldname: "view_mode",
 			label: __("View"),
 			fieldtype: "Select",
-			options: "Summary\nTransaction Details",
-			default: "Summary",
+			options: "Cost Summary\nTransaction Details\nAccounting Summary",
+			default: "Cost Summary",
 			reqd: 1,
 		},
 		{
@@ -84,6 +84,7 @@ frappe.query_reports["Cost Center Transaction Analysis"] = {
 				"Tax",
 				"Cost of Goods Sold",
 			],
+			default: "Expense",
 		},
 		{
 			fieldname: "voucher_type",
