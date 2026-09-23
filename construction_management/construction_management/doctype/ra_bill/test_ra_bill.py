@@ -15,9 +15,9 @@ from construction_management.construction_management.doctype.ra_bill.ra_bill imp
 	calculate_ra_bill_taxes,
 	format_ra_bill_no,
 	get_boq_item_details_for_ra_bill,
-	get_max_project_ra_bill_sequence,
 	get_next_project_ra_bill_sequence,
 	get_ra_bill_project_series_key,
+	get_used_project_ra_bill_sequences,
 	parse_ra_bill_sequence,
 	resolve_ra_bill_company,
 	search_boq_adjustment_items_for_ra_bill,
@@ -88,14 +88,31 @@ class TestRABillNaming(UnitTestCase):
 		self.assertEqual(parse_ra_bill_sequence("RAB-104"), 104)
 		self.assertEqual(parse_ra_bill_sequence("PROJECT-A-RAB-104"), 0)
 
-	def test_next_sequence_uses_highest_existing_ra_bill_for_project(self):
+	def test_next_sequence_uses_smallest_missing_positive_sequence(self):
 		rows = [
 			frappe._dict({"name": "PROJECT-A-RAB-001", "ra_bill_no": "RAB-001", "bill_no": 1}),
 			frappe._dict({"name": "PROJECT-A-RAB-003", "ra_bill_no": "RAB-003", "bill_no": 3}),
 		]
 		with patch("frappe.db.sql", return_value=rows):
-			self.assertEqual(get_max_project_ra_bill_sequence("PROJECT-A"), 3)
-			self.assertEqual(get_next_project_ra_bill_sequence("PROJECT-A"), 4)
+			self.assertEqual(get_used_project_ra_bill_sequences("PROJECT-A"), {1, 3})
+			self.assertEqual(get_next_project_ra_bill_sequence("PROJECT-A"), 2)
+
+	def test_next_sequence_uses_one_when_first_number_is_missing(self):
+		rows = [
+			frappe._dict({"name": "PROJECT-A-RAB-002", "ra_bill_no": "RAB-002", "bill_no": 2}),
+			frappe._dict({"name": "PROJECT-A-RAB-003", "ra_bill_no": "RAB-003", "bill_no": 3}),
+		]
+		with patch("frappe.db.sql", return_value=rows):
+			self.assertEqual(get_next_project_ra_bill_sequence("PROJECT-A"), 1)
+
+	def test_next_sequence_fills_middle_gap(self):
+		rows = [
+			frappe._dict({"name": "PROJECT-A-RAB-001", "ra_bill_no": "RAB-001", "bill_no": 1}),
+			frappe._dict({"name": "PROJECT-A-RAB-002", "ra_bill_no": "RAB-002", "bill_no": 2}),
+			frappe._dict({"name": "PROJECT-A-RAB-004", "ra_bill_no": "RAB-004", "bill_no": 4}),
+		]
+		with patch("frappe.db.sql", return_value=rows):
+			self.assertEqual(get_next_project_ra_bill_sequence("PROJECT-A"), 3)
 
 	def test_next_sequence_reuses_deleted_latest_number(self):
 		rows = [

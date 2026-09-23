@@ -84,7 +84,7 @@ def parse_ra_bill_sequence(ra_bill_no):
 	return cint(match.group(1)) if match else 0
 
 
-def get_max_project_ra_bill_sequence(project, exclude_name=None):
+def get_used_project_ra_bill_sequences(project, exclude_name=None):
 	conditions = ["project = %s"]
 	values = [project]
 	if exclude_name:
@@ -100,7 +100,19 @@ def get_max_project_ra_bill_sequence(project, exclude_name=None):
 		values,
 		as_dict=True,
 	)
-	return max((parse_ra_bill_sequence(row.ra_bill_no) or cint(row.bill_no) for row in rows), default=0)
+	return {
+		sequence
+		for sequence in (parse_ra_bill_sequence(row.ra_bill_no) or cint(row.bill_no) for row in rows)
+		if sequence > 0
+	}
+
+
+def get_next_missing_project_ra_bill_sequence(project, exclude_name=None):
+	used_sequences = get_used_project_ra_bill_sequences(project, exclude_name=exclude_name)
+	sequence = 1
+	while sequence in used_sequences:
+		sequence += 1
+	return sequence
 
 
 def acquire_project_ra_bill_sequence_lock(project, timeout=10):
@@ -119,7 +131,7 @@ def release_project_ra_bill_sequence_lock(lock_name):
 
 
 def get_next_project_ra_bill_sequence(project, exclude_name=None):
-	return get_max_project_ra_bill_sequence(project, exclude_name=exclude_name) + 1
+	return get_next_missing_project_ra_bill_sequence(project, exclude_name=exclude_name)
 
 
 def resolve_ra_bill_company(ra_bill):
