@@ -82,6 +82,12 @@ doctype_js = {
     "Design Issue": "public/js/design_management_buttons.js",
     "Design Change Request": "public/js/design_management_buttons.js",
     "Design NCR": "public/js/design_management_buttons.js",
+    "Unloading": "public/js/construction_activity_item_sync.js",
+    "Assembly": "public/js/construction_activity_item_sync.js",
+    "Welding Bolting": "public/js/construction_activity_item_sync.js",
+    "Erection": "public/js/construction_activity_item_sync.js",
+    "Alignment": "public/js/construction_activity_item_sync.js",
+    "Completion": "public/js/construction_activity_item_sync.js",
 }
 
 # include js, css files in header of web template

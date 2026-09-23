@@ -15,7 +15,10 @@ from construction_management.construction_management.doctype.ra_bill.ra_bill imp
 	calculate_ra_bill_taxes,
 	format_ra_bill_no,
 	get_boq_item_details_for_ra_bill,
+	get_max_project_ra_bill_sequence,
+	get_next_project_ra_bill_sequence,
 	get_ra_bill_project_series_key,
+	parse_ra_bill_sequence,
 	resolve_ra_bill_company,
 	search_boq_adjustment_items_for_ra_bill,
 	search_boq_items_for_ra_bill,
@@ -79,6 +82,28 @@ class TestRABillNaming(UnitTestCase):
 	def test_project_series_key_is_project_specific(self):
 		self.assertEqual(get_ra_bill_project_series_key("PROJECT-A"), get_ra_bill_project_series_key("PROJECT-A"))
 		self.assertNotEqual(get_ra_bill_project_series_key("PROJECT-A"), get_ra_bill_project_series_key("PROJECT-B"))
+
+	def test_parse_ra_bill_sequence_reads_visible_suffix(self):
+		self.assertEqual(parse_ra_bill_sequence("RAB-001"), 1)
+		self.assertEqual(parse_ra_bill_sequence("RAB-104"), 104)
+		self.assertEqual(parse_ra_bill_sequence("PROJECT-A-RAB-104"), 0)
+
+	def test_next_sequence_uses_highest_existing_ra_bill_for_project(self):
+		rows = [
+			frappe._dict({"name": "PROJECT-A-RAB-001", "ra_bill_no": "RAB-001", "bill_no": 1}),
+			frappe._dict({"name": "PROJECT-A-RAB-003", "ra_bill_no": "RAB-003", "bill_no": 3}),
+		]
+		with patch("frappe.db.sql", return_value=rows):
+			self.assertEqual(get_max_project_ra_bill_sequence("PROJECT-A"), 3)
+			self.assertEqual(get_next_project_ra_bill_sequence("PROJECT-A"), 4)
+
+	def test_next_sequence_reuses_deleted_latest_number(self):
+		rows = [
+			frappe._dict({"name": "PROJECT-A-RAB-001", "ra_bill_no": "RAB-001", "bill_no": 1}),
+			frappe._dict({"name": "PROJECT-A-RAB-002", "ra_bill_no": "RAB-002", "bill_no": 2}),
+		]
+		with patch("frappe.db.sql", return_value=rows):
+			self.assertEqual(get_next_project_ra_bill_sequence("PROJECT-A"), 3)
 
 	def test_validate_project_ra_bill_no_unique_rejects_same_project_duplicate(self):
 		ra_bill = frappe.get_doc(

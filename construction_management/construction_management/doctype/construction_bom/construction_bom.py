@@ -25,7 +25,8 @@ class ConstructionBOM(Document):
 			frappe.throw(_("Project {0} does not exist.").format(frappe.bold(self.project)))
 
 		if not self.boq:
-			frappe.throw(_("BOQ is required."))
+			return
+
 		boq_project = frappe.db.get_value("BOQ", self.boq, "project")
 		if not boq_project:
 			if not frappe.db.exists("BOQ", self.boq):

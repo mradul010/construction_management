@@ -5,7 +5,15 @@ from frappe import _
 from frappe.utils import flt
 
 
-STAGES = ["Unloading", "Assembly", "Erection", "Alignment"]
+STAGES = ["Unloading", "Assembly", "Welding Bolting", "Erection", "Alignment", "Completion"]
+STAGE_FIELDNAMES = {
+	"Unloading": "unloading",
+	"Assembly": "assembly",
+	"Welding Bolting": "welding_bolting",
+	"Erection": "erection",
+	"Alignment": "alignment",
+	"Completion": "completion",
+}
 
 
 def execute(filters=None):
@@ -19,15 +27,18 @@ def execute(filters=None):
 def get_columns():
 	return [
 		{"label": _("Building Number"), "fieldname": "building_number", "fieldtype": "Link", "options": "Building Number", "width": 150},
-		{"label": _("Mark"), "fieldname": "mark_no", "fieldtype": "Link", "options": "Item", "width": 140},
+		{"label": _("Mark"), "fieldname": "mark_no", "fieldtype": "Data", "width": 140},
+		{"label": _("Mark Item"), "fieldname": "mark_item", "fieldtype": "Link", "options": "Item", "width": 140},
 		{"label": _("Qty"), "fieldname": "qty", "fieldtype": "Float", "width": 90},
 		{"label": _("Unit Weight"), "fieldname": "unit_weight", "fieldtype": "Float", "width": 110},
 		{"label": _("Total Weight"), "fieldname": "total_weight", "fieldtype": "Float", "width": 120},
 		{"label": _("Vehicle No"), "fieldname": "vehicle_no", "fieldtype": "Data", "width": 130},
 		{"label": _("Unloading"), "fieldname": "unloading", "fieldtype": "Date", "width": 110},
 		{"label": _("Assembly"), "fieldname": "assembly", "fieldtype": "Date", "width": 110},
+		{"label": _("Welding/Bolting"), "fieldname": "welding_bolting", "fieldtype": "Date", "width": 130},
 		{"label": _("Erection"), "fieldname": "erection", "fieldtype": "Date", "width": 110},
 		{"label": _("Alignment"), "fieldname": "alignment", "fieldtype": "Date", "width": 110},
+		{"label": _("Completion"), "fieldname": "completion", "fieldtype": "Date", "width": 110},
 	]
 
 
@@ -47,6 +58,7 @@ def get_activity_rows(stage, filters):
 		parent.project,
 		parent.building_number,
 		item.mark_no,
+		item.mark_item,
 		item.qty,
 		item.unit_weight,
 		item.total_weight,
@@ -89,14 +101,15 @@ def build_rows(activity):
 			{
 				"building_number": key[2],
 				"mark_no": key[3],
+				"mark_item": get_first_text_value(stage_rows_by_key, key, "mark_item"),
 				"qty": tracking_qty,
 				"unit_weight": unit_weight,
 				"total_weight": total_weight,
 				"vehicle_no": get_latest_value(unloading_rows, "vehicle_no"),
-				"unloading": get_latest_value(unloading_rows, "activity_date"),
-				"assembly": get_latest_value(stage_rows_by_key["Assembly"].get(key, []), "activity_date"),
-				"erection": get_latest_value(stage_rows_by_key["Erection"].get(key, []), "activity_date"),
-				"alignment": get_latest_value(stage_rows_by_key["Alignment"].get(key, []), "activity_date"),
+				**{
+					fieldname: get_latest_value(stage_rows_by_key[stage].get(key, []), "activity_date")
+					for stage, fieldname in STAGE_FIELDNAMES.items()
+				},
 			}
 		)
 	return rows
@@ -124,6 +137,14 @@ def get_first_value(stage_rows_by_key, key, fieldname):
 			if flt(row.get(fieldname)):
 				return flt(row.get(fieldname))
 	return 0
+
+
+def get_first_text_value(stage_rows_by_key, key, fieldname):
+	for stage in STAGES:
+		for row in stage_rows_by_key[stage].get(key, []):
+			if row.get(fieldname):
+				return row.get(fieldname)
+	return ""
 
 
 def group_rows_by_key(rows):

@@ -3,7 +3,6 @@ import re
 
 import frappe
 from frappe import _
-from frappe.model.naming import getseries
 from frappe.model.document import Document
 from frappe.utils import cint, flt, fmt_money, getdate, today
 from erpnext.controllers.accounts_controller import get_taxes_and_charges
@@ -80,37 +79,47 @@ def get_ra_bill_project_series_key(project):
 	return f"RA-BILL-{project_hash}-"
 
 
+def parse_ra_bill_sequence(ra_bill_no):
+	match = re.fullmatch(rf"{re.escape(RA_BILL_VISIBLE_PREFIX)}(\d+)", str(ra_bill_no or ""))
+	return cint(match.group(1)) if match else 0
+
+
 def get_max_project_ra_bill_sequence(project, exclude_name=None):
-	conditions = ["project = %s", "COALESCE(bill_no, 0) > 0"]
+	conditions = ["project = %s"]
 	values = [project]
 	if exclude_name:
 		conditions.append("name != %s")
 		values.append(exclude_name)
 
-	return cint(
-		frappe.db.sql(
-			f"""
-			SELECT MAX(COALESCE(bill_no, 0))
-			FROM `tabRA Bill`
-			WHERE {" AND ".join(conditions)}
-			""",
-			values,
-		)[0][0]
+	rows = frappe.db.sql(
+		f"""
+		SELECT name, ra_bill_no, bill_no
+		FROM `tabRA Bill`
+		WHERE {" AND ".join(conditions)}
+		""",
+		values,
+		as_dict=True,
 	)
+	return max((parse_ra_bill_sequence(row.ra_bill_no) or cint(row.bill_no) for row in rows), default=0)
+
+
+def acquire_project_ra_bill_sequence_lock(project, timeout=10):
+	lock_name = get_ra_bill_project_series_key(project)[:64]
+	lock_acquired = frappe.db.sql("SELECT GET_LOCK(%s, %s)", (lock_name, timeout))[0][0]
+	if cint(lock_acquired) != 1:
+		frappe.throw(_("Could not reserve RA Bill number for Project {0}. Please try again.").format(frappe.bold(project)))
+	frappe.db.after_commit.add(lambda: release_project_ra_bill_sequence_lock(lock_name))
+	frappe.db.after_rollback.add(lambda: release_project_ra_bill_sequence_lock(lock_name))
+	return lock_name
+
+
+def release_project_ra_bill_sequence_lock(lock_name):
+	if lock_name:
+		frappe.db.sql("SELECT RELEASE_LOCK(%s)", (lock_name,))
 
 
 def get_next_project_ra_bill_sequence(project, exclude_name=None):
-	series_key = get_ra_bill_project_series_key(project)
-	max_existing = get_max_project_ra_bill_sequence(project, exclude_name=exclude_name)
-	frappe.db.sql(
-		"""
-		INSERT INTO `tabSeries` (`name`, `current`)
-		VALUES (%s, %s)
-		ON DUPLICATE KEY UPDATE `current` = GREATEST(`current`, VALUES(`current`))
-		""",
-		(series_key, max_existing),
-	)
-	return cint(getseries(series_key, RA_BILL_VISIBLE_DIGITS))
+	return get_max_project_ra_bill_sequence(project, exclude_name=exclude_name) + 1
 
 
 def resolve_ra_bill_company(ra_bill):
@@ -285,8 +294,10 @@ class RABill(Document):
 			self.ra_bill_no = self.ra_bill_no or format_ra_bill_no(self.bill_no)
 			return
 
+		self.flags.ra_bill_sequence_lock = acquire_project_ra_bill_sequence_lock(self.project)
 		self.bill_no = get_next_project_ra_bill_sequence(self.project, exclude_name=self.name)
 		self.ra_bill_no = format_ra_bill_no(self.bill_no)
+
 
 	def _ensure_project_for_numbering(self):
 		if not self.project and self.boq:

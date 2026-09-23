@@ -226,16 +226,6 @@
   },
   {
    "hidden": 0,
-   "is_query_report": 1,
-   "label": "Construction Activity Tracking",
-   "link_count": 0,
-   "link_to": "Construction Activity Tracking",
-   "link_type": "Report",
-   "onboard": 0,
-   "type": "Link"
-  },
-  {
-   "hidden": 0,
    "is_query_report": 0,
    "label": "Sales Record",
    "link_count": 4,
@@ -592,12 +582,14 @@
    "hidden": 0,
    "is_query_report": 0,
    "label": "Site Activities",
-   "link_count": 5,
+   "link_count": 7,
    "link_type": "DocType",
    "onboard": 0,
-   "type": "Card Break"
+   "type": "Card Break",
+   "link_to": null
   },
   {
+   "dependencies": null,
    "hidden": 0,
    "is_query_report": 0,
    "label": "Unloading",
@@ -608,6 +600,7 @@
    "type": "Link"
   },
   {
+   "dependencies": null,
    "hidden": 0,
    "is_query_report": 0,
    "label": "Assembly",
@@ -618,6 +611,18 @@
    "type": "Link"
   },
   {
+   "dependencies": null,
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Welding/Bolting",
+   "link_count": 0,
+   "link_to": "Welding Bolting",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "dependencies": null,
    "hidden": 0,
    "is_query_report": 0,
    "label": "Erection",
@@ -628,6 +633,7 @@
    "type": "Link"
   },
   {
+   "dependencies": null,
    "hidden": 0,
    "is_query_report": 0,
    "label": "Alignment",
@@ -636,6 +642,29 @@
    "link_type": "DocType",
    "onboard": 0,
    "type": "Link"
+  },
+  {
+   "dependencies": null,
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Completion",
+   "link_count": 0,
+   "link_to": "Completion",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "dependencies": null,
+   "hidden": 0,
+   "is_query_report": 1,
+   "label": "Construction Activity Tracking",
+   "link_count": 0,
+   "link_to": "Construction Activity Tracking",
+   "link_type": "Report",
+   "onboard": 0,
+   "type": "Link",
+   "report_ref_doctype": "Unloading"
   }
  ],
  "modified": "2026-09-22 16:02:14.681412",

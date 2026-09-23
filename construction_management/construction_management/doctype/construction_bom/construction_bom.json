@@ -9,6 +9,7 @@
   "details_section",
   "naming_series",
   "project",
+  "building_number",
   "boq",
   "posting_date",
   "items_section",
@@ -43,13 +44,21 @@
    "search_index": 1
   },
   {
+   "fieldname": "building_number",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Building Number",
+   "options": "Building Number",
+   "search_index": 1
+  },
+  {
    "fieldname": "boq",
    "fieldtype": "Link",
    "in_list_view": 1,
    "in_standard_filter": 1,
    "label": "BOQ",
    "options": "BOQ",
-   "reqd": 1,
    "search_index": 1
   },
   {

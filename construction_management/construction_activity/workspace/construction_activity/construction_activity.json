@@ -1,6 +1,6 @@
 {
  "charts": [],
- "content": "[{\"id\":\"activity_heading\",\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h4\\\">Construction Activity</span>\",\"col\":12}},{\"id\":\"activity_shortcuts\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Unloading\",\"col\":3}},{\"id\":\"assembly_shortcut\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Assembly\",\"col\":3}},{\"id\":\"erection_shortcut\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Erection\",\"col\":3}},{\"id\":\"alignment_shortcut\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Alignment\",\"col\":3}},{\"id\":\"report_shortcut\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Construction Activity Tracking\",\"col\":3}}]",
+ "content": "[{\"id\":\"activity_heading\",\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h4\\\">Construction Activity</span>\",\"col\":12}},{\"id\":\"activity_unloading\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Unloading\",\"col\":3}},{\"id\":\"activity_assembly\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Assembly\",\"col\":3}},{\"id\":\"activity_welding_bolting\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Welding/Bolting\",\"col\":3}},{\"id\":\"activity_erection\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Erection\",\"col\":3}},{\"id\":\"activity_alignment\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Alignment\",\"col\":3}},{\"id\":\"activity_completion\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Completion\",\"col\":3}},{\"id\":\"activity_tracking_report\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Construction Activity Tracking\",\"col\":3}}]",
  "creation": "2026-09-21 00:00:00.000000",
  "custom_blocks": [],
  "docstatus": 0,
@@ -23,17 +23,81 @@
  "public": 1,
  "quick_lists": [],
  "roles": [
-  {"role": "System Manager"},
-  {"role": "Construction Manager"},
-  {"role": "Site Engineer"}
+  {
+   "role": "System Manager"
+  },
+  {
+   "role": "Construction Manager"
+  },
+  {
+   "role": "Site Engineer"
+  }
  ],
  "sequence_id": 30,
  "shortcuts": [
-  {"color": "Blue", "doc_view": "List", "format": "{} Open", "label": "Unloading", "link_to": "Unloading", "stats_filter": "[]", "type": "DocType"},
-  {"color": "Green", "doc_view": "List", "format": "{} Open", "label": "Assembly", "link_to": "Assembly", "stats_filter": "[]", "type": "DocType"},
-  {"color": "Orange", "doc_view": "List", "format": "{} Open", "label": "Erection", "link_to": "Erection", "stats_filter": "[]", "type": "DocType"},
-  {"color": "Purple", "doc_view": "List", "format": "{} Open", "label": "Alignment", "link_to": "Alignment", "stats_filter": "[]", "type": "DocType"},
-  {"color": "Grey", "doc_view": "Report", "format": "{} Open", "label": "Construction Activity Tracking", "link_to": "Construction Activity Tracking", "stats_filter": "[]", "type": "Report"}
+  {
+   "color": "Blue",
+   "doc_view": "List",
+   "format": "{} Open",
+   "label": "Unloading",
+   "link_to": "Unloading",
+   "stats_filter": "[]",
+   "type": "DocType"
+  },
+  {
+   "color": "Green",
+   "doc_view": "List",
+   "format": "{} Open",
+   "label": "Assembly",
+   "link_to": "Assembly",
+   "stats_filter": "[]",
+   "type": "DocType"
+  },
+  {
+   "color": "Grey",
+   "doc_view": "List",
+   "format": "{} Open",
+   "label": "Welding/Bolting",
+   "link_to": "Welding Bolting",
+   "stats_filter": "[]",
+   "type": "DocType"
+  },
+  {
+   "color": "Orange",
+   "doc_view": "List",
+   "format": "{} Open",
+   "label": "Erection",
+   "link_to": "Erection",
+   "stats_filter": "[]",
+   "type": "DocType"
+  },
+  {
+   "color": "Purple",
+   "doc_view": "List",
+   "format": "{} Open",
+   "label": "Alignment",
+   "link_to": "Alignment",
+   "stats_filter": "[]",
+   "type": "DocType"
+  },
+  {
+   "color": "Grey",
+   "doc_view": "List",
+   "format": "{} Open",
+   "label": "Completion",
+   "link_to": "Completion",
+   "stats_filter": "[]",
+   "type": "DocType"
+  },
+  {
+   "color": "Grey",
+   "doc_view": "Report",
+   "format": "{} Open",
+   "label": "Construction Activity Tracking",
+   "link_to": "Construction Activity Tracking",
+   "stats_filter": "[]",
+   "type": "Report"
+  }
  ],
  "title": "Construction Activity"
 }

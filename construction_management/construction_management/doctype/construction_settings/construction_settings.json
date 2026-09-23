@@ -11,6 +11,9 @@
   "default_margin",
   "default_boq_price_list",
   "stock_settings_section",
+  "default_construction_activity_item_group",
+  "default_construction_activity_stock_uom",
+  "default_construction_activity_hsn_code",
   "default_material_consumption_expense_account",
   "default_site_material_warehouse",
   "require_project_warehouse",
@@ -60,6 +63,27 @@
    "fieldname": "stock_settings_section",
    "fieldtype": "Section Break",
    "label": "Stock Settings"
+  },
+  {
+   "description": "Item Group used when Construction Activity marks automatically create Item Masters.",
+   "fieldname": "default_construction_activity_item_group",
+   "fieldtype": "Link",
+   "label": "Default Construction Activity Item Group",
+   "options": "Item Group"
+  },
+  {
+   "description": "Stock UOM used when Construction Activity marks automatically create Item Masters.",
+   "fieldname": "default_construction_activity_stock_uom",
+   "fieldtype": "Link",
+   "label": "Default Construction Activity Stock UOM",
+   "options": "UOM"
+  },
+  {
+   "description": "HSN/SAC Code used when Construction Activity marks automatically create Item Masters on India Compliance enabled sites.",
+   "fieldname": "default_construction_activity_hsn_code",
+   "fieldtype": "Link",
+   "label": "Default Construction Activity HSN/SAC Code",
+   "options": "GST HSN Code"
   },
   {
    "description": "Expense account used when site material consumption creates a Material Issue Stock Entry.",

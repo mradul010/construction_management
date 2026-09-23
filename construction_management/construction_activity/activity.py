@@ -1,16 +1,32 @@
 import frappe
 from frappe import _
+from construction_management.construction_activity.item_sync import ensure_item_for_mark
 from frappe.model.document import Document
 from frappe.utils import flt, nowdate
 
 
-STAGE_SEQUENCE = ["Unloading", "Assembly", "Erection", "Alignment"]
-PREVIOUS_STAGE = {"Assembly": "Unloading", "Erection": "Assembly", "Alignment": "Erection"}
-NEXT_STAGE = {"Unloading": "Assembly", "Assembly": "Erection", "Erection": "Alignment"}
+STAGE_SEQUENCE = ["Unloading", "Assembly", "Welding Bolting", "Erection", "Alignment", "Completion"]
+STAGE_LABELS = {"Welding Bolting": "Welding/Bolting"}
+PREVIOUS_STAGE = {
+	"Assembly": "Unloading",
+	"Welding Bolting": "Assembly",
+	"Erection": "Welding Bolting",
+	"Alignment": "Erection",
+	"Completion": "Alignment",
+}
+NEXT_STAGE = {
+	"Unloading": "Assembly",
+	"Assembly": "Welding Bolting",
+	"Welding Bolting": "Erection",
+	"Erection": "Alignment",
+	"Alignment": "Completion",
+}
 REFERENCE_FIELD = {
 	"Assembly": "unloading_reference",
-	"Erection": "assembly_reference",
+	"Welding Bolting": "assembly_reference",
+	"Erection": "welding_bolting_reference",
 	"Alignment": "erection_reference",
+	"Completion": "alignment_reference",
 }
 
 
@@ -34,9 +50,16 @@ class ConstructionActivity(Document):
 			self.company = frappe.db.get_value("Project", self.project, "company")
 
 		for row in self.get("items") or []:
-			if row.mark_no and not flt(row.unit_weight):
-				row.unit_weight = get_item_unit_weight(row.mark_no)
+			if row.mark_no:
+				item = ensure_item_for_mark(row.mark_no, unit_weight=row.unit_weight)
+				row.mark_item = item.get("item") if item else None
+			if row.mark_item and not flt(row.unit_weight):
+				row.unit_weight = get_item_unit_weight(row.mark_item)
 			row.total_weight = flt(row.qty) * flt(row.unit_weight)
+
+	def get_stage_label(self, stage=None):
+		stage = stage or self.stage
+		return STAGE_LABELS.get(stage, stage)
 
 	def validate_items(self):
 		if not self.get("items"):
@@ -61,8 +84,8 @@ class ConstructionActivity(Document):
 			if previous_qty <= 0:
 				frappe.throw(
 					_("{0} is allowed only after submitted {1} for Mark {2}, Project {3}, Building {4}.").format(
-						self.stage,
-						previous_stage,
+						self.get_stage_label(),
+						self.get_stage_label(previous_stage),
 						row.mark_no,
 						self.project,
 						self.building_number,
@@ -76,9 +99,9 @@ class ConstructionActivity(Document):
 			if current_qty > previous_qty:
 				frappe.throw(
 					_("{0} Qty {1} exceeds submitted {2} Qty {3} for Mark {4}, Project {5}, Building {6}.").format(
-						self.stage,
+						self.get_stage_label(),
 						current_qty,
-						previous_stage,
+						self.get_stage_label(previous_stage),
 						previous_qty,
 						row.mark_no,
 						self.project,
@@ -103,8 +126,8 @@ class ConstructionActivity(Document):
 			if downstream_qty > remaining_current:
 				frappe.throw(
 					_("Cannot cancel {0}. Submitted {1} Qty {2} would exceed remaining {0} Qty {3} for Mark {4}.").format(
-						self.stage,
-						next_stage,
+						self.get_stage_label(),
+						self.get_stage_label(next_stage),
 						downstream_qty,
 						remaining_current,
 						row.mark_no,
@@ -165,6 +188,7 @@ def get_remaining_items(source, target_stage):
 			remaining.append(
 				{
 					"mark_no": mark_no,
+					"mark_item": source_row.mark_item,
 					"qty": remaining_qty,
 					"unit_weight": flt(source_row.unit_weight),
 					"total_weight": remaining_qty * flt(source_row.unit_weight),
@@ -176,7 +200,7 @@ def get_remaining_items(source, target_stage):
 def make_next_stage(source_name, source_stage, target_stage):
 	source = frappe.get_doc(source_stage, source_name)
 	if source.docstatus != 1:
-		frappe.throw(_("{0} must be submitted before creating {1}.").format(source_stage, target_stage))
+		frappe.throw(_("{0} must be submitted before creating {1}.").format(label_stage(source_stage), label_stage(target_stage)))
 
 	reference_field = REFERENCE_FIELD[target_stage]
 	existing_draft = get_existing_downstream(target_stage, reference_field, source.name, draft_only=True)
@@ -188,7 +212,7 @@ def make_next_stage(source_name, source_stage, target_stage):
 		existing = get_existing_downstream(target_stage, reference_field, source.name)
 		if existing:
 			return frappe.get_doc(target_stage, existing)
-		frappe.throw(_("No remaining quantity is available for {0}.").format(target_stage))
+		frappe.throw(_("No remaining quantity is available for {0}.").format(label_stage(target_stage)))
 
 	doc = frappe.new_doc(target_stage)
 	doc.company = source.company
@@ -208,10 +232,24 @@ def make_assembly(source_name):
 
 
 @frappe.whitelist()
+def make_welding_bolting(source_name):
+	return make_next_stage(source_name, "Assembly", "Welding Bolting")
+
+
+@frappe.whitelist()
 def make_erection(source_name):
-	return make_next_stage(source_name, "Assembly", "Erection")
+	return make_next_stage(source_name, "Welding Bolting", "Erection")
 
 
 @frappe.whitelist()
 def make_alignment(source_name):
 	return make_next_stage(source_name, "Erection", "Alignment")
+
+
+@frappe.whitelist()
+def make_completion(source_name):
+	return make_next_stage(source_name, "Alignment", "Completion")
+
+
+def label_stage(stage):
+	return STAGE_LABELS.get(stage, stage)

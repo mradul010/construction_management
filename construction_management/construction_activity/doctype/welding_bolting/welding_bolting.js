@@ -1,7 +1,7 @@
-frappe.ui.form.on("Assembly", {
+frappe.ui.form.on("Welding Bolting", {
 	refresh(frm) {
 		if (frm.doc.docstatus === 1) {
-			add_next_stage_button(frm, __("Create Welding/Bolting"), "construction_management.construction_activity.activity.make_welding_bolting");
+			add_next_stage_button(frm, __("Create Erection"), "construction_management.construction_activity.activity.make_erection");
 		}
 	},
 });

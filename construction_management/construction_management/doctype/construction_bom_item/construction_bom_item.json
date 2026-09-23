@@ -12,6 +12,7 @@
   "qty",
   "unit_weight",
   "total_weight",
+  "activity_sync",
   "remarks",
   "total_wt_mt"
  ],
@@ -50,6 +51,13 @@
    "fieldtype": "Float",
    "in_list_view": 1,
    "label": "Total Weight",
+   "read_only": 1
+  },
+  {
+   "fieldname": "activity_sync",
+   "fieldtype": "Check",
+   "hidden": 1,
+   "label": "Activity Sync",
    "read_only": 1
   },
   {
