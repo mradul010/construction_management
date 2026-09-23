@@ -180,7 +180,7 @@ class TestRABillCompanyResolution(UnitTestCase):
 		self.assertEqual(company, "Optional Company")
 
 
-def _fake_sales_invoice():
+def _fake_sales_invoice(taxes=None):
 	return _FakeDoc(
 		{
 			"doctype": "Sales Invoice",
@@ -189,7 +189,7 @@ def _fake_sales_invoice():
 			"project": "PROJECT-TEST",
 			"cost_center": "Main - QBC",
 			"posting_date": "2026-08-12",
-			"taxes": [],
+			"taxes": taxes or [],
 			"advances": [_FakeRow({"allocated_amount": 990})],
 			"items": [
 				_FakeRow(
@@ -350,8 +350,20 @@ class IntegrationTestRABill(UnitTestCase):
 
 		get_doc.assert_not_called()
 
-	def test_ra_bill_invoice_deduction_tax_rows_are_ordered_before_vat(self):
-		si = _fake_sales_invoice()
+	def test_ra_bill_invoice_deduction_tax_rows_are_appended_after_standard_taxes(self):
+		si = _fake_sales_invoice(
+			taxes=[
+				_FakeRow(
+					{
+						"idx": 1,
+						"charge_type": "On Net Total",
+						"account_head": "VAT 5% - QBC",
+						"description": "VAT 5%",
+						"rate": 5,
+					}
+				)
+			]
+		)
 		ra_bill = _fake_ra_bill()
 
 		def account_for(_company, account_key, **_kwargs):
@@ -369,58 +381,33 @@ class IntegrationTestRABill(UnitTestCase):
 				"construction_management.construction_management.overrides.sales_invoice.get_ra_bill_project_cost_center",
 				return_value="Main - QBC",
 			),
-			patch(
-				"construction_management.construction_management.overrides.sales_invoice.get_ra_bill_vat_config",
-				return_value=frappe._dict(
-					{
-						"account_head": "VAT 5% - QBC",
-						"description": "VAT 5%",
-						"rate": 5,
-					}
-				),
-			),
 		):
 			apply_ra_bill_deduction_taxes_to_sales_invoice(si, ra_bill, advance_native=990)
 
-		self.assertEqual([row.description for row in si.taxes], ["Retention Deduction", "Advance Recovery", "VAT 5%"])
-		self.assertEqual(si.taxes[0].charge_type, "Actual")
-		self.assertEqual(si.taxes[0].tax_amount, -990)
-		self.assertEqual(si.taxes[0].account_head, "Retention Receivable - QBC")
+		self.assertEqual([row.description for row in si.taxes], ["VAT 5%", "Retention Deduction", "Advance Recovery"])
+		self.assertEqual(si.taxes[0].charge_type, "On Net Total")
+		self.assertEqual(si.taxes[0].rate, 5)
 		self.assertEqual(si.taxes[1].charge_type, "Actual")
 		self.assertEqual(si.taxes[1].tax_amount, -990)
-		self.assertEqual(si.taxes[1].account_head, "Customer Advances - QBC")
-		self.assertEqual(si.taxes[2].charge_type, "On Previous Row Total")
-		self.assertEqual(si.taxes[2].row_id, 2)
-		self.assertEqual(si.taxes[2].rate, 5)
+		self.assertEqual(si.taxes[1].account_head, "Retention Receivable - QBC")
+		self.assertEqual(si.taxes[2].charge_type, "Actual")
+		self.assertEqual(si.taxes[2].tax_amount, -990)
+		self.assertEqual(si.taxes[2].account_head, "Customer Advances - QBC")
 		self.assertEqual(si.advances, [])
-		self.assertIsNone(si["items"][0].item_tax_template)
-		self.assertEqual(si["items"][0].item_tax_rate, "{}")
+		self.assertEqual(si["items"][0].item_tax_template, "VAT Template")
+		self.assertEqual(si["items"][0].item_tax_rate, '{"VAT 5% - QBC": 5}')
 
-	def test_ra_bill_invoice_vat_uses_net_total_when_there_are_no_deductions(self):
+	def test_ra_bill_invoice_does_not_create_manual_vat_row(self):
 		si = _fake_sales_invoice()
 		ra_bill = _fake_ra_bill(retention_amount=0)
 
-		with (
-			patch(
-				"construction_management.construction_management.overrides.sales_invoice.get_ra_bill_project_cost_center",
-				return_value="Main - QBC",
-			),
-			patch(
-				"construction_management.construction_management.overrides.sales_invoice.get_ra_bill_vat_config",
-				return_value=frappe._dict(
-					{
-						"account_head": "VAT 5% - QBC",
-						"description": "VAT 5%",
-						"rate": 5,
-					}
-				),
-			),
+		with patch(
+			"construction_management.construction_management.overrides.sales_invoice.get_ra_bill_project_cost_center",
+			return_value="Main - QBC",
 		):
 			apply_ra_bill_deduction_taxes_to_sales_invoice(si, ra_bill, advance_native=0)
 
-		self.assertEqual(len(si.taxes), 1)
-		self.assertEqual(si.taxes[0].charge_type, "On Net Total")
-		self.assertFalse(si.taxes[0].get("row_id"))
+		self.assertEqual(si.taxes, [])
 
 	def test_zero_rated_or_exempt_ra_bill_without_template_does_not_add_vat(self):
 		si = _fake_sales_invoice()

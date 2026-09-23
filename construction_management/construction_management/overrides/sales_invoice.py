@@ -39,13 +39,11 @@ class ConstructionSalesInvoice(SalesInvoice):
 	def validate(self):
 		self.normalize_payment_schedule_date_types()
 		if self.is_ra_bill_invoice():
-			clear_ra_bill_item_tax_overrides(self)
 			self.set("advances", [])
 			apply_ra_bill_dates_to_sales_invoice(self, self.get_ra_bill_doc(), company=self.company)
 		super().validate()
 		if self.is_ra_bill_invoice():
 			apply_ra_bill_dates_to_sales_invoice(self, self.get_ra_bill_doc(), company=self.company)
-			clear_ra_bill_item_tax_overrides(self)
 		self.validate_retention_account_for_submit()
 		self.set_payment_breakdown()
 
@@ -382,12 +380,15 @@ class ConstructionSalesInvoice(SalesInvoice):
 
 
 def apply_ra_bill_deduction_taxes_to_sales_invoice(si, ra_bill, advance_native=0):
-	"""Build RA-bill Sales Invoice deductions as standard tax/charge rows."""
+	"""Append RA-bill deductions after standard ERPNext tax rows.
+
+	The originating Sales Invoice must keep its normal tax template, item tax
+	templates, and India Compliance tax rows intact. Retention and advance
+	recovery reduce the receivable after tax; they must not become the tax base.
+	"""
 	if not si.meta.has_field("taxes"):
 		return
 
-	clear_ra_bill_item_tax_overrides(si)
-	vat_config = get_ra_bill_vat_config(si, ra_bill)
 	retention_amount = flt(ra_bill.get("retention_amount"))
 	advance_amount = flt(advance_native)
 	project = si.get("project") or ra_bill.get("project")
@@ -397,8 +398,7 @@ def apply_ra_bill_deduction_taxes_to_sales_invoice(si, ra_bill, advance_native=0
 		company=si.company,
 	)
 
-	si.set("taxes", [])
-	last_deduction_idx = 0
+	remove_ra_bill_deduction_tax_rows(si)
 
 	if retention_amount > AMOUNT_TOLERANCE:
 		si.append(
@@ -417,7 +417,6 @@ def apply_ra_bill_deduction_taxes_to_sales_invoice(si, ra_bill, advance_native=0
 				"project": project,
 			},
 		)
-		last_deduction_idx = len(si.get("taxes"))
 
 	if advance_amount > AMOUNT_TOLERANCE:
 		si.append(
@@ -436,24 +435,31 @@ def apply_ra_bill_deduction_taxes_to_sales_invoice(si, ra_bill, advance_native=0
 				"project": project,
 			},
 		)
-		last_deduction_idx = len(si.get("taxes"))
-
-	if vat_config:
-		vat_row = {
-			"charge_type": "On Previous Row Total" if last_deduction_idx else "On Net Total",
-			"account_head": vat_config.account_head,
-			"description": vat_config.description,
-			"rate": vat_config.rate,
-			"cost_center": vat_config.get("cost_center") or cost_center,
-			"project": project,
-		}
-		if last_deduction_idx:
-			vat_row["row_id"] = last_deduction_idx
-		si.append("taxes", vat_row)
 
 	si.set("advances", [])
 	if si.meta.has_field("total_advance"):
 		si.total_advance = 0
+
+
+def remove_ra_bill_deduction_tax_rows(si):
+	retention_row = get_ra_bill_retention_tax_row(si)
+	advance_row = get_ra_bill_advance_tax_row(si)
+	deduction_rows = [
+		row
+		for row in (retention_row, advance_row)
+		if row
+	]
+	if not deduction_rows:
+		return
+
+	si.set(
+		"taxes",
+		[
+			row
+			for row in si.get("taxes") or []
+			if not any(is_same_child_row(row, deduction_row) for deduction_row in deduction_rows)
+		],
+	)
 
 
 def clear_ra_bill_item_tax_overrides(si):

@@ -30,7 +30,6 @@ from construction_management.construction_management.doctype.retention_record.re
 )
 from construction_management.construction_management.overrides.sales_invoice import (
 	apply_ra_bill_deduction_taxes_to_sales_invoice,
-	clear_ra_bill_item_tax_overrides,
 )
 from construction_management.construction_management.ra_bill_dates import (
 	apply_ra_bill_dates_to_sales_invoice,
@@ -1155,7 +1154,6 @@ class RABill(Document):
 			if hasattr(si, "calculate_taxes_and_totals"):
 				si.calculate_taxes_and_totals()
 			apply_ra_bill_dates_to_sales_invoice(si, self, company=company)
-			clear_ra_bill_item_tax_overrides(si)
 			si.insert(ignore_permissions=True)
 			return si
 
