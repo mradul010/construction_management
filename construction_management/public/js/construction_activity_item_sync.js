@@ -3,43 +3,48 @@ if (!window.construction_activity_item_sync_bound) {
 
 	frappe.ui.form.on("Construction Activity Item", {
 		mark_no(frm, cdt, cdn) {
-			ensure_activity_item(cdt, cdn);
+			ensure_activity_item(cdt, cdn, "mark_no", "item_code");
+		},
+		mark_item(frm, cdt, cdn) {
+			ensure_activity_item(cdt, cdn, "mark_item", "mark_item_item_code");
 		},
 		qty(frm, cdt, cdn) {
 			set_total_weight(cdt, cdn);
 		},
 		unit_weight(frm, cdt, cdn) {
 			set_total_weight(cdt, cdn);
-			ensure_activity_item(cdt, cdn);
+			ensure_activity_item(cdt, cdn, "mark_no", "item_code");
+			ensure_activity_item(cdt, cdn, "mark_item", "mark_item_item_code");
 		},
 	});
 }
 
-function ensure_activity_item(cdt, cdn) {
+function ensure_activity_item(cdt, cdn, source_field, target_field) {
 	const row = locals[cdt][cdn];
-	const mark_no = (row.mark_no || "").trim();
-	if (!mark_no) {
-		frappe.model.set_value(cdt, cdn, "item_code", "");
+	const itemValue = (row[source_field] || "").trim();
+	if (!itemValue) {
+		frappe.model.set_value(cdt, cdn, target_field, "");
 		return;
 	}
 
-	const signature = `${mark_no}::${row.unit_weight || ""}`;
-	if (row.__last_item_sync_signature === signature && row.item_code) {
+	const signatureField = `__last_${target_field}_sync_signature`;
+	const signature = `${itemValue}::${row.unit_weight || ""}`;
+	if (row[signatureField] === signature && row[target_field]) {
 		return;
 	}
-	row.__last_item_sync_signature = signature;
+	row[signatureField] = signature;
 
 	frappe.call({
 		method: "construction_management.construction_activity.item_sync.ensure_item_for_mark",
 		args: {
-			mark_no,
+			mark_no: itemValue,
 			unit_weight: row.unit_weight,
-	},
-	callback(r) {
-		if (r.message && r.message.item) {
-			frappe.model.set_value(cdt, cdn, "item_code", r.message.item);
-		}
-	},
+		},
+		callback(r) {
+			if (r.message && r.message.item) {
+				frappe.model.set_value(cdt, cdn, target_field, r.message.item);
+			}
+		},
 	});
 }
 

@@ -14,6 +14,7 @@
   "unit_weight",
   "total_weight",
   "item_code",
+  "mark_item_item_code",
   "activity_sync",
   "remarks",
   "total_wt_mt"
@@ -51,6 +52,7 @@
    "fieldtype": "Float",
    "in_list_view": 1,
    "label": "Total Weight",
+   "precision": "2",
    "read_only": 1
   },
   {
@@ -58,6 +60,14 @@
    "fieldtype": "Link",
    "hidden": 1,
    "label": "Stock Item",
+   "options": "Item",
+   "read_only": 1
+  },
+  {
+   "fieldname": "mark_item_item_code",
+   "fieldtype": "Link",
+   "hidden": 1,
+   "label": "Mark Item Stock Item",
    "options": "Item",
    "read_only": 1
   },
@@ -79,6 +89,7 @@
    "fieldtype": "Float",
    "in_list_view": 1,
    "label": "Total WT (MT)",
+   "precision": "4",
    "read_only": 1
   }
  ],

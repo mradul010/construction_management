@@ -53,6 +53,9 @@ class ConstructionActivity(Document):
 			if row.mark_no:
 				item = ensure_item_for_mark(row.mark_no, unit_weight=row.unit_weight)
 				row.item_code = item.get("item") if item else None
+			if row.mark_item:
+				item = ensure_item_for_mark(row.mark_item, unit_weight=row.unit_weight)
+				row.mark_item_item_code = item.get("item") if item else None
 			if row.item_code and not flt(row.unit_weight):
 				row.unit_weight = get_item_unit_weight(row.item_code)
 			row.total_weight = flt(row.qty) * flt(row.unit_weight)
@@ -235,6 +238,7 @@ def get_remaining_items(source, target_stage):
 					"mark_no": mark_no,
 					"mark_item": source_row.mark_item,
 					"item_code": source_row.item_code,
+					"mark_item_item_code": source_row.mark_item_item_code,
 					"qty": remaining_qty,
 					"unit_weight": flt(source_row.unit_weight),
 					"total_weight": remaining_qty * flt(source_row.unit_weight),
