@@ -19,12 +19,12 @@ function ensure_activity_item(cdt, cdn) {
 	const row = locals[cdt][cdn];
 	const mark_no = (row.mark_no || "").trim();
 	if (!mark_no) {
-		frappe.model.set_value(cdt, cdn, "mark_item", "");
+		frappe.model.set_value(cdt, cdn, "item_code", "");
 		return;
 	}
 
 	const signature = `${mark_no}::${row.unit_weight || ""}`;
-	if (row.__last_item_sync_signature === signature && row.mark_item) {
+	if (row.__last_item_sync_signature === signature && row.item_code) {
 		return;
 	}
 	row.__last_item_sync_signature = signature;
@@ -34,12 +34,12 @@ function ensure_activity_item(cdt, cdn) {
 		args: {
 			mark_no,
 			unit_weight: row.unit_weight,
-		},
-		callback(r) {
-			if (r.message && r.message.item) {
-				frappe.model.set_value(cdt, cdn, "mark_item", r.message.item);
-			}
-		},
+	},
+	callback(r) {
+		if (r.message && r.message.item) {
+			frappe.model.set_value(cdt, cdn, "item_code", r.message.item);
+		}
+	},
 	});
 }
 

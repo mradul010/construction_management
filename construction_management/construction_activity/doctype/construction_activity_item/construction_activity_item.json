@@ -6,13 +6,14 @@
  "document_type": "Other",
  "editable_grid": 1,
  "engine": "InnoDB",
- "field_order": ["mark_no", "mark_item", "qty", "unit_weight", "total_weight", "remarks"],
+ "field_order": ["mark_no", "mark_item", "qty", "unit_weight", "total_weight", "item_code", "remarks"],
  "fields": [
   {"fieldname": "mark_no", "fieldtype": "Data", "in_list_view": 1, "label": "Mark No.", "reqd": 1},
-  {"fieldname": "mark_item", "fieldtype": "Link", "in_list_view": 1, "label": "Mark Item", "options": "Item", "read_only": 1},
+  {"fieldname": "mark_item", "fieldtype": "Data", "in_list_view": 1, "label": "Mark Item"},
   {"fieldname": "qty", "fieldtype": "Float", "in_list_view": 1, "label": "Qty", "reqd": 1},
   {"fieldname": "unit_weight", "fieldtype": "Float", "in_list_view": 1, "label": "Unit Weight", "reqd": 1},
   {"fieldname": "total_weight", "fieldtype": "Float", "in_list_view": 1, "label": "Total Weight", "read_only": 1},
+  {"fieldname": "item_code", "fieldtype": "Link", "hidden": 1, "label": "Stock Item", "options": "Item", "read_only": 1},
   {"fieldname": "remarks", "fieldtype": "Small Text", "label": "Remarks"}
  ],
  "istable": 1,

@@ -52,9 +52,9 @@ class ConstructionActivity(Document):
 		for row in self.get("items") or []:
 			if row.mark_no:
 				item = ensure_item_for_mark(row.mark_no, unit_weight=row.unit_weight)
-				row.mark_item = item.get("item") if item else None
-			if row.mark_item and not flt(row.unit_weight):
-				row.unit_weight = get_item_unit_weight(row.mark_item)
+				row.item_code = item.get("item") if item else None
+			if row.item_code and not flt(row.unit_weight):
+				row.unit_weight = get_item_unit_weight(row.item_code)
 			row.total_weight = flt(row.qty) * flt(row.unit_weight)
 
 	def get_stage_label(self, stage=None):
@@ -80,30 +80,45 @@ class ConstructionActivity(Document):
 
 		previous_stage = PREVIOUS_STAGE[self.stage]
 		for row in self.items:
-			previous_qty = get_stage_item_qty(previous_stage, self.project, self.building_number, row.mark_no)
+			previous_qty = get_stage_item_qty(
+				previous_stage,
+				self.project,
+				self.building_number,
+				row.mark_no,
+				row.mark_item,
+			)
 			if previous_qty <= 0:
 				frappe.throw(
-					_("{0} is allowed only after submitted {1} for Mark {2}, Project {3}, Building {4}.").format(
+					_("{0} is allowed only after submitted {1} for Mark {2}, Mark Item {3}, Project {4}, Building {5}.").format(
 						self.get_stage_label(),
 						self.get_stage_label(previous_stage),
 						row.mark_no,
+						row.mark_item or "-",
 						self.project,
 						self.building_number,
 					)
 				)
 
 			current_qty = (
-				get_stage_item_qty(self.stage, self.project, self.building_number, row.mark_no, exclude_parent=self.name)
+				get_stage_item_qty(
+					self.stage,
+					self.project,
+					self.building_number,
+					row.mark_no,
+					row.mark_item,
+					exclude_parent=self.name,
+				)
 				+ flt(row.qty)
 			)
 			if current_qty > previous_qty:
 				frappe.throw(
-					_("{0} Qty {1} exceeds submitted {2} Qty {3} for Mark {4}, Project {5}, Building {6}.").format(
+					_("{0} Qty {1} exceeds submitted {2} Qty {3} for Mark {4}, Mark Item {5}, Project {6}, Building {7}.").format(
 						self.get_stage_label(),
 						current_qty,
 						self.get_stage_label(previous_stage),
 						previous_qty,
 						row.mark_no,
+						row.mark_item or "-",
 						self.project,
 						self.building_number,
 					)
@@ -120,22 +135,30 @@ class ConstructionActivity(Document):
 				self.project,
 				self.building_number,
 				row.mark_no,
+				row.mark_item,
 				exclude_parent=self.name,
 			)
-			downstream_qty = get_stage_item_qty(next_stage, self.project, self.building_number, row.mark_no)
+			downstream_qty = get_stage_item_qty(
+				next_stage,
+				self.project,
+				self.building_number,
+				row.mark_no,
+				row.mark_item,
+			)
 			if downstream_qty > remaining_current:
 				frappe.throw(
-					_("Cannot cancel {0}. Submitted {1} Qty {2} would exceed remaining {0} Qty {3} for Mark {4}.").format(
+					_("Cannot cancel {0}. Submitted {1} Qty {2} would exceed remaining {0} Qty {3} for Mark {4}, Mark Item {5}.").format(
 						self.get_stage_label(),
 						self.get_stage_label(next_stage),
 						downstream_qty,
 						remaining_current,
 						row.mark_no,
+						row.mark_item or "-",
 					)
 				)
 
 
-def get_stage_item_qty(stage, project, building_number, mark_no, exclude_parent=None):
+def get_stage_item_qty(stage, project, building_number, mark_no, mark_item=None, exclude_parent=None):
 	if stage not in STAGE_SEQUENCE or not project or not building_number or not mark_no:
 		return 0
 
@@ -145,7 +168,16 @@ def get_stage_item_qty(stage, project, building_number, mark_no, exclude_parent=
 		"parent.building_number = %(building_number)s",
 		"item.mark_no = %(mark_no)s",
 	]
-	values = {"project": project, "building_number": building_number, "mark_no": mark_no}
+	values = {
+		"project": project,
+		"building_number": building_number,
+		"mark_no": mark_no,
+		"mark_item": mark_item,
+	}
+	if mark_item:
+		conditions.append("item.mark_item = %(mark_item)s")
+	else:
+		conditions.append("(item.mark_item is null or item.mark_item = '')")
 	if exclude_parent:
 		conditions.append("parent.name != %(exclude_parent)s")
 		values["exclude_parent"] = exclude_parent
@@ -174,27 +206,45 @@ def get_existing_downstream(target_stage, reference_field, source_name, draft_on
 
 
 def get_remaining_items(source, target_stage):
-	rows_by_mark = {}
+	rows_by_key = {}
 	for row in source.items:
 		if row.mark_no:
-			rows_by_mark[row.mark_no] = row
+			rows_by_key[get_activity_row_key(row)] = row
 
 	remaining = []
-	for mark_no, source_row in rows_by_mark.items():
-		source_qty = get_stage_item_qty(source.doctype, source.project, source.building_number, mark_no)
-		target_qty = get_stage_item_qty(target_stage, source.project, source.building_number, mark_no)
+	for key, source_row in rows_by_key.items():
+		mark_no, mark_item = key
+		source_qty = get_stage_item_qty(
+			source.doctype,
+			source.project,
+			source.building_number,
+			mark_no,
+			mark_item,
+		)
+		target_qty = get_stage_item_qty(
+			target_stage,
+			source.project,
+			source.building_number,
+			mark_no,
+			mark_item,
+		)
 		remaining_qty = source_qty - target_qty
 		if remaining_qty > 0:
 			remaining.append(
 				{
 					"mark_no": mark_no,
 					"mark_item": source_row.mark_item,
+					"item_code": source_row.item_code,
 					"qty": remaining_qty,
 					"unit_weight": flt(source_row.unit_weight),
 					"total_weight": remaining_qty * flt(source_row.unit_weight),
 				}
 			)
 	return remaining
+
+
+def get_activity_row_key(row):
+	return ((row.mark_no or "").strip(), (row.mark_item or "").strip())
 
 
 def make_next_stage(source_name, source_stage, target_stage):

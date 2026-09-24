@@ -9,28 +9,28 @@
  "field_order": [
   "serial_no",
   "mark_no",
+  "mark_item",
   "qty",
   "unit_weight",
   "total_weight",
+  "item_code",
   "activity_sync",
   "remarks",
   "total_wt_mt"
  ],
  "fields": [
   {
-   "fieldname": "serial_no",
-   "fieldtype": "Int",
-   "in_list_view": 1,
-   "label": "S. No.",
-   "read_only": 1
-  },
-  {
    "fieldname": "mark_no",
-   "fieldtype": "Link",
+   "fieldtype": "Data",
    "in_list_view": 1,
    "label": "Mark No.",
-   "options": "Item",
    "reqd": 1
+  },
+  {
+   "fieldname": "mark_item",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Mark Item"
   },
   {
    "fieldname": "qty",
@@ -51,6 +51,14 @@
    "fieldtype": "Float",
    "in_list_view": 1,
    "label": "Total Weight",
+   "read_only": 1
+  },
+  {
+   "fieldname": "item_code",
+   "fieldtype": "Link",
+   "hidden": 1,
+   "label": "Stock Item",
+   "options": "Item",
    "read_only": 1
   },
   {

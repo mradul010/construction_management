@@ -3,6 +3,8 @@ from frappe import _
 from frappe.model.document import Document
 from frappe.utils import flt, today
 
+from construction_management.construction_activity.item_sync import ensure_item_for_mark
+
 
 class ConstructionBOM(Document):
 	def before_insert(self):
@@ -46,12 +48,24 @@ class ConstructionBOM(Document):
 		if not self.get("items"):
 			frappe.throw(_("At least one Construction BOM Item is required."))
 
+		seen = set()
 		for row in self.items:
 			row_label = _("Row {0}").format(row.idx)
 			if not row.mark_no:
 				frappe.throw(_("{0}: Mark No. is required.").format(row_label))
-			if not frappe.db.exists("Item", row.mark_no):
-				frappe.throw(_("{0}: Mark No. {1} is not a valid Item.").format(row_label, frappe.bold(row.mark_no)))
+			row_key = ((row.mark_no or "").strip(), (row.mark_item or "").strip())
+			if row_key in seen:
+				frappe.throw(
+					_("{0}: Duplicate Construction BOM row for Mark No. {1} and Mark Item {2}.").format(
+						row_label,
+						frappe.bold(row.mark_no),
+						frappe.bold(row.mark_item or "-"),
+					)
+				)
+			seen.add(row_key)
+			if row.mark_no and not row.item_code:
+				item = ensure_item_for_mark(row.mark_no, unit_weight=row.unit_weight)
+				row.item_code = item.get("item") if item else None
 			if flt(row.qty) < 0:
 				frappe.throw(_("{0}: Qty cannot be negative.").format(row_label))
 			if flt(row.unit_weight) < 0:

@@ -26,19 +26,20 @@ def execute(filters=None):
 
 def get_columns():
 	return [
+		{"label": _("Project"), "fieldname": "project", "fieldtype": "Link", "options": "Project", "width": 150},
 		{"label": _("Building Number"), "fieldname": "building_number", "fieldtype": "Link", "options": "Building Number", "width": 150},
 		{"label": _("Mark"), "fieldname": "mark_no", "fieldtype": "Data", "width": 140},
-		{"label": _("Mark Item"), "fieldname": "mark_item", "fieldtype": "Link", "options": "Item", "width": 140},
+		{"label": _("Mark Item"), "fieldname": "mark_item", "fieldtype": "Data", "width": 140},
 		{"label": _("Qty"), "fieldname": "qty", "fieldtype": "Float", "width": 90},
 		{"label": _("Unit Weight"), "fieldname": "unit_weight", "fieldtype": "Float", "width": 110},
 		{"label": _("Total Weight"), "fieldname": "total_weight", "fieldtype": "Float", "width": 120},
 		{"label": _("Vehicle No"), "fieldname": "vehicle_no", "fieldtype": "Data", "width": 130},
-		{"label": _("Unloading"), "fieldname": "unloading", "fieldtype": "Date", "width": 110},
-		{"label": _("Assembly"), "fieldname": "assembly", "fieldtype": "Date", "width": 110},
-		{"label": _("Welding/Bolting"), "fieldname": "welding_bolting", "fieldtype": "Date", "width": 130},
-		{"label": _("Erection"), "fieldname": "erection", "fieldtype": "Date", "width": 110},
-		{"label": _("Alignment"), "fieldname": "alignment", "fieldtype": "Date", "width": 110},
-		{"label": _("Completion"), "fieldname": "completion", "fieldtype": "Date", "width": 110},
+		{"label": _("Unloading Date"), "fieldname": "unloading", "fieldtype": "Date", "width": 120},
+		{"label": _("Assembly Date"), "fieldname": "assembly", "fieldtype": "Date", "width": 120},
+		{"label": _("Welding/Bolting Date"), "fieldname": "welding_bolting", "fieldtype": "Date", "width": 150},
+		{"label": _("Erection Date"), "fieldname": "erection", "fieldtype": "Date", "width": 120},
+		{"label": _("Alignment Date"), "fieldname": "alignment", "fieldtype": "Date", "width": 120},
+		{"label": _("Completion Date"), "fieldname": "completion", "fieldtype": "Date", "width": 120},
 	]
 
 
@@ -73,7 +74,7 @@ def get_activity_rows(stage, filters):
 		from `tab{stage}` parent
 		inner join `tabConstruction Activity Item` item on item.parent = parent.name
 		where {" and ".join(conditions)}
-		order by parent.project, parent.building_number, item.mark_no, parent.activity_date, parent.creation
+		order by parent.project, parent.building_number, item.mark_no, item.mark_item, parent.activity_date, parent.name
 		""",
 		values,
 		as_dict=True,
@@ -91,7 +92,7 @@ def build_rows(activity):
 	}
 
 	rows = []
-	for key in sorted(keys, key=lambda value: (value[1] or "", value[2] or "", value[3] or "")):
+	for key in sorted(keys, key=lambda value: (value[1] or "", value[2] or "", value[3] or "", value[4] or "")):
 		unloading_rows = stage_rows_by_key["Unloading"].get(key, [])
 		tracking_qty = get_tracking_qty(stage_rows_by_key, key)
 		unit_weight = get_first_value(stage_rows_by_key, key, "unit_weight")
@@ -99,9 +100,10 @@ def build_rows(activity):
 
 		rows.append(
 			{
+				"project": key[1],
 				"building_number": key[2],
 				"mark_no": key[3],
-				"mark_item": get_first_text_value(stage_rows_by_key, key, "mark_item"),
+				"mark_item": key[4],
 				"qty": tracking_qty,
 				"unit_weight": unit_weight,
 				"total_weight": total_weight,
@@ -155,7 +157,13 @@ def group_rows_by_key(rows):
 
 
 def row_key(row):
-	return (row.get("company"), row.get("project"), row.get("building_number"), row.get("mark_no"))
+	return (
+		row.get("company"),
+		row.get("project"),
+		row.get("building_number"),
+		row.get("mark_no"),
+		row.get("mark_item") or "",
+	)
 
 
 def add_filter(conditions, values, db_field, filter_name, filters, operator="="):

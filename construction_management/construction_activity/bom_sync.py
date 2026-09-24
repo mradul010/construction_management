@@ -62,6 +62,7 @@ def get_unloading_aggregates(project, building_number):
 		select
 			item.mark_no,
 			item.mark_item,
+			item.item_code,
 			item.qty,
 			item.unit_weight,
 			parent.activity_date,
@@ -81,52 +82,76 @@ def get_unloading_aggregates(project, building_number):
 
 	aggregates = {}
 	for row in rows:
-		mark_item = get_mark_item(row)
-		if not mark_item:
+		mark_no = (row.mark_no or "").strip()
+		mark_item = (row.mark_item or "").strip()
+		if not mark_no:
 			continue
 
+		item_code = get_stock_item(row)
+		key = (mark_no, mark_item)
 		aggregate = aggregates.setdefault(
-			mark_item,
-			{"mark_no": mark_item, "qty": 0, "unit_weight": 0},
+			key,
+			{
+				"mark_no": mark_no,
+				"mark_item": mark_item,
+				"item_code": item_code,
+				"qty": 0,
+				"unit_weight": 0,
+			},
 		)
 		aggregate["qty"] += flt(row.qty)
+		if item_code:
+			aggregate["item_code"] = item_code
 		if flt(row.unit_weight):
 			aggregate["unit_weight"] = flt(row.unit_weight)
 
 	return aggregates
 
 
-def get_mark_item(row):
-	if row.mark_item and frappe.db.exists("Item", row.mark_item):
-		return row.mark_item
+def get_stock_item(row):
+	if row.item_code and frappe.db.exists("Item", row.item_code):
+		return row.item_code
 
 	item = ensure_item_for_mark(row.mark_no, unit_weight=row.unit_weight)
 	return item.get("item") if item else None
 
 
 def apply_unloading_aggregates(bom, aggregates):
-	rows_by_mark = {
-		row.mark_no: row
+	rows_by_key = {
+		get_bom_row_key(row): row
 		for row in bom.get("items") or []
 		if row.mark_no
 	}
 
-	for mark_item, aggregate in aggregates.items():
-		row = rows_by_mark.get(mark_item)
+	for key, aggregate in aggregates.items():
+		row = rows_by_key.get(key)
 		if not row:
-			row = bom.append("items", {"mark_no": mark_item})
-			rows_by_mark[mark_item] = row
+			row = bom.append(
+				"items",
+				{
+					"mark_no": aggregate["mark_no"],
+					"mark_item": aggregate["mark_item"],
+				},
+			)
+			rows_by_key[key] = row
 
 		row.activity_sync = 1
+		row.mark_no = aggregate["mark_no"]
+		row.mark_item = aggregate["mark_item"]
+		row.item_code = aggregate["item_code"]
 		row.qty = flt(aggregate["qty"])
 		row.unit_weight = flt(aggregate["unit_weight"])
 		row.total_weight = flt(row.qty) * flt(row.unit_weight)
 		row.total_wt_mt = flt(row.total_weight) / 1000
 
 	for row in bom.get("items") or []:
-		if row.get("activity_sync") and row.mark_no not in aggregates:
+		if row.get("activity_sync") and get_bom_row_key(row) not in aggregates:
 			row.qty = 0
 			row.total_weight = 0
 			row.total_wt_mt = 0
 
 	bom.run_method("update_item_values")
+
+
+def get_bom_row_key(row):
+	return ((row.mark_no or "").strip(), (row.mark_item or "").strip())
