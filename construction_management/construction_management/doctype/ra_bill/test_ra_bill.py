@@ -13,7 +13,9 @@ from construction_management.construction_management.overrides.sales_invoice imp
 	validate_ra_bill_advance_recovery_balance,
 )
 from construction_management.construction_management.doctype.ra_bill.ra_bill import (
+	are_ra_bill_amounts_equal,
 	calculate_ra_bill_taxes,
+	get_ra_bill_rounded_total,
 	get_ra_bill_sales_invoice_item_total,
 	get_ra_bill_sales_invoice_item_values,
 	search_boq_adjustment_items_for_ra_bill,
@@ -368,6 +370,32 @@ class IntegrationTestRABill(UnitTestCase):
 
 		self.assertEqual(taxable_amount, 1000)
 		self.assertEqual(flt(taxable_amount * 5 / 100, 2), 50)
+
+	def test_ra_bill_item_total_rounds_after_summing_raw_amounts(self):
+		raw_amounts = [
+			13500.000000000,
+			8100.000000000,
+			7491.039840000,
+			68352.086400000,
+			52221.916398745,
+			43424.995981819,
+			276184.909435635,
+			15378.817814493,
+		]
+		gross_amount = 484653.765870692
+
+		line_rounded_total = flt(sum(flt(amount, 2) for amount in raw_amounts), 2)
+		raw_rounded_total = get_ra_bill_rounded_total(raw_amounts, 2)
+
+		self.assertEqual(line_rounded_total, 484653.78)
+		self.assertEqual(raw_rounded_total, 484653.77)
+		self.assertTrue(
+			are_ra_bill_amounts_equal(
+				raw_rounded_total,
+				flt(gross_amount, 2),
+				2,
+			)
+		)
 
 	def test_ra_bill_advance_recovery_validates_against_remaining_sales_order_balance(self):
 		si = _fake_sales_invoice()
