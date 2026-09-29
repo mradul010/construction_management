@@ -1036,20 +1036,32 @@ class RABill(Document):
 		validate_ra_bill_advance_recovery(self)
 		set_item_sales_order(invoice_items, source_sales_order)
 
-		invoice_gross = get_ra_bill_sales_invoice_item_total(invoice_items)
-		if flt(invoice_gross, 2) != flt(self.gross_amount, 2):
+		gross_precision = self.precision("gross_amount")
+		invoice_gross = get_ra_bill_rounded_total(
+			(row.current_amount for row in self.items),
+			gross_precision,
+		)
+		gross_amount = flt(self.gross_amount, gross_precision)
+		if not are_ra_bill_amounts_equal(invoice_gross, gross_amount, gross_precision):
 			frappe.throw(
 				"Detailed RA Bill Item total does not match the RA Bill gross amount. "
 				f"Item total: {frappe.format(invoice_gross, {'fieldtype': 'Currency'})}, "
-				f"Gross amount: {frappe.format(self.gross_amount, {'fieldtype': 'Currency'})}."
+				f"Gross amount: {frappe.format(gross_amount, {'fieldtype': 'Currency'})}."
 			)
 
-		invoice_certified_total = get_ra_bill_sales_invoice_item_total(invoice_items)
-		if flt(invoice_certified_total, 2) != flt(self.gross_amount, 2):
+		invoice_certified_total = get_ra_bill_rounded_total(
+			(get_ra_bill_sales_invoice_item_amount(item) for item in invoice_items),
+			gross_precision,
+		)
+		if not are_ra_bill_amounts_equal(
+			invoice_certified_total,
+			gross_amount,
+			gross_precision,
+		):
 			frappe.throw(
 				"Sales Invoice item total does not match the RA Bill certified amount. "
 				f"Invoice total: {frappe.format(invoice_certified_total, {'fieldtype': 'Currency'})}, "
-				f"Certified amount: {frappe.format(self.gross_amount, {'fieldtype': 'Currency'})}."
+				f"Certified amount: {frappe.format(gross_amount, {'fieldtype': 'Currency'})}."
 			)
 
 		si = make_sales_invoice(invoice_items)
@@ -1356,12 +1368,16 @@ def get_ra_bill_sales_invoice_item_values(
 		else qty_precision
 	)
 
-	certified_amount = flt(amount, amount_precision)
+	certified_amount = flt(amount)
 	invoice_qty = flt(qty, qty_precision)
 	invoice_rate = flt(rate, rate_precision)
 	recomputed_amount = flt(invoice_qty * invoice_rate, amount_precision)
 
-	if invoice_qty > 0 and invoice_rate > 0 and recomputed_amount == certified_amount:
+	if (
+		invoice_qty > 0
+		and invoice_rate > 0
+		and recomputed_amount == flt(certified_amount, amount_precision)
+	):
 		return frappe._dict(
 			{
 				"qty": invoice_qty,
@@ -1392,6 +1408,15 @@ def get_ra_bill_sales_invoice_item_amount(item):
 
 def get_ra_bill_sales_invoice_item_total(items):
 	return sum(get_ra_bill_sales_invoice_item_amount(item) for item in items)
+
+
+def get_ra_bill_rounded_total(values, precision):
+	return flt(sum(flt(value) for value in values), precision)
+
+
+def are_ra_bill_amounts_equal(amount, expected_amount, precision):
+	tolerance = 0.5 * (10**-precision)
+	return abs(flt(amount) - flt(expected_amount)) <= tolerance
 
 
 @frappe.whitelist()
