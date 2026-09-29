@@ -45,7 +45,73 @@ def get_payment_entry(
 	apply_trade_receivable_allocation(payment_entry)
 	apply_trade_payable_allocation(payment_entry)
 	apply_construction_accounts_to_payment_entry(payment_entry)
+	apply_sales_invoice_tax_reference(payment_entry, dt, dn)
 	return payment_entry
+
+
+def apply_sales_invoice_tax_reference(payment_entry, dt=None, dn=None):
+	"""Copy source Sales Invoice tax rows for display/reference only.
+
+	These rows intentionally do not use Payment Entry's native taxes/deductions
+	tables because those tables participate in PE amount calculation and GL.
+	"""
+	if not payment_entry or dt != "Sales Invoice" or not dn:
+		return payment_entry
+
+	if not payment_entry.meta.has_field("sales_invoice_tax_reference"):
+		return payment_entry
+
+	source_invoice = frappe.get_doc("Sales Invoice", dn)
+	if not source_invoice.get("taxes"):
+		return payment_entry
+
+	existing_keys = {
+		_get_invoice_tax_reference_key(row)
+		for row in payment_entry.get("sales_invoice_tax_reference") or []
+	}
+
+	for tax in source_invoice.get("taxes") or []:
+		if not tax.account_head:
+			continue
+
+		row_values = _get_invoice_tax_reference_row(source_invoice, tax)
+		key = _get_invoice_tax_reference_key(frappe._dict(row_values))
+		if key in existing_keys:
+			continue
+
+		payment_entry.append("sales_invoice_tax_reference", row_values)
+		existing_keys.add(key)
+
+	return payment_entry
+
+
+def _get_invoice_tax_reference_row(source_invoice, tax):
+	return {
+		"source_sales_invoice": source_invoice.name,
+		"account_head": tax.account_head,
+		"description": tax.get("description"),
+		"charge_type": tax.get("charge_type"),
+		"add_deduct_tax": tax.get("add_deduct_tax"),
+		"rate": tax.get("rate"),
+		"tax_amount": tax.get("tax_amount"),
+		"base_tax_amount": tax.get("base_tax_amount"),
+		"included_in_print_rate": tax.get("included_in_print_rate"),
+		"included_in_paid_amount": tax.get("included_in_paid_amount"),
+		"cost_center": tax.get("cost_center"),
+	}
+
+
+def _get_invoice_tax_reference_key(row):
+	return (
+		row.get("source_sales_invoice"),
+		row.get("account_head"),
+		row.get("description"),
+		row.get("charge_type"),
+		flt(row.get("rate")),
+		flt(row.get("tax_amount")),
+		flt(row.get("base_tax_amount")),
+		row.get("add_deduct_tax"),
+	)
 
 
 def apply_trade_receivable_allocation(payment_entry):

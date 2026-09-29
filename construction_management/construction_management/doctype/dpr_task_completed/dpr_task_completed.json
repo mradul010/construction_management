@@ -5,66 +5,259 @@
  "editable_grid": 1,
  "engine": "InnoDB",
  "field_order": [
+  "work_location",
+  "contractor",
+  "gang_name",
+  "fitter",
+  "welder",
+  "gas_cutter",
+  "rigger",
+  "grinder",
+  "helper",
+  "khalasi",
+  "electrician",
+  "foreman",
+  "total_workers",
+  "todays_work_activity",
+  "target_mark_no",
+  "target_quantity",
+  "work_completed",
+  "completed_mark_no",
+  "completed_quantity",
+  "balance_quantity",
+  "remarks_constraints",
+  "legacy_section",
+  "location",
   "task_title",
+  "mark_no",
   "description",
+  "notes",
+  "item_code",
+  "item_name",
   "status",
   "quantity",
   "uom",
-  "location",
-  "notes",
   "photo"
  ],
  "fields": [
   {
-   "fieldname": "task_title",
+   "columns": 2,
+   "fieldname": "work_location",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Work Location / Building",
+   "options": "Building"
+  },
+  {
+   "columns": 2,
+   "fieldname": "contractor",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Contractor",
+   "options": "Supplier"
+  },
+  {
+   "columns": 2,
+   "fieldname": "gang_name",
    "fieldtype": "Data",
    "in_list_view": 1,
-   "label": "Task Completed",
+   "label": "Gang Name"
+  },
+  {
+   "default": "0",
+   "fieldname": "fitter",
+   "fieldtype": "Int",
+   "label": "Fitter"
+  },
+  {
+   "default": "0",
+   "fieldname": "welder",
+   "fieldtype": "Int",
+   "label": "Welder"
+  },
+  {
+   "default": "0",
+   "fieldname": "gas_cutter",
+   "fieldtype": "Int",
+   "label": "Gas Cutter"
+  },
+  {
+   "default": "0",
+   "fieldname": "rigger",
+   "fieldtype": "Int",
+   "label": "Rigger"
+  },
+  {
+   "default": "0",
+   "fieldname": "grinder",
+   "fieldtype": "Int",
+   "label": "Grinder"
+  },
+  {
+   "default": "0",
+   "fieldname": "helper",
+   "fieldtype": "Int",
+   "label": "Helper"
+  },
+  {
+   "default": "0",
+   "fieldname": "khalasi",
+   "fieldtype": "Int",
+   "label": "Khalasi"
+  },
+  {
+   "default": "0",
+   "fieldname": "electrician",
+   "fieldtype": "Int",
+   "label": "Electrician"
+  },
+  {
+   "default": "0",
+   "fieldname": "foreman",
+   "fieldtype": "Int",
+   "label": "Foreman"
+  },
+  {
+   "columns": 1,
+   "fieldname": "total_workers",
+   "fieldtype": "Int",
+   "in_list_view": 1,
+   "label": "Total Workers",
+   "read_only": 1
+  },
+  {
+   "columns": 3,
+   "fieldname": "todays_work_activity",
+   "fieldtype": "Small Text",
+   "in_list_view": 1,
+   "label": "Today's Work / Activity",
    "reqd": 1
+  },
+  {
+   "columns": 2,
+   "fieldname": "target_mark_no",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Mark No",
+   "options": "Item"
+  },
+  {
+   "columns": 1,
+   "fieldname": "target_quantity",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "Target Quantity"
+  },
+  {
+   "fieldname": "work_completed",
+   "fieldtype": "Small Text",
+   "label": "Work Completed"
+  },
+  {
+   "columns": 2,
+   "fieldname": "completed_mark_no",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Mark No",
+   "options": "Item"
+  },
+  {
+   "columns": 1,
+   "fieldname": "completed_quantity",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "Completed Quantity"
+  },
+  {
+   "columns": 1,
+   "fieldname": "balance_quantity",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "Balance Quantity",
+   "read_only": 1
+  },
+  {
+   "fieldname": "remarks_constraints",
+   "fieldtype": "Small Text",
+   "label": "Remarks / Constraints"
+  },
+  {
+   "collapsible": 1,
+   "fieldname": "legacy_section",
+   "fieldtype": "Section Break",
+   "hidden": 1,
+   "label": "Legacy Fields"
+  },
+  {
+   "fieldname": "location",
+   "fieldtype": "Data",
+   "hidden": 1,
+   "label": "Legacy Work Location / Building"
+  },
+  {
+   "fieldname": "task_title",
+   "fieldtype": "Small Text",
+   "hidden": 1,
+   "label": "Legacy Today's Work / Activity"
+  },
+  {
+   "fieldname": "mark_no",
+   "fieldtype": "Data",
+   "hidden": 1,
+   "label": "Legacy Mark No"
   },
   {
    "fieldname": "description",
    "fieldtype": "Small Text",
-   "in_list_view": 1,
-   "label": "Description"
+   "hidden": 1,
+   "label": "Legacy Work Completed"
+  },
+  {
+   "fieldname": "notes",
+   "fieldtype": "Small Text",
+   "hidden": 1,
+   "label": "Legacy Remarks / Constraints"
+  },
+  {
+   "fieldname": "item_code",
+   "fieldtype": "Data",
+   "hidden": 1,
+   "label": "Legacy Item Code",
+   "read_only": 1
+  },
+  {
+   "fieldname": "item_name",
+   "fieldtype": "Data",
+   "hidden": 1,
+   "label": "Legacy Item Name",
+   "read_only": 1
   },
   {
    "default": "Completed",
    "fieldname": "status",
    "fieldtype": "Select",
-   "in_list_view": 1,
-   "label": "Status",
+   "hidden": 1,
+   "label": "Legacy Status",
    "options": "Completed\nPartially Completed\nPending"
   },
   {
    "fieldname": "quantity",
    "fieldtype": "Float",
-   "in_list_view": 1,
-   "label": "Quantity"
+   "hidden": 1,
+   "label": "Legacy Quantity"
   },
   {
    "fieldname": "uom",
    "fieldtype": "Link",
-   "in_list_view": 1,
-   "label": "UOM",
+   "hidden": 1,
+   "label": "Legacy UOM",
    "options": "UOM"
-  },
-  {
-   "fieldname": "location",
-   "fieldtype": "Data",
-   "in_list_view": 1,
-   "label": "Location"
-  },
-  {
-   "fieldname": "notes",
-   "fieldtype": "Small Text",
-   "in_list_view": 1,
-   "label": "Notes"
   },
   {
    "fieldname": "photo",
    "fieldtype": "Attach Image",
-   "label": "Photo"
+   "hidden": 1,
+   "label": "Legacy Photo"
   }
  ],
  "istable": 1,

@@ -139,7 +139,7 @@
    "hidden": 0,
    "is_query_report": 0,
    "label": "Reports",
-   "link_count": 8,
+   "link_count": 9,
    "link_type": "DocType",
    "onboard": 0,
    "type": "Card Break"
@@ -160,6 +160,16 @@
    "label": "DPR Register",
    "link_count": 0,
    "link_to": "DPR Register",
+   "link_type": "Report",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 1,
+   "label": "Daily Progress Report Register",
+   "link_count": 0,
+   "link_to": "Daily Progress Report Register",
    "link_type": "Report",
    "onboard": 0,
    "type": "Link"

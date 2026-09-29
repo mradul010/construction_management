@@ -1,0 +1,84 @@
+{
+ "app": "construction_management",
+ "charts": [],
+ "content": "[{\"id\":\"material_consumption_header\",\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h4\\\"><b>Material Consumption</b></span>\",\"col\":12}},{\"id\":\"site_material_consumption_shortcut\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Site Material Consumption\",\"col\":4}},{\"id\":\"material_consumption_reports_card\",\"type\":\"card\",\"data\":{\"card_name\":\"Reports\",\"col\":4}}]",
+ "creation": "2026-09-29 00:00:00",
+ "custom_blocks": [],
+ "docstatus": 0,
+ "doctype": "Workspace",
+ "for_user": "",
+ "hide_custom": 0,
+ "icon": "stock",
+ "idx": 0,
+ "is_hidden": 0,
+ "label": "Material Consumption",
+ "links": [
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Reports",
+   "link_count": 1,
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Card Break"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 1,
+   "label": "Material Consumption",
+   "link_count": 0,
+   "link_to": "Material Consumption",
+   "link_type": "Report",
+   "onboard": 0,
+   "report_ref_doctype": "Site Material Consumption",
+   "type": "Link"
+  }
+ ],
+ "modified": "2026-09-29 12:35:10.232562",
+ "modified_by": "Administrator",
+ "module": "Construction Management",
+ "name": "Material Consumption",
+ "number_cards": [],
+ "owner": "Administrator",
+ "parent_page": "",
+ "public": 1,
+ "quick_lists": [],
+ "restrict_to_domain": "",
+ "roles": [
+  {
+   "role": "System Manager"
+  },
+  {
+   "role": "Construction Manager"
+  },
+  {
+   "role": "Site Engineer"
+  },
+  {
+   "role": "Stock Manager"
+  },
+  {
+   "role": "Accounts Manager"
+  },
+  {
+   "role": "Projects Manager"
+  },
+  {
+   "role": "Projects User"
+  }
+ ],
+ "sequence_id": 0.0,
+ "shortcuts": [
+  {
+   "color": "Grey",
+   "doc_view": "List",
+   "format": "{} Open",
+   "label": "Site Material Consumption",
+   "link_to": "Site Material Consumption",
+   "stats_filter": "[]",
+   "type": "DocType"
+  }
+ ],
+ "title": "Material Consumption",
+ "type": "Workspace"
+}

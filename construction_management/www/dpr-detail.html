@@ -61,29 +61,39 @@
 				<thead>
 					<tr>
 						<th>Sr.</th>
-						<th>Task Completed</th>
-						<th>Description</th>
-						<th>Status</th>
-						<th>Quantity</th>
-						<th>UOM</th>
-						<th>Location</th>
-						<th>Notes</th>
+						<th>Work Location / Building</th>
+						<th>Contractor</th>
+						<th>Gang Name</th>
+						<th>Total Workers</th>
+						<th>Today's Work / Activity</th>
+						<th>Mark No</th>
+						<th>Target Quantity</th>
+						<th>Work Completed</th>
+						<th>Mark No</th>
+						<th>Completed Quantity</th>
+						<th>Balance Quantity</th>
+						<th>Remarks / Constraints</th>
 					</tr>
 				</thead>
 				<tbody>
 					{% for row in tasks %}
 					<tr>
 						<td>{{ loop.index }}</td>
-						<td>{{ row.task_title or "-" }}</td>
-						<td>{{ row.description or "-" }}</td>
-						<td>{{ row.status or "-" }}</td>
-						<td>{{ row.quantity or "" }}</td>
-						<td>{{ row.uom or "" }}</td>
-						<td>{{ row.location or "-" }}</td>
-						<td>{{ row.notes or "-" }}</td>
+						<td>{{ row.work_location or row.location or "-" }}</td>
+						<td>{{ row.contractor or "-" }}</td>
+						<td>{{ row.gang_name or "-" }}</td>
+						<td>{{ row.total_workers if row.total_workers is not none else 0 }}</td>
+						<td>{{ row.todays_work_activity or row.task_title or "-" }}</td>
+						<td>{{ row.target_mark_no or row.mark_no or "-" }}</td>
+						<td>{{ row.target_quantity if row.target_quantity is not none else "" }}</td>
+						<td>{{ row.work_completed or row.description or row.status or "-" }}</td>
+						<td>{{ row.completed_mark_no or row.mark_no or "-" }}</td>
+						<td>{{ row.completed_quantity if row.completed_quantity is not none else row.quantity or "" }}</td>
+						<td>{{ row.balance_quantity if row.balance_quantity is not none else "" }}</td>
+						<td>{{ row.remarks_constraints or row.notes or "-" }}</td>
 					</tr>
 					{% else %}
-						{% set columns = 8 %}
+						{% set columns = 13 %}
 						{% set message = "No completed tasks recorded." %}
 						{% include "construction_management/templates/includes/construction_portal/table_empty.html" %}
 					{% endfor %}

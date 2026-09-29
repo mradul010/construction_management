@@ -23,6 +23,7 @@ def after_install():
 	ensure_purchase_invoice_site_material_consumption_fields()
 	ensure_purchase_order_subcontract_fields()
 	ensure_payment_entry_retention_record_field()
+	ensure_payment_entry_sales_invoice_tax_reference_field()
 	backfill_payment_entry_subcontract_links()
 	backfill_sales_invoice_ra_bill_links()
 	ensure_ra_bill_items()
@@ -47,6 +48,7 @@ def after_migrate():
 	ensure_purchase_invoice_site_material_consumption_fields()
 	ensure_purchase_order_subcontract_fields()
 	ensure_payment_entry_retention_record_field()
+	ensure_payment_entry_sales_invoice_tax_reference_field()
 	backfill_payment_entry_subcontract_links()
 	backfill_sales_invoice_ra_bill_links()
 	ensure_ra_bill_items()
@@ -948,6 +950,39 @@ def ensure_sales_invoice_payment_breakdown_field():
 	frappe.clear_cache(doctype="Sales Invoice")
 	frappe.db.commit()
 	print("Sales Invoice Retention Deduction custom fields are ready")
+
+
+def ensure_payment_entry_sales_invoice_tax_reference_field():
+	"""Show source Sales Invoice tax rows on Payment Entry without affecting accounting."""
+	ensure_custom_field(
+		"Payment Entry",
+		"sales_invoice_tax_reference_section",
+		{
+			"label": "Sales Invoice Tax Reference",
+			"fieldtype": "Section Break",
+			"insert_after": "tax_withholding_entries",
+			"collapsible": 1,
+			"depends_on": "eval:doc.sales_invoice_tax_reference && doc.sales_invoice_tax_reference.length",
+			"module": "Construction Management",
+		},
+	)
+	ensure_custom_field(
+		"Payment Entry",
+		"sales_invoice_tax_reference",
+		{
+			"label": "Sales Invoice Tax Reference",
+			"fieldtype": "Table",
+			"options": "Payment Entry Sales Invoice Tax",
+			"insert_after": "sales_invoice_tax_reference_section",
+			"read_only": 1,
+			"no_copy": 1,
+			"module": "Construction Management",
+		},
+	)
+
+	frappe.clear_cache(doctype="Payment Entry")
+	frappe.db.commit()
+	print("Payment Entry Sales Invoice tax reference field is ready")
 
 
 def ensure_purchase_invoice_sc_bill_fields():

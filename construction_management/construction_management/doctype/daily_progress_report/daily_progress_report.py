@@ -1,14 +1,28 @@
 import frappe
 from frappe import _
 from frappe.model.document import Document
+from frappe.utils import cint, flt
 
 from construction_management.portal_utils import get_project_customer
+
+WORKER_FIELDS = (
+	"fitter",
+	"welder",
+	"gas_cutter",
+	"rigger",
+	"grinder",
+	"helper",
+	"khalasi",
+	"electrician",
+	"foreman",
+)
 
 
 class DailyProgressReport(Document):
 	def validate(self):
 		self._set_project_customer()
 		self._set_defaults()
+		self._update_task_rows()
 		self._validate_task_rows()
 
 	def before_submit(self):
@@ -52,15 +66,67 @@ class DailyProgressReport(Document):
 
 	def _validate_task_rows(self):
 		for row in self.get("tasks_completed") or []:
-			if row.task_title:
-				continue
+			if row.todays_work_activity:
+				pass
 
 			has_other_values = any(
 				row.get(fieldname)
-				for fieldname in ("description", "quantity", "uom", "location", "notes", "photo")
+				for fieldname in (
+					"work_location",
+					"todays_work_activity",
+					"target_mark_no",
+					"work_completed",
+					"completed_mark_no",
+					"remarks_constraints",
+					"description",
+					"quantity",
+					"uom",
+					"location",
+					"notes",
+					"photo",
+					"contractor",
+					"gang_name",
+					"mark_no",
+					"target_quantity",
+					"completed_quantity",
+				)
 			)
-			if has_other_values:
+			if not row.todays_work_activity and has_other_values:
 				frappe.throw(_("Task Completed is required in row {0}.").format(row.idx))
+
+			row_label = _("Row {0}").format(row.idx)
+			for fieldname in WORKER_FIELDS:
+				if cint(row.get(fieldname)) < 0:
+					frappe.throw(_("{0}: {1} cannot be negative.").format(row_label, frappe.unscrub(fieldname)))
+
+			if flt(row.target_quantity) < 0:
+				frappe.throw(_("{0}: Target Quantity cannot be negative.").format(row_label))
+			if flt(row.completed_quantity) < 0:
+				frappe.throw(_("{0}: Completed Quantity cannot be negative.").format(row_label))
+			if flt(row.completed_quantity) > flt(row.target_quantity):
+				frappe.throw(_("{0}: Completed Quantity cannot exceed Target Quantity.").format(row_label))
+
+	def _update_task_rows(self):
+		for row in self.get("tasks_completed") or []:
+			if not row.work_location and row.location:
+				row.work_location = row.location
+			if not row.todays_work_activity and row.task_title:
+				row.todays_work_activity = row.task_title
+			if not row.work_completed and row.description:
+				row.work_completed = row.description
+			if not row.remarks_constraints and row.notes:
+				row.remarks_constraints = row.notes
+			if not row.target_mark_no:
+				row.target_mark_no = (row.mark_no or row.item_code or row.item_name or "").strip()
+			if not row.completed_mark_no:
+				row.completed_mark_no = (row.mark_no or row.item_code or row.item_name or "").strip()
+
+			if flt(row.quantity) and not flt(row.target_quantity) and not flt(row.completed_quantity):
+				row.target_quantity = flt(row.quantity)
+				row.completed_quantity = flt(row.quantity)
+
+			row.total_workers = sum(cint(row.get(fieldname)) for fieldname in WORKER_FIELDS)
+			row.balance_quantity = flt(row.target_quantity) - flt(row.completed_quantity)
 
 
 def get_permission_query_conditions(user=None):
