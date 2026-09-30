@@ -9,6 +9,7 @@ def after_install():
 	create_boq_client_script()
 	ensure_ra_bill_print_formats()
 	ensure_construction_desktop_icons()
+	ensure_material_consumption_desktop_icon()
 	ensure_design_management_setup()
 	ensure_company_construction_accounting_fields()
 	ensure_construction_company_settings()
@@ -34,6 +35,7 @@ def after_migrate():
 	create_boq_client_script()
 	ensure_ra_bill_print_formats()
 	ensure_construction_desktop_icons()
+	ensure_material_consumption_desktop_icon()
 	ensure_design_management_setup()
 	ensure_company_construction_accounting_fields()
 	ensure_construction_company_settings()
@@ -184,6 +186,93 @@ def ensure_construction_desktop_icons():
 				update_modified=False,
 			)
 	frappe.db.commit()
+
+
+def ensure_material_consumption_desktop_icon():
+	workspace_name = "Material Consumption"
+	if not frappe.db.exists("Workspace", workspace_name):
+		return
+
+	ensure_material_consumption_workspace_sidebar(workspace_name)
+
+	icon_values = {
+		"label": workspace_name,
+		"app": "construction_management",
+		"icon_type": "Link",
+		"link_type": "Workspace Sidebar",
+		"link_to": workspace_name,
+		"icon": "stock",
+		"hidden": 0,
+		"standard": 1,
+		"idx": 31,
+		"parent_icon": "",
+	}
+	if frappe.db.exists("Desktop Icon", workspace_name):
+		frappe.db.set_value("Desktop Icon", workspace_name, icon_values, update_modified=False)
+	else:
+		frappe.get_doc({"doctype": "Desktop Icon", **icon_values}).insert(ignore_permissions=True)
+
+	frappe.cache.delete_key("desktop_icons")
+	frappe.db.commit()
+
+
+def ensure_material_consumption_workspace_sidebar(workspace_name):
+	sidebar_values = {
+		"title": workspace_name,
+		"header_icon": "stock",
+		"module": "Construction Management",
+		"app": "construction_management",
+		"standard": 1,
+	}
+	if frappe.db.exists("Workspace Sidebar", workspace_name):
+		frappe.db.set_value("Workspace Sidebar", workspace_name, sidebar_values, update_modified=False)
+	else:
+		frappe.get_doc(
+			{
+				"doctype": "Workspace Sidebar",
+				"name": workspace_name,
+				**sidebar_values,
+			}
+		).insert(ignore_permissions=True)
+
+	frappe.db.delete("Workspace Sidebar Item", {"parent": workspace_name})
+	for idx, item in enumerate(get_material_consumption_workspace_sidebar_items(workspace_name), start=1):
+		frappe.get_doc(
+			{
+				"doctype": "Workspace Sidebar Item",
+				"parent": workspace_name,
+				"parenttype": "Workspace Sidebar",
+				"parentfield": "items",
+				"idx": idx,
+				**item,
+			}
+		).insert(ignore_permissions=True)
+
+
+def get_material_consumption_workspace_sidebar_items(workspace_name):
+	return [
+		{
+			"label": "Home",
+			"type": "Link",
+			"link_type": "Workspace",
+			"link_to": workspace_name,
+			"icon": "home",
+		},
+		{
+			"label": "Site Material Consumption",
+			"type": "Link",
+			"link_type": "DocType",
+			"link_to": "Site Material Consumption",
+			"icon": "stock",
+		},
+		{
+			"label": "Material Consumption",
+			"type": "Link",
+			"link_type": "Report",
+			"link_to": "Material Consumption",
+			"icon": "file-chart-column-increasing",
+		},
+	]
 
 
 def ensure_construction_workspace_route():
