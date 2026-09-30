@@ -193,6 +193,7 @@ def ensure_material_consumption_desktop_icon():
 	if not frappe.db.exists("Workspace", workspace_name):
 		return
 
+	ensure_material_consumption_workspace(workspace_name)
 	ensure_material_consumption_workspace_sidebar(workspace_name)
 
 	icon_values = {
@@ -214,6 +215,22 @@ def ensure_material_consumption_desktop_icon():
 
 	frappe.cache.delete_key("desktop_icons")
 	frappe.db.commit()
+
+
+def ensure_material_consumption_workspace(workspace_name):
+	frappe.db.set_value(
+		"Workspace",
+		workspace_name,
+		{
+			"public": 1,
+			"is_hidden": 0,
+			"for_user": "",
+			"module": "Construction Management",
+			"app": "construction_management",
+		},
+		update_modified=False,
+	)
+	frappe.db.delete("Has Role", {"parenttype": "Workspace", "parent": workspace_name})
 
 
 def ensure_material_consumption_workspace_sidebar(workspace_name):

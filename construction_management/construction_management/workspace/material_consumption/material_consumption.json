@@ -44,29 +44,7 @@
  "public": 1,
  "quick_lists": [],
  "restrict_to_domain": "",
- "roles": [
-  {
-   "role": "System Manager"
-  },
-  {
-   "role": "Construction Manager"
-  },
-  {
-   "role": "Site Engineer"
-  },
-  {
-   "role": "Stock Manager"
-  },
-  {
-   "role": "Accounts Manager"
-  },
-  {
-   "role": "Projects Manager"
-  },
-  {
-   "role": "Projects User"
-  }
- ],
+ "roles": [],
  "sequence_id": 0.0,
  "shortcuts": [
   {
