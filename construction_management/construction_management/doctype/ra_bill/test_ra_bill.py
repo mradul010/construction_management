@@ -22,6 +22,7 @@ from construction_management.construction_management.doctype.ra_bill.ra_bill imp
 	reconcile_sales_invoice_item_total_with_ra_bill,
 	search_boq_adjustment_items_for_ra_bill,
 	search_boq_items_for_ra_bill,
+	validate_ra_bill_sales_invoice_matches_gross,
 )
 from construction_management.construction_management.ra_bill_dates import (
 	apply_ra_bill_dates_to_sales_invoice,
@@ -411,15 +412,23 @@ class IntegrationTestRABill(UnitTestCase):
 			15378.817814493,
 		]
 		si = _FakeDoc(
-			{
-				"ra_bill": "RA-BILL-TEST",
-				"items": [
-					_FakeRow({"idx": idx, "item_name": f"Item {idx}", "qty": 1, "rate": amount, "amount": amount})
-					for idx, amount in enumerate(amounts, 1)
-				],
-			}
+				{
+					"ra_bill": "RA-YYYY-0026-3",
+					"items": [
+						_FakeRow(
+							{
+								"idx": idx,
+								"item_name": f"Item {idx}",
+								"qty": 1,
+								"rate": amount,
+								"amount": amount,
+							}
+						)
+						for idx, amount in enumerate(amounts, 1)
+					],
+				}
 		)
-		ra_bill = _fake_ra_bill(gross_amount=484653.765870692)
+		ra_bill = _fake_ra_bill(name="RA-YYYY-0026-3", gross_amount=484653.765870692)
 
 		result = reconcile_sales_invoice_item_total_with_ra_bill(si, ra_bill, precision=2)
 
@@ -500,6 +509,16 @@ class IntegrationTestRABill(UnitTestCase):
 		)
 		self.assertEqual(non_ra_invoice.items[0].amount, 99.99)
 		self.assertEqual(return_invoice.items[0].amount, 99.99)
+
+	def test_ra_bill_sales_invoice_strict_total_validation(self):
+		ra_bill = _fake_ra_bill(gross_amount=484653.765870692)
+		si = _FakeDoc({"total": 484653.77, "net_total": 484653.77})
+
+		validate_ra_bill_sales_invoice_matches_gross(si, ra_bill, precision=2)
+
+		si.net_total = 484653.78
+		with self.assertRaises(frappe.ValidationError):
+			validate_ra_bill_sales_invoice_matches_gross(si, ra_bill, precision=2)
 
 	def test_ra_bill_advance_recovery_validates_against_remaining_sales_order_balance(self):
 		si = _fake_sales_invoice()
