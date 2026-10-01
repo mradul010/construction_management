@@ -13,13 +13,10 @@ from construction_management.construction_management.overrides.sales_invoice imp
 	validate_ra_bill_advance_recovery_balance,
 )
 from construction_management.construction_management.doctype.ra_bill.ra_bill import (
-	are_ra_bill_amounts_equal,
+	RABill,
 	calculate_ra_bill_taxes,
-	get_ra_bill_rounded_total,
-	get_ra_bill_sales_invoice_item_total_at_precision,
 	get_ra_bill_sales_invoice_item_total,
 	get_ra_bill_sales_invoice_item_values,
-	reconcile_sales_invoice_item_total_with_ra_bill,
 	search_boq_adjustment_items_for_ra_bill,
 	search_boq_items_for_ra_bill,
 	validate_ra_bill_sales_invoice_matches_gross,
@@ -69,6 +66,9 @@ class _FakeDoc(frappe._dict):
 		row.idx = len(self.setdefault(fieldname, [])) + 1
 		self[fieldname].append(row)
 		return row
+
+	def precision(self, fieldname):
+		return 2
 
 
 def _fake_sales_invoice():
@@ -374,7 +374,7 @@ class IntegrationTestRABill(UnitTestCase):
 		self.assertEqual(taxable_amount, 1000)
 		self.assertEqual(flt(taxable_amount * 5 / 100, 2), 50)
 
-	def test_ra_bill_item_total_rounds_after_summing_raw_amounts(self):
+	def test_ra_bill_currency_amounts_round_at_line_level(self):
 		raw_amounts = [
 			13500.000000000,
 			8100.000000000,
@@ -385,138 +385,45 @@ class IntegrationTestRABill(UnitTestCase):
 			276184.909435635,
 			15378.817814493,
 		]
-		gross_amount = 484653.765870692
-
-		line_rounded_total = flt(sum(flt(amount, 2) for amount in raw_amounts), 2)
-		raw_rounded_total = get_ra_bill_rounded_total(raw_amounts, 2)
-
-		self.assertEqual(line_rounded_total, 484653.78)
-		self.assertEqual(raw_rounded_total, 484653.77)
-		self.assertTrue(
-			are_ra_bill_amounts_equal(
-				raw_rounded_total,
-				flt(gross_amount, 2),
-				2,
-			)
-		)
-
-	def test_ra_bill_invoice_reconciliation_matches_rounded_gross_total(self):
-		amounts = [
-			13500.000000000,
-			8100.000000000,
-			7491.039840000,
-			68352.086400000,
-			52221.916398745,
-			43424.995981819,
-			276184.909435635,
-			15378.817814493,
+		line_amounts = [flt(amount, 2) for amount in raw_amounts]
+		ra_bill_gross = flt(sum(line_amounts), 2)
+		invoice_items = [
+			frappe._dict({"qty": 1, "rate": amount, "amount": amount})
+			for amount in line_amounts
 		]
-		si = _FakeDoc(
-				{
-					"ra_bill": "RA-YYYY-0026-3",
-					"items": [
-						_FakeRow(
-							{
-								"idx": idx,
-								"item_name": f"Item {idx}",
-								"qty": 1,
-								"rate": amount,
-								"amount": amount,
-							}
-						)
-						for idx, amount in enumerate(amounts, 1)
-					],
-				}
-		)
-		ra_bill = _fake_ra_bill(name="RA-YYYY-0026-3", gross_amount=484653.765870692)
 
-		result = reconcile_sales_invoice_item_total_with_ra_bill(si, ra_bill, precision=2)
+		self.assertEqual(line_amounts[-1], 15378.82)
+		self.assertEqual(ra_bill_gross, 484653.78)
+		self.assertEqual(flt(get_ra_bill_sales_invoice_item_total(invoice_items), 2), 484653.78)
 
-		self.assertTrue(result.adjusted)
-		self.assertEqual(result.difference, -0.01)
-		self.assertEqual(si.items[-1].qty, 1)
-		self.assertEqual(si.items[-1].rate, 15378.81)
-		self.assertEqual(si.items[-1].amount, 15378.81)
-		self.assertEqual(get_ra_bill_sales_invoice_item_total_at_precision(si.items, 2), 484653.77)
-
-	def test_ra_bill_invoice_reconciliation_noops_when_totals_match(self):
-		si = _FakeDoc(
+	def test_ra_bill_row_totals_round_only_monetary_amounts(self):
+		ra_bill = _FakeDoc(
 			{
-				"ra_bill": "RA-BILL-TEST",
-				"items": [_FakeRow({"idx": 1, "qty": 1, "rate": 100, "amount": 100})],
-			}
-		)
-		ra_bill = _fake_ra_bill(gross_amount=100)
-
-		result = reconcile_sales_invoice_item_total_with_ra_bill(si, ra_bill, precision=2)
-
-		self.assertFalse(result.adjusted)
-		self.assertEqual(si.items[0].amount, 100)
-
-	def test_ra_bill_invoice_reconciliation_handles_positive_precision_difference(self):
-		si = _FakeDoc(
-			{
-				"ra_bill": "RA-BILL-TEST",
-				"items": [_FakeRow({"idx": 1, "qty": 1, "rate": 99.99, "amount": 99.99})],
-			}
-		)
-		ra_bill = _fake_ra_bill(gross_amount=100)
-
-		result = reconcile_sales_invoice_item_total_with_ra_bill(si, ra_bill, precision=2)
-
-		self.assertTrue(result.adjusted)
-		self.assertEqual(result.difference, 0.01)
-		self.assertEqual(si.items[0].amount, 100)
-
-	def test_ra_bill_invoice_reconciliation_rejects_large_difference(self):
-		si = _FakeDoc(
-			{
-				"ra_bill": "RA-BILL-TEST",
-				"items": [_FakeRow({"idx": 1, "qty": 1, "rate": 99.97, "amount": 99.97})],
-			}
-		)
-		ra_bill = _fake_ra_bill(gross_amount=100)
-
-		with self.assertRaises(frappe.ValidationError):
-			reconcile_sales_invoice_item_total_with_ra_bill(si, ra_bill, precision=2)
-
-	def test_ra_bill_invoice_reconciliation_skips_non_ra_and_return_invoices(self):
-		ra_bill = _fake_ra_bill(gross_amount=100)
-		non_ra_invoice = _FakeDoc(
-			{"items": [_FakeRow({"idx": 1, "qty": 1, "rate": 99.99, "amount": 99.99})]}
-		)
-		return_invoice = _FakeDoc(
-			{
-				"ra_bill": "RA-BILL-TEST",
-				"is_return": 1,
-				"items": [_FakeRow({"idx": 1, "qty": 1, "rate": 99.99, "amount": 99.99})],
+				"items": [
+					_FakeRow(
+						{
+							"work_percent": 100,
+							"boq_qty": 1,
+							"boq_rate": 52221.916398745,
+							"prev_cumulative_qty": 0,
+						}
+					)
+				]
 			}
 		)
 
-		self.assertFalse(
-			reconcile_sales_invoice_item_total_with_ra_bill(
-				non_ra_invoice,
-				ra_bill,
-				precision=2,
-			).adjusted
-		)
-		self.assertFalse(
-			reconcile_sales_invoice_item_total_with_ra_bill(
-				return_invoice,
-				ra_bill,
-				precision=2,
-			).adjusted
-		)
-		self.assertEqual(non_ra_invoice.items[0].amount, 99.99)
-		self.assertEqual(return_invoice.items[0].amount, 99.99)
+		RABill._calculate_row_totals(ra_bill)
+
+		self.assertEqual(ra_bill.items[0].current_qty, 1)
+		self.assertEqual(ra_bill.items[0].current_amount, 52221.92)
 
 	def test_ra_bill_sales_invoice_strict_total_validation(self):
-		ra_bill = _fake_ra_bill(gross_amount=484653.765870692)
-		si = _FakeDoc({"total": 484653.77, "net_total": 484653.77})
+		ra_bill = _fake_ra_bill(gross_amount=484653.78)
+		si = _FakeDoc({"total": 484653.78, "net_total": 484653.78})
 
 		validate_ra_bill_sales_invoice_matches_gross(si, ra_bill, precision=2)
 
-		si.net_total = 484653.78
+		si.net_total = 484653.77
 		with self.assertRaises(frappe.ValidationError):
 			validate_ra_bill_sales_invoice_matches_gross(si, ra_bill, precision=2)
 

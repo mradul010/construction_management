@@ -36,6 +36,14 @@ function formatNumber(value, digits = 2) {
 	});
 }
 
+function currencyRound(value, fieldname, doc, fallback = 2) {
+	let digits = fallback;
+	if (typeof precision === "function") {
+		digits = precision(fieldname, doc);
+	}
+	return flt(value, digits);
+}
+
 function showStandardItemsGrid(frm) {
 	$(frm.wrapper).find("#ra-bill-custom-items-grid").remove();
 	if (frm.fields_dict.items && frm.fields_dict.items.$wrapper) {
@@ -152,7 +160,7 @@ function getRowTotals(row, workPercent) {
 		work_percent: pct,
 		current_qty: currentQty,
 		cumulative_qty: prevQty + currentQty,
-		current_amount: currentQty * boqRate,
+		current_amount: currencyRound(currentQty * boqRate, "current_amount", row),
 	};
 }
 
@@ -166,7 +174,7 @@ function getRowTotalsFromCurrentQty(row) {
 		work_percent: boqQty ? (currentQty / boqQty) * 100 : 0,
 		current_qty: currentQty,
 		cumulative_qty: prevQty + currentQty,
-		current_amount: currentQty * boqRate,
+		current_amount: currencyRound(currentQty * boqRate, "current_amount", row),
 	};
 }
 
@@ -371,7 +379,11 @@ function capWorkToRemaining(frm, cdt, cdn, row, enteredPercent) {
 		work_percent: remainingPercent,
 		current_qty: remainingQty,
 		cumulative_qty: getPreviousQty(row) + remainingQty,
-		current_amount: remainingQty * getNumber(row.boq_rate),
+		current_amount: currencyRound(
+			remainingQty * getNumber(row.boq_rate),
+			"current_amount",
+			row,
+		),
 	};
 
 	showOverbillingCapMessage(row, enteredPercent);
@@ -658,12 +670,16 @@ function getRaBillTaxAmount(row, taxBase, previousRows) {
 
 function updateTaxRowTotals(frm, taxBase) {
 	let totalTaxes = 0;
-	let runningTotal = taxBase;
+	let runningTotal = currencyRound(taxBase, "net_total", frm.doc);
 	const previousRows = [];
 
 	(frm.doc.taxes || []).forEach((row) => {
 		const chargeType = row.charge_type || "Actual";
-		const taxAmount = getRaBillTaxAmount(row, taxBase, previousRows);
+		const taxAmount = currencyRound(
+			getRaBillTaxAmount(row, taxBase, previousRows),
+			"tax_amount",
+			row,
+		);
 
 		if (
 			chargeType !== "Actual" &&
@@ -673,8 +689,8 @@ function updateTaxRowTotals(frm, taxBase) {
 			row.tax_amount = taxAmount;
 		}
 
-		totalTaxes += taxAmount;
-		runningTotal += taxAmount;
+		totalTaxes = currencyRound(totalTaxes + taxAmount, "total_taxes_and_charges", frm.doc);
+		runningTotal = currencyRound(runningTotal + taxAmount, "grand_total", frm.doc);
 
 		if (childFieldExists(row.doctype, "total")) {
 			row.total = runningTotal;
@@ -1379,26 +1395,51 @@ frappe.ui.form.on("RA Bill", {
 		let gross = 0;
 
 		(frm.doc.items || []).forEach((row) => {
-			gross += getNumber(row.current_amount);
+			gross += currencyRound(getNumber(row.current_amount), "current_amount", row);
 		});
+		gross = currencyRound(gross, "gross_amount", frm.doc);
 
-		const retention = gross * (getNumber(frm.doc.retention_percent) / 100);
-		const netPayable = gross - retention;
+		const retention = currencyRound(
+			gross * (getNumber(frm.doc.retention_percent) / 100),
+			"retention_amount",
+			frm.doc,
+		);
+		const netPayable = currencyRound(gross - retention, "net_payable", frm.doc);
 		const totalTaxes = updateTaxRowTotals(frm, gross);
-		const grandTotal = gross + totalTaxes;
-		const allocatedAdvance = (frm.doc.advances || []).reduce(
+		const grandTotal = currencyRound(gross + totalTaxes, "grand_total", frm.doc);
+		const allocatedAdvance = currencyRound((frm.doc.advances || []).reduce(
 			(total, row) => total + getNumber(row.allocated_amount),
 			0,
+		), "total_advance", frm.doc);
+		const totalAdvanceReceived = currencyRound(
+			getNumber(frm.doc.total_advance_received),
+			"total_advance_received",
+			frm.doc,
 		);
-		const totalAdvanceReceived = getNumber(frm.doc.total_advance_received);
-		const previouslyRecovered = getNumber(frm.doc.previously_recovered_advance);
-		const remainingBefore = Math.max(totalAdvanceReceived - previouslyRecovered, 0);
+		const previouslyRecovered = currencyRound(
+			getNumber(frm.doc.previously_recovered_advance),
+			"previously_recovered_advance",
+			frm.doc,
+		);
+		const remainingBefore = currencyRound(
+			Math.max(totalAdvanceReceived - previouslyRecovered, 0),
+			"remaining_advance_before_current_bill",
+			frm.doc,
+		);
 		const recoveryPercent = getNumber(frm.doc.advance_recovery_percent);
 		const proposedRecovery = gross > 0 && recoveryPercent
-			? (gross * recoveryPercent) / 100
+			? currencyRound(
+				(gross * recoveryPercent) / 100,
+				"proposed_advance_recovery",
+				frm.doc,
+			)
 			: 0;
 		const totalAdvance = gross > 0
-			? (recoveryPercent ? Math.min(proposedRecovery, remainingBefore) : allocatedAdvance)
+			? currencyRound(
+				recoveryPercent ? Math.min(proposedRecovery, remainingBefore) : allocatedAdvance,
+				"actual_advance_recovered",
+				frm.doc,
+			)
 			: 0;
 
 		if (gross <= 0 || recoveryPercent) {
@@ -1420,11 +1461,23 @@ frappe.ui.form.on("RA Bill", {
 		setParentValueIfFieldExists(frm, "total_taxes_and_charges", totalTaxes);
 		setParentValueIfFieldExists(frm, "grand_total", grandTotal);
 		setParentValueIfFieldExists(frm, "total_advance", totalAdvance);
-		setParentValueIfFieldExists(frm, "outstanding_amount", grandTotal - totalAdvance);
+		setParentValueIfFieldExists(
+			frm,
+			"outstanding_amount",
+			currencyRound(grandTotal - totalAdvance, "outstanding_amount", frm.doc),
+		);
 		setParentValueIfFieldExists(frm, "remaining_advance_before_current_bill", remainingBefore);
 		setParentValueIfFieldExists(frm, "proposed_advance_recovery", proposedRecovery);
 		setParentValueIfFieldExists(frm, "actual_advance_recovered", totalAdvance);
-		setParentValueIfFieldExists(frm, "remaining_advance_after_current_bill", Math.max(remainingBefore - totalAdvance, 0));
+		setParentValueIfFieldExists(
+			frm,
+			"remaining_advance_after_current_bill",
+			currencyRound(
+				Math.max(remainingBefore - totalAdvance, 0),
+				"remaining_advance_after_current_bill",
+				frm.doc,
+			),
+		);
 		frm.refresh_field("taxes");
 	},
 });

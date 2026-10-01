@@ -459,35 +459,51 @@ def update_ra_bill_advance_fields(ra_bill):
 	if not sales_order:
 		return frappe._dict()
 
+	try:
+		amount_precision = ra_bill.precision("gross_amount")
+	except Exception:
+		amount_precision = 2
+
 	summary = get_sales_order_advance_summary(
 		sales_order,
 		exclude_invoice=ra_bill.get("sales_invoice"),
 		exclude_ra_bill=ra_bill.get("name"),
 	)
-	remaining_before = summary.remaining_advance_balance
+	remaining_before = flt(summary.remaining_advance_balance, amount_precision)
 	proposed = 0
 	recovery_percent = flt(ra_bill.get("advance_recovery_percent"))
-	current_billable_amount = flt(ra_bill.get("gross_amount"))
+	current_billable_amount = flt(ra_bill.get("gross_amount"), amount_precision)
 	if current_billable_amount <= ADVANCE_TOLERANCE:
 		actual = 0
 		sync_ra_bill_advance_rows(ra_bill, sales_order, 0, summary.total_advance_recovered)
 	elif recovery_percent > 0:
-		proposed = flt(ra_bill.get("gross_amount")) * recovery_percent / 100
-		actual = min(proposed, remaining_before)
+		proposed = flt(
+			current_billable_amount * recovery_percent / 100,
+			amount_precision,
+		)
+		actual = flt(min(proposed, remaining_before), amount_precision)
 		sync_ra_bill_advance_rows(ra_bill, sales_order, actual, summary.total_advance_recovered)
 	else:
-		allocated_from_rows = sum(flt(row.allocated_amount) for row in ra_bill.get("advances") or [])
-		actual = allocated_from_rows
+		allocated_from_rows = sum(
+			flt(row.allocated_amount) for row in ra_bill.get("advances") or []
+		)
+		actual = flt(allocated_from_rows, amount_precision)
 
 	values = frappe._dict(
 		{
 			"sales_order": sales_order,
-			"total_advance_received": summary.total_advance_received,
-			"previously_recovered_advance": summary.total_advance_recovered,
+			"total_advance_received": flt(summary.total_advance_received, amount_precision),
+			"previously_recovered_advance": flt(
+				summary.total_advance_recovered,
+				amount_precision,
+			),
 			"remaining_advance_before_current_bill": remaining_before,
 			"proposed_advance_recovery": proposed,
 			"actual_advance_recovered": actual,
-			"remaining_advance_after_current_bill": max(remaining_before - actual, 0),
+			"remaining_advance_after_current_bill": flt(
+				max(remaining_before - actual, 0),
+				amount_precision,
+			),
 		}
 	)
 

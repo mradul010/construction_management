@@ -38,7 +38,6 @@ from construction_management.construction_management.ra_bill_dates import (
 
 
 OVERBILLING_TOLERANCE = 0.0001
-RA_BILL_INVOICE_RECONCILIATION_UNITS = 2
 
 RA_BILL_TAX_CHARGE_TYPES = {
 	"Actual",
@@ -352,10 +351,14 @@ class RABill(Document):
 		Calculate current_qty and current_amount for each row from Work %.
 		Adjustment rows intentionally keep the sign of Work %.
 		"""
+		amount_precision = get_ra_bill_invoice_currency_precision(ra_bill=self)
 		for row in self.items:
 			row.work_percent = flt(row.work_percent)
 			row.current_qty = flt(row.boq_qty) * (row.work_percent / 100)
-			row.current_amount = flt(row.current_qty) * flt(row.boq_rate)
+			row.current_amount = flt(
+				flt(row.current_qty) * flt(row.boq_rate),
+				amount_precision,
+			)
 			row.cumulative_qty = flt(row.prev_cumulative_qty) + flt(row.current_qty)
 
 	def _validate_no_duplicate_items(self):
@@ -466,11 +469,21 @@ class RABill(Document):
 		and cumulative_billed across all submitted bills
 		for this project + BOQ including this one.
 		"""
-		self.gross_amount = sum(row.current_amount or 0 for row in self.items)
+		amount_precision = get_ra_bill_invoice_currency_precision(ra_bill=self)
+		self.gross_amount = flt(
+			sum(flt(row.current_amount, amount_precision) for row in self.items),
+			amount_precision,
+		)
 
 		retention_pct = float(self.retention_percent or 0)
-		self.retention_amount = self.gross_amount * (retention_pct / 100)
-		self.net_payable = self.gross_amount - self.retention_amount
+		self.retention_amount = flt(
+			self.gross_amount * (retention_pct / 100),
+			amount_precision,
+		)
+		self.net_payable = flt(
+			self.gross_amount - self.retention_amount,
+			amount_precision,
+		)
 
 		chain_names = _get_boq_chain_names(self.boq)
 		prev_billed = frappe.db.sql(
@@ -484,7 +497,10 @@ class RABill(Document):
 			""",
 			(self.project, tuple(chain_names or [self.boq]), self.name or "__new__"),
 		)
-		self.cumulative_billed = (prev_billed[0][0] if prev_billed else 0) + self.gross_amount
+		self.cumulative_billed = flt(
+			(prev_billed[0][0] if prev_billed else 0) + self.gross_amount,
+			amount_precision,
+		)
 
 	def _validate_payment_and_tax_fields(self):
 		for row in self.get("advances") or []:
@@ -534,11 +550,20 @@ class RABill(Document):
 
 		advance_values = update_ra_bill_advance_fields(self)
 		self.total_advance = (
-			flt(advance_values.get("actual_advance_recovered"))
+			flt(
+				advance_values.get("actual_advance_recovered"),
+				get_ra_bill_invoice_currency_precision(ra_bill=self),
+			)
 			if advance_values
-			else sum(flt(row.allocated_amount) for row in self.get("advances") or [])
+			else flt(
+				sum(flt(row.allocated_amount) for row in self.get("advances") or []),
+				get_ra_bill_invoice_currency_precision(ra_bill=self),
+			)
 		)
-		self.outstanding_amount = flt(self.grand_total) - flt(self.total_advance)
+		self.outstanding_amount = flt(
+			flt(self.grand_total) - flt(self.total_advance),
+			get_ra_bill_invoice_currency_precision(ra_bill=self),
+		)
 
 	def on_submit(self):
 		self._validate_no_duplicate_items()
@@ -909,7 +934,6 @@ class RABill(Document):
 				si.set_missing_values()
 			apply_ra_bill_dates_to_sales_invoice(si, self, company=company)
 			apply_ra_bill_cost_center_to_sales_invoice(si)
-			reconcile_sales_invoice_item_total_with_ra_bill(si, self)
 			recovery_target = get_ra_bill_advance_recovery_target(self)
 			apply_ra_bill_deduction_taxes_to_sales_invoice(
 				si,
@@ -1273,20 +1297,24 @@ def get_boq_context_for_ra_bill(boq):
 
 
 def calculate_ra_bill_taxes(doc):
-	doc.net_total = flt(doc.gross_amount)
-	running_total = flt(doc.net_total)
+	amount_precision = get_ra_bill_invoice_currency_precision(ra_bill=doc)
+	doc.net_total = flt(doc.gross_amount, amount_precision)
+	running_total = flt(doc.net_total, amount_precision)
 	total_taxes = 0
 	calculated_rows = []
 
 	for row in doc.get("taxes") or []:
-		tax_amount = get_ra_bill_tax_amount(row, doc.net_total, calculated_rows)
+		tax_amount = flt(
+			get_ra_bill_tax_amount(row, doc.net_total, calculated_rows),
+			amount_precision,
+		)
 		if row.charge_type != "On Item Quantity":
 			row.tax_amount = tax_amount
 		else:
-			tax_amount = flt(row.tax_amount)
+			tax_amount = flt(row.tax_amount, amount_precision)
 
-		total_taxes += tax_amount
-		running_total += tax_amount
+		total_taxes = flt(total_taxes + tax_amount, amount_precision)
+		running_total = flt(running_total + tax_amount, amount_precision)
 		row.total = running_total
 		calculated_rows.append(
 			frappe._dict(
@@ -1297,8 +1325,8 @@ def calculate_ra_bill_taxes(doc):
 			)
 		)
 
-	doc.total_taxes_and_charges = total_taxes
-	doc.grand_total = running_total
+	doc.total_taxes_and_charges = flt(total_taxes, amount_precision)
+	doc.grand_total = flt(running_total, amount_precision)
 
 
 def get_ra_bill_tax_amount(row, net_total, previous_rows):
@@ -1443,87 +1471,6 @@ def are_ra_bill_amounts_equal(amount, expected_amount, precision):
 	return abs(flt(amount) - flt(expected_amount)) <= tolerance
 
 
-def get_ra_bill_sales_invoice_item_total_at_precision(items, precision):
-	return flt(
-		sum(flt(get_ra_bill_sales_invoice_item_amount(item), precision) for item in items),
-		precision,
-	)
-
-
-def reconcile_sales_invoice_item_total_with_ra_bill(sales_invoice, ra_bill, precision=None):
-	if not sales_invoice or not ra_bill:
-		return frappe._dict({"adjusted": False})
-
-	if not sales_invoice.get("ra_bill") or sales_invoice.get("is_return"):
-		return frappe._dict({"adjusted": False})
-
-	items = sales_invoice.get("items") or []
-	if not items:
-		return frappe._dict({"adjusted": False})
-
-	precision = (
-		get_ra_bill_invoice_currency_precision(ra_bill, sales_invoice)
-		if precision is None
-		else precision
-	)
-	target_total = flt(ra_bill.get("gross_amount"), precision)
-	current_total = get_ra_bill_sales_invoice_item_total_at_precision(items, precision)
-	difference = flt(target_total - current_total, precision)
-
-	if not difference:
-		return frappe._dict(
-			{
-				"adjusted": False,
-				"target_total": target_total,
-				"current_total": current_total,
-				"difference": difference,
-			}
-		)
-
-	minimal_unit = 10**-precision
-	max_allowed_difference = minimal_unit * RA_BILL_INVOICE_RECONCILIATION_UNITS
-	if abs(difference) > max_allowed_difference:
-		frappe.throw(
-			_(
-				"Sales Invoice total differs from RA Bill gross amount by {0}, "
-				"which exceeds allowed precision adjustment. Please review RA Bill item calculations."
-			).format(frappe.format_value(abs(difference), {"fieldtype": "Currency"}))
-		)
-
-	item = get_ra_bill_sales_invoice_reconciliation_item(items)
-	if not item:
-		frappe.throw(_("No eligible Sales Invoice item found for RA Bill precision reconciliation."))
-
-	current_item_amount = flt(get_ra_bill_sales_invoice_item_amount(item), precision)
-	adjusted_amount = flt(current_item_amount + difference, precision)
-	if adjusted_amount <= 0:
-		frappe.throw(_("RA Bill precision reconciliation would make an invoice item non-positive."))
-
-	item.qty = 1
-	item.rate = adjusted_amount
-	item.amount = adjusted_amount
-	item.net_rate = adjusted_amount
-	item.net_amount = adjusted_amount
-
-	frappe.logger("construction_management.ra_bill").info(
-		"RA Bill Sales Invoice precision reconciliation: "
-		f"RA Bill {ra_bill.get('name')}, Sales Invoice {sales_invoice.get('name') or '[new]'}, "
-		f"target {target_total}, generated {current_total}, adjustment {difference}, "
-		f"item {item.get('item_name') or item.get('item_code') or item.get('idx')}"
-	)
-
-	return frappe._dict(
-		{
-			"adjusted": True,
-			"target_total": target_total,
-			"current_total": current_total,
-			"difference": difference,
-			"adjusted_item": item,
-			"adjusted_amount": adjusted_amount,
-		}
-	)
-
-
 def validate_ra_bill_sales_invoice_matches_gross(sales_invoice, ra_bill, precision=None):
 	precision = (
 		get_ra_bill_invoice_currency_precision(ra_bill, sales_invoice)
@@ -1547,14 +1494,6 @@ def validate_ra_bill_sales_invoice_matches_gross(sales_invoice, ra_bill, precisi
 				frappe.format_value(net_total, {"fieldtype": "Currency"}),
 			)
 		)
-
-
-def get_ra_bill_sales_invoice_reconciliation_item(items):
-	for item in reversed(items):
-		if flt(item.get("amount")) > 0 and flt(item.get("qty")) > 0:
-			return item
-
-	return None
 
 
 @frappe.whitelist()
@@ -1967,11 +1906,19 @@ def _get_row_current_qty(row):
 
 
 def _get_row_current_amount(row):
-	current_amount = flt(row.get("current_amount"))
+	try:
+		amount_precision = row.precision("current_amount")
+	except Exception:
+		amount_precision = 2
+
+	current_amount = flt(row.get("current_amount"), amount_precision)
 	if current_amount:
 		return current_amount
 
-	return _get_row_current_qty(row) * flt(row.get("boq_rate"))
+	return flt(
+		_get_row_current_qty(row) * flt(row.get("boq_rate")),
+		amount_precision,
+	)
 
 
 def _get_transaction_date(ra_bill):
