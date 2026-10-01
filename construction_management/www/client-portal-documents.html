@@ -1,5 +1,54 @@
 {% extends "construction_management/templates/client_portal/base.html" %}
 
 {% block portal_content %}
-{% include "construction_management/templates/client_portal/page_shell.html" %}
+<section class="qatra-portal-hero qatra-portal-hero--compact">
+	<p class="qatra-eyebrow">{{ page_kicker }}</p>
+	<h1>{{ page_title }}</h1>
+	<p>{{ page_subtitle }}</p>
+</section>
+
+<section class="qatra-portal-toolbar">
+	<div>
+		<span>{{ document_count }} document{% if document_count != 1 %}s{% endif %}</span>
+		<strong>{% if selected_project %}{{ selected_project.display_name }}{% else %}All Projects{% endif %}</strong>
+	</div>
+	<label>
+		<span>Project</span>
+		<select data-qatra-project-select>
+			<option value="/client-portal/documents" {% if not selected_project %}selected{% endif %}>All Projects</option>
+			{% for project in projects %}
+			<option value="/client-portal/documents?project={{ project.name | urlencode }}" {% if selected_project and selected_project.name == project.name %}selected{% endif %}>{{ project.display_name }}</option>
+			{% endfor %}
+		</select>
+	</label>
+</section>
+
+{% if documents %}
+<section class="qatra-document-grid">
+	{% for file in documents %}
+	<article class="qatra-document-card">
+		<div class="qatra-file-icon">{{ file.file_type_label }}</div>
+		<div class="qatra-document-card__body">
+			<p>{{ file.display_project }}</p>
+			<h2>{{ file.display_title }}</h2>
+			{% if file.description %}<span>{{ file.description }}</span>{% endif %}
+			<dl>
+				<div><dt>Type</dt><dd>{{ file.file_type_label }}</dd></div>
+				<div><dt>Size</dt><dd>{{ file.display_file_size }}</dd></div>
+				<div><dt>Source</dt><dd>{{ file.display_source }}</dd></div>
+				<div><dt>Published</dt><dd>{{ file.display_published_on }}</dd></div>
+			</dl>
+		</div>
+		<div class="qatra-document-card__actions">
+			<a href="{{ file.view_url }}" target="_blank" rel="noopener">View</a>
+			<a href="{{ file.download_url }}" target="_blank" rel="noopener" download>Download</a>
+		</div>
+	</article>
+	{% endfor %}
+</section>
+{% else %}
+<section class="qatra-dashboard-empty-card qatra-portal-empty-state">
+	<p>No documents have been published for this project yet.</p>
+</section>
+{% endif %}
 {% endblock %}

@@ -1,0 +1,265 @@
+{
+ "actions": [],
+ "autoname": "naming_series:",
+ "creation": "2026-09-30 00:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "portal_file_section",
+  "naming_series",
+  "project",
+  "customer",
+  "category",
+  "file",
+  "portal_title",
+  "caption",
+  "description",
+  "publish_to_client_portal",
+  "sort_order",
+  "visibility_section",
+  "visible_from",
+  "visible_until",
+  "metadata_section",
+  "file_name",
+  "file_url",
+  "file_extension",
+  "is_image",
+  "file_size",
+  "uploaded_by",
+  "published_on",
+  "source_section",
+  "source_doctype",
+  "source_type",
+  "source_name"
+ ],
+ "fields": [
+  {
+   "fieldname": "portal_file_section",
+   "fieldtype": "Section Break",
+   "label": "Portal File"
+  },
+  {
+   "default": "PPF-.YYYY.-.#####",
+   "fieldname": "naming_series",
+   "fieldtype": "Select",
+   "label": "Series",
+   "options": "PPF-.YYYY.-.#####",
+   "reqd": 1
+  },
+  {
+   "fieldname": "project",
+   "fieldtype": "Link",
+   "label": "Project",
+   "options": "Project",
+   "reqd": 1,
+   "in_list_view": 1,
+   "in_standard_filter": 1
+  },
+  {
+   "fieldname": "customer",
+   "fieldtype": "Link",
+   "label": "Customer",
+   "options": "Customer",
+   "reqd": 1,
+   "read_only": 1,
+   "in_list_view": 1,
+   "in_standard_filter": 1
+  },
+  {
+   "fieldname": "category",
+   "fieldtype": "Select",
+   "label": "Category",
+   "options": "Document\nGallery",
+   "reqd": 1,
+   "in_list_view": 1,
+   "in_standard_filter": 1
+  },
+  {
+   "fieldname": "file",
+   "fieldtype": "Attach",
+   "label": "File",
+   "reqd": 1
+  },
+  {
+   "fieldname": "portal_title",
+   "fieldtype": "Data",
+   "label": "Portal Title",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "caption",
+   "fieldtype": "Small Text",
+   "label": "Caption"
+  },
+  {
+   "fieldname": "description",
+   "fieldtype": "Small Text",
+   "label": "Description"
+  },
+  {
+   "fieldname": "publish_to_client_portal",
+   "fieldtype": "Check",
+   "label": "Publish to Client Portal",
+   "default": "0",
+   "in_list_view": 1,
+   "in_standard_filter": 1
+  },
+  {
+   "fieldname": "sort_order",
+   "fieldtype": "Int",
+   "label": "Sort Order",
+   "default": "0"
+  },
+  {
+   "fieldname": "visibility_section",
+   "fieldtype": "Section Break",
+   "label": "Visibility"
+  },
+  {
+   "fieldname": "visible_from",
+   "fieldtype": "Date",
+   "label": "Visible From"
+  },
+  {
+   "fieldname": "visible_until",
+   "fieldtype": "Date",
+   "label": "Visible Until"
+  },
+  {
+   "fieldname": "metadata_section",
+   "fieldtype": "Section Break",
+   "label": "System Information"
+  },
+  {
+   "fieldname": "file_name",
+   "fieldtype": "Data",
+   "label": "File Name",
+   "read_only": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "file_url",
+   "fieldtype": "Data",
+   "label": "File URL",
+   "read_only": 1
+  },
+  {
+   "fieldname": "file_extension",
+   "fieldtype": "Data",
+   "label": "File Extension",
+   "read_only": 1
+  },
+  {
+   "fieldname": "is_image",
+   "fieldtype": "Check",
+   "label": "Is Image",
+   "read_only": 1
+  },
+  {
+   "fieldname": "file_size",
+   "fieldtype": "Int",
+   "label": "File Size",
+   "read_only": 1
+  },
+  {
+   "fieldname": "uploaded_by",
+   "fieldtype": "Link",
+   "label": "Uploaded By",
+   "options": "User",
+   "read_only": 1
+  },
+  {
+   "fieldname": "published_on",
+   "fieldtype": "Datetime",
+   "label": "Published On",
+   "read_only": 1
+  },
+  {
+   "fieldname": "source_section",
+   "fieldtype": "Section Break",
+   "label": "Source",
+   "hidden": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "source_doctype",
+   "fieldtype": "Link",
+   "label": "Source DocType",
+   "options": "DocType",
+   "hidden": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "source_type",
+   "fieldtype": "Select",
+   "label": "Source Type",
+   "options": "\nProject\nDPR\nManual\nOther",
+   "hidden": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "source_name",
+   "fieldtype": "Dynamic Link",
+   "label": "Source Document",
+   "options": "source_doctype",
+   "hidden": 1,
+   "read_only": 1
+  }
+ ],
+ "index_web_pages_for_search": 0,
+ "links": [],
+ "modified": "2026-09-30 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Construction Management",
+ "name": "Project Portal File",
+ "naming_rule": "By \"Naming Series\" field",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "role": "System Manager",
+   "read": 1,
+   "write": 1,
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "report": 1,
+   "share": 1
+  },
+  {
+   "role": "Construction Manager",
+   "read": 1,
+   "write": 1,
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "report": 1
+  },
+  {
+   "role": "Projects Manager",
+   "read": 1,
+   "write": 1,
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "report": 1
+  },
+  {
+   "role": "Projects User",
+   "read": 1,
+   "write": 1,
+   "create": 1,
+   "email": 1,
+   "print": 1
+  }
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "title_field": "portal_title"
+}

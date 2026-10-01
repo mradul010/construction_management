@@ -162,7 +162,7 @@
 		<span>Published project updates</span>
 		<b>&rarr;</b>
 	</a>
-	<a href="/client-portal/documents" class="qatra-dashboard-summary-card">
+	<a href="/client-portal/documents?project={{ project.name | urlencode }}" class="qatra-dashboard-summary-card">
 		<p>BOQs</p>
 		<h2>{{ project_counts.boqs }}</h2>
 		<span>Project commercial records</span>
@@ -236,15 +236,15 @@
 		<h3>Project Reports</h3>
 		<span>{{ project_counts.dprs }} published</span>
 	</a>
-	<a href="/client-portal/documents" class="qatra-dashboard-quick-access-card">
+	<a href="/client-portal/documents?project={{ project.name | urlencode }}" class="qatra-dashboard-quick-access-card">
 		<p>Documents</p>
 		<h3>Shared Files</h3>
-		<span>0 visible files</span>
+		<span>{{ project_counts.documents }} visible file{% if project_counts.documents != 1 %}s{% endif %}</span>
 	</a>
-	<a href="/client-portal/gallery" class="qatra-dashboard-quick-access-card">
+	<a href="/client-portal/gallery?project={{ project.name | urlencode }}" class="qatra-dashboard-quick-access-card">
 		<p>Gallery</p>
 		<h3>Site Photos</h3>
-		<span>Published DPR photos</span>
+		<span>{{ project_counts.gallery }} published image{% if project_counts.gallery != 1 %}s{% endif %}</span>
 	</a>
 	<a href="/client-portal/approvals" class="qatra-dashboard-quick-access-card qatra-dashboard-quick-access-card--dark">
 		<p>Approvals</p>

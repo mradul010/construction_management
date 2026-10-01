@@ -1,5 +1,48 @@
 {% extends "construction_management/templates/client_portal/base.html" %}
 
 {% block portal_content %}
-{% include "construction_management/templates/client_portal/page_shell.html" %}
+<section class="qatra-portal-hero qatra-portal-hero--compact">
+	<p class="qatra-eyebrow">{{ page_kicker }}</p>
+	<h1>{{ page_title }}</h1>
+	<p>{{ page_subtitle }}</p>
+</section>
+
+<section class="qatra-portal-toolbar">
+	<div>
+		<span>{{ gallery_count }} image{% if gallery_count != 1 %}s{% endif %}</span>
+		<strong>{% if selected_project %}{{ selected_project.display_name }}{% else %}All Projects{% endif %}</strong>
+	</div>
+	<label>
+		<span>Project</span>
+		<select data-qatra-project-select>
+			<option value="/client-portal/gallery" {% if not selected_project %}selected{% endif %}>All Projects</option>
+			{% for project in projects %}
+			<option value="/client-portal/gallery?project={{ project.name | urlencode }}" {% if selected_project and selected_project.name == project.name %}selected{% endif %}>{{ project.display_name }}</option>
+			{% endfor %}
+		</select>
+	</label>
+</section>
+
+{% if gallery_items %}
+<section class="qatra-gallery-grid">
+	{% for item in gallery_items %}
+	<article class="qatra-gallery-card">
+		<a href="{{ item.view_url }}" target="_blank" rel="noopener" class="qatra-gallery-card__image">
+			<img src="{{ item.view_url }}" alt="{{ item.display_title }}">
+		</a>
+		<div class="qatra-gallery-card__body">
+			<p>{{ item.display_project }} · {{ item.display_source }}</p>
+			<h2>{{ item.display_title }}</h2>
+			{% if item.caption %}<span>{{ item.caption }}</span>{% endif %}
+			{% if item.description %}<em>{{ item.description }}</em>{% endif %}
+			<small>{{ item.display_published_on }}</small>
+		</div>
+	</article>
+	{% endfor %}
+</section>
+{% else %}
+<section class="qatra-dashboard-empty-card qatra-portal-empty-state">
+	<p>No gallery images have been published for this project yet.</p>
+</section>
+{% endif %}
 {% endblock %}

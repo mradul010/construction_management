@@ -31,6 +31,33 @@ SALES_INVOICE_DISPLAY_REFERENCE_FIELDS = (
 	"custom_invoice_no",
 )
 
+PROJECT_PORTAL_DOCUMENT_EXTENSIONS = {".pdf", ".doc", ".docx", ".xls", ".xlsx", ".csv", ".txt", ".dwg", ".dxf", ".zip", ".rvt", ".ifc"}
+PROJECT_PORTAL_GALLERY_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp"}
+PROJECT_PORTAL_FILE_FIELDS = [
+	"name",
+	"project",
+	"customer",
+	"file",
+	"file_name",
+	"file_url",
+	"file_size",
+	"category",
+	"portal_title",
+	"caption",
+	"description",
+	"sort_order",
+	"visible_from",
+	"visible_until",
+	"source_doctype",
+	"source_name",
+	"source_type",
+	"is_image",
+	"file_extension",
+	"uploaded_by",
+	"published_on",
+	"creation",
+]
+
 QATRA_CLIENT_PORTAL_ITEMS = [
 	{"key": "dashboard", "title": _("Dashboard"), "route": "/client-portal/dashboard"},
 	{"key": "projects", "title": _("Projects"), "route": "/client-portal/projects"},
@@ -372,9 +399,9 @@ def set_client_portal_project_display_fields(project, project_meta, customer_fie
 def get_client_portal_project_counts(project_name, customers):
 	customers = [customer for customer in (customers or []) if customer]
 	if not project_name or not customers:
-		return frappe._dict({"boqs": 0, "ra_bills": 0, "dprs": 0})
+		return frappe._dict({"boqs": 0, "ra_bills": 0, "dprs": 0, "documents": 0, "gallery": 0})
 
-	counts = frappe._dict({"boqs": 0, "ra_bills": 0, "dprs": 0})
+	counts = frappe._dict({"boqs": 0, "ra_bills": 0, "dprs": 0, "documents": 0, "gallery": 0})
 	boq_customer_field = get_boq_customer_field()
 	counts.boqs = frappe.db.count(
 		"BOQ",
@@ -404,6 +431,10 @@ def get_client_portal_project_counts(project_name, customers):
 				"status": ["!=", "Cancelled"],
 			},
 		)
+	portal_counts = get_project_portal_file_counts([project_name], customers).get(project_name)
+	if portal_counts:
+		counts.documents = portal_counts.documents
+		counts.gallery = portal_counts.gallery
 
 	return counts
 
@@ -859,13 +890,214 @@ def get_dashboard_counts_for_projects(project_names, customers):
 			if row.project in counts:
 				counts[row.project].reports += 1
 
-	# Documents and approvals remain zero until explicit client visibility flags
-	# or portal publication rules exist for those internal doctypes.
+	portal_counts = get_project_portal_file_counts(project_names, customers)
+	for project_name, project_counts in portal_counts.items():
+		if project_name in counts:
+			counts[project_name].documents = project_counts.documents
+			counts[project_name].gallery = project_counts.gallery
+
 	return counts
 
 
 def get_empty_project_counts():
-	return frappe._dict({"reports": 0, "documents": 0, "pending_approvals": 0})
+	return frappe._dict({"reports": 0, "documents": 0, "gallery": 0, "pending_approvals": 0})
+
+
+def get_project_portal_file_counts(project_names, customers):
+	project_names = [project for project in (project_names or []) if project]
+	customers = [customer for customer in (customers or []) if customer]
+	counts = {project: frappe._dict({"documents": 0, "gallery": 0}) for project in project_names}
+	if not project_names or not customers:
+		return counts
+
+	for row in get_project_documents(customers, include_dpr_attachments=True):
+		if row.project in counts:
+			counts[row.project].documents += 1
+	for row in get_project_gallery(customers, include_dpr_photos=True):
+		if row.project in counts:
+			counts[row.project].gallery += 1
+	return counts
+
+
+def get_project_documents(customers, project_name=None, include_dpr_attachments=True):
+	rows = get_project_portal_files(customers, project_name=project_name, category="Document")
+	if include_dpr_attachments:
+		rows.extend(get_published_dpr_document_items(customers, project_name=project_name))
+	return sort_project_portal_rows(rows)
+
+
+def get_project_gallery(customers, project_name=None, include_dpr_photos=True):
+	rows = get_project_portal_files(customers, project_name=project_name, category="Gallery")
+	if include_dpr_photos:
+		rows.extend(get_published_dpr_gallery_items(customers, project_name=project_name))
+	return sort_project_portal_rows(rows)
+
+
+def get_project_portal_files(customers, project_name=None, category=None):
+	customers = [customer for customer in (customers or []) if customer]
+	project_names = get_authorized_project_names_for_portal_files(customers, project_name)
+	if not customers or not project_names or not frappe.db.exists("DocType", "Project Portal File"):
+		return []
+
+	filters = {"customer": ["in", customers], "project": ["in", project_names], "publish_to_client_portal": 1}
+	if category:
+		filters["category"] = category
+	rows = frappe.get_all(
+		"Project Portal File",
+		filters=filters,
+		fields=PROJECT_PORTAL_FILE_FIELDS,
+		order_by="sort_order asc, published_on desc, creation desc",
+		ignore_permissions=True,
+	)
+	project_map = get_portal_project_display_map(project_names, customers)
+	visible_rows = []
+	for row in rows:
+		if not is_project_portal_file_visible(row):
+			continue
+		if row.customer != (project_map.get(row.project) or {}).get("customer"):
+			continue
+		visible_rows.append(prepare_project_portal_file_row(row, project_map, source_label=row.source_type or "Project"))
+	return visible_rows
+
+
+def get_authorized_project_names_for_portal_files(customers, project_name=None):
+	customers = [customer for customer in (customers or []) if customer]
+	if project_name:
+		project = get_authorized_customer_project(project_name, customers)
+		return [project.name]
+	return [project.name for project in get_customer_projects(customers)]
+
+
+def get_portal_project_display_map(project_names, customers):
+	project_names = [project for project in (project_names or []) if project]
+	if not project_names:
+		return {}
+	return {
+		project.name: {"display_name": project.display_name, "customer": project.customer}
+		for project in get_customer_projects(customers)
+		if project.name in project_names
+	}
+
+
+def is_project_portal_file_visible(row, reference_date=None):
+	if not row:
+		return False
+	reference_date = getdate(reference_date or today())
+	if row.get("visible_from") and getdate(row.visible_from) > reference_date:
+		return False
+	if row.get("visible_until") and getdate(row.visible_until) < reference_date:
+		return False
+	return True
+
+
+def prepare_project_portal_file_row(row, project_map=None, source_label=None):
+	row = frappe._dict(row)
+	project_info = (project_map or {}).get(row.project) or {}
+	row.display_title = row.portal_title or row.file_name or row.name
+	row.display_project = project_info.get("display_name") or row.project
+	row.display_source = source_label or row.get("source_type") or "Project"
+	row.display_file_size = format_file_size(row.get("file_size"))
+	row.display_published_on = formatdate(row.published_on or row.creation) if (row.published_on or row.creation) else _("Not specified")
+	row.file_extension = normalize_file_extension(row.get("file_extension") or row.get("file_name") or row.get("file_url"))
+	row.file_type_label = (row.file_extension or ".file").replace(".", "").upper()
+	row.view_url = row.file_url
+	row.download_url = row.file_url
+	return row
+
+
+def sort_project_portal_rows(rows):
+	return sorted(rows or [], key=lambda row: (row.get("sort_order") or 0, str(row.get("published_on") or row.get("creation") or "")))
+
+
+def get_published_dpr_gallery_items(customers, project_name=None):
+	customers = [customer for customer in (customers or []) if customer]
+	project_names = get_authorized_project_names_for_portal_files(customers, project_name)
+	if not customers or not project_names or not frappe.db.exists("DocType", "Daily Progress Report"):
+		return []
+	reports = frappe.get_all(
+		"Daily Progress Report",
+		filters={"customer": ["in", customers], "project": ["in", project_names], "docstatus": 1, "publish_to_portal": 1, "status": ["!=", "Cancelled"]},
+		fields=["name", "project", "customer", "title", "dpr_date", "creation", "modified"],
+		ignore_permissions=True,
+	)
+	project_map = get_portal_project_display_map(project_names, customers)
+	items = []
+	for report in reports:
+		try:
+			report_doc = frappe.get_doc("Daily Progress Report", report.name)
+		except Exception:
+			continue
+		for photo in report_doc.get("photos") or []:
+			if not photo.get("photo") or is_private_file_url(photo.photo):
+				continue
+			extension = normalize_file_extension(photo.photo)
+			if extension not in PROJECT_PORTAL_GALLERY_EXTENSIONS:
+				continue
+			items.append(prepare_project_portal_file_row(frappe._dict({"name": f"{report.name}-{photo.name or photo.idx}", "project": report.project, "customer": report.customer, "file_name": photo.caption or report.title or report.name, "file_url": photo.photo, "file_size": None, "category": "Gallery", "portal_title": report.title or report.name, "caption": photo.caption, "description": photo.notes, "sort_order": photo.sequence or photo.idx or 0, "source_type": "DPR", "source_doctype": "Daily Progress Report", "source_name": report.name, "is_image": 1, "file_extension": extension, "published_on": report.dpr_date or report.modified or report.creation, "creation": report.creation}), project_map, source_label="DPR"))
+	return items
+
+
+def get_published_dpr_document_items(customers, project_name=None):
+	customers = [customer for customer in (customers or []) if customer]
+	project_names = get_authorized_project_names_for_portal_files(customers, project_name)
+	if not customers or not project_names or not frappe.db.exists("DocType", "Daily Progress Report"):
+		return []
+	reports = frappe.get_all(
+		"Daily Progress Report",
+		filters={"customer": ["in", customers], "project": ["in", project_names], "docstatus": 1, "publish_to_portal": 1, "status": ["!=", "Cancelled"]},
+		fields=["name", "project", "customer", "title", "dpr_date", "creation", "modified"],
+		ignore_permissions=True,
+	)
+	if not reports:
+		return []
+	report_map = {report.name: report for report in reports}
+	attachments = frappe.get_all(
+		"File",
+		filters={"attached_to_doctype": "Daily Progress Report", "attached_to_name": ["in", list(report_map)]},
+		fields=["name", "file_name", "file_url", "file_size", "is_private", "attached_to_name", "creation"],
+		ignore_permissions=True,
+	)
+	project_map = get_portal_project_display_map(project_names, customers)
+	items = []
+	for file_row in attachments:
+		if file_row.is_private:
+			continue
+		extension = normalize_file_extension(file_row.file_name or file_row.file_url)
+		if extension not in PROJECT_PORTAL_DOCUMENT_EXTENSIONS:
+			continue
+		report = report_map.get(file_row.attached_to_name)
+		if not report:
+			continue
+		items.append(prepare_project_portal_file_row(frappe._dict({"name": file_row.name, "project": report.project, "customer": report.customer, "file_name": file_row.file_name, "file_url": file_row.file_url, "file_size": file_row.file_size, "category": "Document", "portal_title": file_row.file_name, "caption": None, "description": f"Attachment from {report.title or report.name}", "sort_order": 0, "source_type": "DPR", "source_doctype": "Daily Progress Report", "source_name": report.name, "is_image": 0, "file_extension": extension, "published_on": report.dpr_date or report.modified or report.creation, "creation": file_row.creation}), project_map, source_label="DPR"))
+	return items
+
+
+def normalize_file_extension(value):
+	if not value:
+		return ""
+	path = str(value).split("?", 1)[0]
+	if "." not in path:
+		return ""
+	return "." + path.rsplit(".", 1)[-1].lower()
+
+
+def is_private_file_url(file_url):
+	if not file_url or str(file_url).startswith("/private/"):
+		return True
+	file_row = frappe.get_all("File", filters={"file_url": file_url}, fields=["is_private"], limit_page_length=1, ignore_permissions=True)
+	return bool(file_row and file_row[0].is_private)
+
+
+def format_file_size(value):
+	value = flt(value)
+	if not value:
+		return _("Size not specified")
+	units = ["B", "KB", "MB", "GB"]
+	idx = 0
+	while value >= 1024 and idx < len(units) - 1:
+		value = value / 1024
+		idx += 1
+	return f"{value:.1f} {units[idx]}" if idx else f"{int(value)} {units[idx]}"
 
 
 def get_client_portal_report_types():
