@@ -918,6 +918,7 @@ class RABill(Document):
 			)
 			if hasattr(si, "calculate_taxes_and_totals"):
 				si.calculate_taxes_and_totals()
+			validate_ra_bill_sales_invoice_matches_gross(si, self)
 			apply_ra_bill_dates_to_sales_invoice(si, self, company=company)
 			clear_ra_bill_item_tax_overrides(si)
 			si.insert(ignore_permissions=True)
@@ -1521,6 +1522,31 @@ def reconcile_sales_invoice_item_total_with_ra_bill(sales_invoice, ra_bill, prec
 			"adjusted_amount": adjusted_amount,
 		}
 	)
+
+
+def validate_ra_bill_sales_invoice_matches_gross(sales_invoice, ra_bill, precision=None):
+	precision = (
+		get_ra_bill_invoice_currency_precision(ra_bill, sales_invoice)
+		if precision is None
+		else precision
+	)
+	target_total = flt(ra_bill.get("gross_amount"), precision)
+	net_total = flt(sales_invoice.get("net_total"), precision)
+	total = flt(sales_invoice.get("total"), precision)
+
+	if net_total != target_total or total != target_total:
+		frappe.throw(
+			_(
+				"Sales Invoice total must match the RA Bill gross amount at currency precision.<br>"
+				"RA Bill Gross: {0}<br>"
+				"Sales Invoice Total: {1}<br>"
+				"Sales Invoice Net Total: {2}"
+			).format(
+				frappe.format_value(target_total, {"fieldtype": "Currency"}),
+				frappe.format_value(total, {"fieldtype": "Currency"}),
+				frappe.format_value(net_total, {"fieldtype": "Currency"}),
+			)
+		)
 
 
 def get_ra_bill_sales_invoice_reconciliation_item(items):
