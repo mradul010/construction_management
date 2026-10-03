@@ -1325,3 +1325,846 @@ Runtime verification on `Qatra.local` confirmed `PROJ-0015` derives Customer `BU
 
 The Client Portal Documents and Gallery sections now use an explicit publish-to-client workflow. Uploading a public File and attaching it to a Project is still not enough by itself; the file must be published through `Project Portal File` or come from an approved published DPR source. This keeps visibility project-aware and customer-secure while giving ERPNext users a clear workflow for approved client documents and gallery images.
 
+# Concern 3 - Client Portal Approvals Page
+
+## Client Concern
+
+> The approvals page is currently empty. Could you please explain how an approval request should be created from ERPNext and how it is linked and displayed in the Client Portal?
+
+## Investigation Status
+
+CONFIRMED
+
+The `/client-portal/approvals` route exists, but it is currently a placeholder page. It authenticates the client portal user and renders the standard page shell only. It does not load approval records, does not query Frappe Workflow Action, and does not provide Approve/Reject actions.
+
+## Current Route Map
+
+| Item | Current Implementation |
+|---|---|
+| Route | `/client-portal/approvals` |
+| Route rule | `construction_management/hooks.py` maps `/client-portal/approvals` to `client-portal-approvals` |
+| Controller | `construction_management/www/client_portal_approvals.py` |
+| Template | `construction_management/www/client-portal-approvals.html` |
+| Shared layout | `construction_management/templates/client_portal/base.html` |
+| Placeholder include | `construction_management/templates/client_portal/page_shell.html` |
+| JS | `construction_management/public/js/qatra_client_portal.js` only for portal shell behavior |
+| Backend helper | `setup_client_portal_context(context, "approvals")` |
+| Data source | None |
+| Security | Authenticated client portal user only; no approval-specific authorization because no approval data is loaded |
+| Current status | PLACEHOLDER |
+
+## What The Page Actually Does Today
+
+The page only does the following:
+
+1. Requires a logged-in website user linked to a Customer through the existing client portal access logic.
+2. Sets common portal context values such as logo, customer name, sidebar items, active page, title, kicker, and subtitle.
+3. Renders the generic placeholder hero with title `Approvals` and subtitle `Review requests that require your approval.`
+
+It does not render approval cards, tabs, remarks, source document links, project names, customer names, dates, status counts, or action buttons.
+
+## Controller Findings
+
+Controller: `construction_management/www/client_portal_approvals.py`
+
+Current code only calls:
+
+```python
+setup_client_portal_context(context, "approvals")
+```
+
+Explicit answers:
+
+| Question | Answer |
+|---|---|
+| Does the page query any Approval-related DocType? | NO |
+| Does it query `Workflow Action`? | NO |
+| Does it query any custom Approval Request DocType? | NO |
+| Does it query Project-linked documents? | NO |
+| Does it read filters/query params? | NO |
+| Does it set `context.approvals`? | NO |
+| Does it set pending/approved/rejected counts? | NO |
+| Does it expose approve/reject backend methods? | NO |
+
+## Template Findings
+
+Template: `construction_management/www/client-portal-approvals.html`
+
+Current template extends the client portal base layout and includes `page_shell.html` only.
+
+Explicit answers:
+
+| UI Capability | Present? |
+|---|---|
+| Approval cards/list | NO |
+| Pending/Approved/Rejected tabs | NO |
+| Approve button | NO |
+| Reject button | NO |
+| Remarks/comment field | NO |
+| Source document link | NO |
+| Project display | NO |
+| Customer display | NO |
+| Requested date / due date | NO |
+| Approval type | NO |
+
+## Existing Approval-Related Code
+
+There are internal approval concepts in the app, but none is wired to the Client Portal approvals page.
+
+| DocType / Feature | Purpose | Project Link | Customer Link | Portal Flag | Status Field | Used by `/client-portal/approvals`? |
+|---|---|---|---|---|---|---|
+| `Drawing Approval` | Desk-side design/drawing approval record | Yes | No direct customer field | No | `approval_status` | NO |
+| `Design Change Request` | Desk-side design change workflow | Yes | No direct customer field | No | `approval`, `status` | NO |
+| `RA Bill.approve()` | Internal submitted RA Bill approval method | Yes | Yes | No | `status` | NO |
+| `SC Bill.approve()` | Internal submitted subcontract bill approval method | Yes | No customer-facing approval | No | `status` | NO |
+| Frappe `Workflow` / `Workflow Action` | Standard workflow framework | Depends on target DocType | Depends on target DocType | No portal mapping found | workflow state/status | NO |
+
+Runtime check on `Qatra.local` found `0` `Workflow Action` records. No active Workflow records were returned by the workflow inspection query.
+
+## Important Distinction
+
+`Drawing Approval`, `Design Change Request`, RA Bill approval, and SC Bill approval are ERPNext Desk/internal approval mechanisms. They are not currently client approval requests. They do not include a complete portal-facing lifecycle such as:
+
+```text
+request created by staff
+-> linked to project and customer
+-> visible to authorized client
+-> client approves/rejects with remarks
+-> response user/date stored
+-> source document updated safely
+```
+
+## Dashboard Count Finding
+
+The dashboard and project detail pages show an Approvals link/count, but the count is not connected to a real data source.
+
+- `get_empty_project_counts()` returns `pending_approvals: 0`.
+- `get_dashboard_counts_for_projects()` counts reports, documents, and gallery files, but does not count approvals.
+- Project detail currently renders `0 open requests` for approvals.
+
+## What Is Missing
+
+Missing backend:
+
+- No `Client Approval Request` / `Portal Approval Request` DocType.
+- No helper like `get_client_portal_approvals(customers, project=None, status=None)`.
+- No detail route for a single approval request.
+- No whitelisted client action methods for approve/reject/respond.
+- No source-document update contract.
+- No audit trail for customer decision, remarks, response date, response user, or IP/session metadata.
+
+Missing frontend:
+
+- No approval list/cards.
+- No project/status/type filters.
+- No pending/approved/rejected tabs.
+- No detail modal/page.
+- No approve/reject buttons.
+- No remarks input.
+- No empty state specific to approvals.
+
+Missing security rules:
+
+- No Customer/Project authorization filter for approval records.
+- No check that only pending records can be acted on.
+- No validation that the approval belongs to the logged-in Customer.
+- No protection against acting on cancelled/expired/superseded requests.
+
+## Recommended Architecture
+
+Best safe architecture is to add a dedicated portal-facing approval DocType instead of exposing internal Desk workflows directly.
+
+Recommended DocType name:
+
+```text
+Client Approval Request
+```
+
+Recommended fields:
+
+```text
+project
+customer
+approval_type
+subject
+description
+source_doctype
+source_name
+source_title
+attachment
+status: Pending / Approved / Rejected / Cancelled / Expired
+requested_by
+requested_on
+due_date
+response_by
+response_on
+response_remarks
+publish_to_client_portal
+visible_from
+visible_until
+```
+
+Recommended flow:
+
+```text
+ERPNext user creates Client Approval Request
+-> selects Project
+-> Customer auto-derives from Project
+-> optional Source DocType/Source Document links the request to Drawing Approval, DCR, BOQ, RA Bill, Variation, or another source
+-> publish_to_client_portal = 1 makes it visible
+-> client opens /client-portal/approvals
+-> portal filters by logged-in Customer + authorized Project
+-> client approves/rejects with remarks
+-> system stores response_by/response_on/response_remarks/status
+-> optional server hook updates the source document according to a controlled mapping
+```
+
+Recommended route design:
+
+| Route | Purpose |
+|---|---|
+| `/client-portal/approvals` | Approval list with project/status filters and pending count |
+| `/client-portal/approval/<name>` | Approval detail page, source summary, attachment, remarks, approve/reject actions |
+
+Recommended backend helpers:
+
+```text
+get_client_portal_approvals(customers, project_name=None, status=None)
+get_authorized_client_approval(name, customers)
+approve_client_approval(name, remarks=None)
+reject_client_approval(name, remarks=None)
+get_project_approval_counts(project_names, customers)
+```
+
+Recommended reuse:
+
+- Reuse `setup_client_portal_context()` for page shell/auth.
+- Reuse `get_customer_projects()` and `get_authorized_customer_project()` for Customer/Project authorization.
+- Reuse the Documents/Gallery pattern for project filtering and empty states.
+- Reuse dashboard count aggregation pattern in `get_dashboard_counts_for_projects()`.
+- Reuse `Project Portal File` source metadata pattern for `source_doctype` and `source_name`.
+- Optionally link to `Drawing Approval` and `Design Change Request` first, but keep the portal decision record separate.
+
+## Why Not Use `Workflow Action` Directly
+
+Directly exposing `Workflow Action` is not recommended as the first implementation because Workflow Action is user/role/workflow-state oriented, not Customer/Project portal oriented. It does not naturally provide the client portal requirements around customer authorization, project filtering, source summaries, external remarks, and safe source-document updates.
+
+A dedicated `Client Approval Request` DocType can still update internal Workflow/Desk documents after a customer decision, but it keeps the portal contract stable and auditable.
+
+
+
+## Implementation
+
+Implemented as a dedicated portal-facing DocType: `Client Approval Request`.
+
+Key fields:
+
+```text
+project
+customer
+approval_type
+subject
+description
+attachment
+source_doctype
+source_name
+source_title
+publish_to_client_portal
+visible_from
+visible_until
+due_date
+status
+requested_by
+requested_on
+response_by
+response_on
+response_remarks
+cancelled_by
+cancelled_on
+```
+
+Customer is required/read-only and is auto-derived from the selected Project on the server before mandatory validation. If the Project has no Customer, the system shows a clear Project/Customer error instead of the generic mandatory-field error.
+
+Publication logic:
+
+```text
+Draft + Publish to Client Portal = 1
+-> Pending
+-> requested_by/requested_on populated
+```
+
+Portal routes:
+
+| Route | Purpose |
+|---|---|
+| `/client-portal/approvals` | List published approval requests with Project, Status, and Type filters |
+| `/client-portal/approval/<name>` | Detail page with attachment, remarks, Approve, and Reject actions |
+
+Portal security:
+
+- Only `publish_to_client_portal = 1` records are shown.
+- `Draft` and `Cancelled` records are hidden.
+- Records are filtered by logged-in portal Customer and authorized Project.
+- Direct URL access to another Customer's request is denied.
+- Only `Pending` requests can be acted upon.
+- Reject requires remarks on both frontend and backend.
+- Approved/Rejected requests cannot be responded to again.
+
+Audit trail:
+
+- `response_by`
+- `response_on`
+- `response_remarks`
+- final `status`
+- document Comment such as `Client approved via Client Portal`
+
+Source document behavior:
+
+`source_doctype` and `source_name` are supported and validated. Known source documents are checked against the selected Project/Customer where those fields exist. The implementation intentionally does not auto-update internal source documents such as `Drawing Approval`, `Design Change Request`, `BOQ`, or `RA Bill`, because internal approval status and external client approval are different business concepts. The `Client Approval Request` remains the authoritative client response record unless a future explicit source-sync mapping is approved.
+
+Dashboard/project counts:
+
+- Dashboard pending approvals now count visible, published, pending approval requests.
+- Project detail pending approvals now shows the real open-request count.
+- Project detail Approvals quick link now passes the selected project to `/client-portal/approvals?project=<project>`.
+
+## ERPNext Approval Creation Process
+
+1. Open `Client Approval Request`.
+2. Click New.
+3. Select Project.
+4. Customer auto-fills from the Project.
+5. Select Approval Type.
+6. Enter Subject.
+7. Add Description.
+8. Optionally select Source DocType and Source Document.
+9. Optionally attach a file.
+10. Enable `Publish to Client Portal`.
+11. Save.
+12. Status becomes `Pending`.
+13. The client sees it in `/client-portal/approvals`.
+
+## Client Response Process
+
+1. Client logs in.
+2. Opens Approvals.
+3. Opens the request.
+4. Reviews details and attachment.
+5. Approves or Rejects.
+6. Adds remarks. Remarks are required for rejection.
+7. System records the response user, response date, response remarks, and final status.
+
+## Implementation Status
+
+Implemented
+
+## Verification Status
+
+Runtime Verified
+
+Runtime verification on `Qatra.local` used Project `PROJ-0015`, Customer `BUILDING EVOLUTION CONTRACTING L.L.C`, and portal user `mradulmishra010@gmail.com`. It verified published pending visibility, hidden draft/unpublished requests, invalid source rejection, approve flow, reject flow with remarks, reject-without-remarks validation, double-response protection, response audit fields, dashboard/project pending-count updates, and unauthorized customer denial. Temporary verification records were deleted after the run.
+
+
+
+### Approval UI / Detail Route Fix
+
+A runtime issue was found after the `Client Approval Request` workflow was implemented: clicking `Review Request` for `CAR-2026-00003` opened `/client-portal/approval/CAR-2026-00003`, but Frappe returned `500: There was an error building this page`.
+
+Root cause:
+
+```text
+construction_management/www/client_portal_approval.py
+```
+
+The page controller was defined as:
+
+```python
+def get_context(context, name):
+```
+
+Frappe website template pages call colocated Python page controllers as `get_context(context)` and place dynamic route values in `frappe.form_dict`. Other project detail pages in this app use the same pattern. Because the controller expected a second positional `name` argument, the detail page failed during page-context building before the template could render.
+
+Fix:
+
+- Changed the detail controller to `get_context(context)`.
+- Reads the approval name from `frappe.form_dict.get("name")` with a path fallback for `/client-portal/approval/<name>`.
+- Keeps authorization through `get_authorized_client_approval()`.
+- Handles missing source fields as `Manual Request`.
+- Handles empty description as `No description provided.`
+- Handles missing response fields by only showing the decision section for `Approved` or `Rejected`.
+- Keeps attachment rendering safe; public attachment paths with spaces render as `View Attachment`, and missing attachment metadata does not block the page render.
+
+List card redesign:
+
+- Converted approval cards from tall vertical metadata blocks to a compact horizontal card layout.
+- Desktop card now uses top status/type row, subject/description summary, four-column metadata grid, and a bottom action row.
+- `Review Request` is compact and aligned bottom-right on desktop.
+- Attachment display is compact and omitted when no attachment exists.
+- Tablet/mobile layouts collapse metadata cleanly without horizontal overflow.
+
+Runtime verification:
+
+- `CAR-2026-00003` rendered successfully with HTTP 200.
+- Verified `Drawing Approval`, `Pending`, `Emerald Hills Villa 95`, `Manual Request`, `View Attachment`, empty-description fallback, remarks field, and Approve/Reject buttons.
+- Additional temporary records verified no-description, no-source, no-attachment, no-due-date, Approved, and Rejected cases without 500 errors.
+- Unauthorized Customer access remained blocked with `PermissionError`.
+- Temporary verification records were deleted after the run.
+
+### Approvals List Template Syntax Fix
+
+After the detail-route fix, `/client-portal/approvals` failed with:
+
+```text
+jinja2.exceptions.TemplateSyntaxError: Encountered unknown tag 'endfor'
+```
+
+File:
+
+```text
+construction_management/www/client-portal-approvals.html
+```
+
+Exact cause:
+
+- The compact horizontal approval-card block was inserted into the existing approvals template, but a fragment of the old list markup remained after the new `{% endfor %}` and `</section>`.
+- That leftover fragment contained an extra inline action fragment, another `{% endfor %}`, another `</section>`, and another `{% else %}`.
+- Jinja therefore saw an orphaned `{% endfor %}` outside the active loop and failed while building the page.
+
+Fix:
+
+- Removed the duplicate leftover fragment.
+- Kept one balanced template structure:
+
+```text
+{% block portal_content %}
+  filters
+  status tabs loop
+  {% if approvals %}
+    approval list section
+    {% for approval in approvals %}
+      compact horizontal approval card
+    {% endfor %}
+  {% else %}
+    empty state section
+  {% endif %}
+{% endblock %}
+```
+
+- Preserved the compact horizontal approval card design.
+- Preserved safe fallbacks for optional fields such as empty description, missing source, missing due date, and optional attachment.
+
+Runtime verification:
+
+- `/client-portal/approvals` rendered successfully with HTTP 200.
+- `/client-portal/approvals?type=Drawing&status=Pending` rendered successfully with HTTP 200.
+- Filtered page showed `CAR-2026-00003`.
+- Filtered page included the compact card classes `qatra-approval-card__summary` and `qatra-approval-meta-grid`.
+- `/client-portal/approval/CAR-2026-00003` rendered successfully with HTTP 200.
+- Detail page still showed remarks and Approve/Reject actions.
+
+## Client Response
+
+We confirmed that the Approvals page was previously a placeholder. We have now implemented a dedicated `Client Approval Request` workflow. ERPNext users can create an approval request against a Project, with the Customer automatically derived from the Project, and optionally link it to a source document such as a Drawing Approval, Design Change Request, BOQ, RA Bill, or another project document. Once published, the request appears in the Client Portal only for the authorized customer. The client can approve or reject the request with remarks, and the response is recorded with user/date/audit details. Internal Desk approval documents are not automatically changed; the client approval record remains the controlled audit record unless a future explicit source-sync rule is approved.
+
+---
+
+# Concern 4 - Client Portal Logo
+
+## Client Concern
+
+> Please update the logo in the Client Portal. The logo should be clear and displayed without the background behind it.
+
+## Investigation Status
+
+CONFIRMED
+
+The Client Portal logo was being rendered from the generic Company logo and then placed inside a styled logo container with a dark gradient background, border, border radius, and padding. This created the visible background box behind the logo.
+
+## Current Logo Source
+
+Current source before the fix:
+
+```text
+construction_management/portal_utils.py
+-> get_client_portal_logo()
+-> Company.company_logo
+-> /files/WhatsApp Image 2026-05-06 at 12.42.52 PM.jpeg
+```
+
+Runtime settings inspected on `Qatra.local`:
+
+| Setting | Value |
+|---|---|
+| Default Company | `QATRA BUILDING CONTG LLC` |
+| `Company.company_logo` | `/files/WhatsApp Image 2026-05-06 at 12.42.52 PM.jpeg` |
+| Website Settings app logo | Not set |
+| Website Settings splash image | Not set |
+
+Current Company logo file properties:
+
+```text
+Format: JPEG
+Dimensions: 1600 x 650
+Alpha channel: No
+```
+
+Better transparent logo asset found:
+
+```text
+sites/Qatra.local/Qatra.local/public/files/Qatra Logo.png
+```
+
+Transparent logo properties:
+
+```text
+Format: PNG
+Dimensions: 1735 x 705
+Mode: RGBA
+Alpha channel: Yes
+Alpha range: 0 to 255
+```
+
+The transparent PNG was copied into the app as a stable public asset:
+
+```text
+construction_management/public/images/qatra-logo-transparent.png
+```
+
+Served URL:
+
+```text
+/assets/construction_management/images/qatra-logo-transparent.png
+```
+
+## Root Cause
+
+Classification:
+
+```text
+Combination of B and A
+```
+
+Primary issue:
+
+- CSS/container added the visible background box.
+- `.qatra-portal-logo` had a dark gradient background, border, border radius, and padding.
+- `.qatra-portal-mobile-logo` also had a dark gradient background, border, border radius, and padding.
+
+Secondary issue:
+
+- The rendered Company logo was a JPEG, which cannot preserve transparency.
+- A better official transparent Qatra PNG existed but was not being used by the Client Portal.
+
+The app fallback SVG is transparent, but it uses white wordmark text and was visually dependent on the dark CSS container. That made it unsuitable as the primary logo on the current light sidebar without a background box.
+
+## Implementation
+
+Implemented changes:
+
+- Added official transparent Qatra PNG to the app public assets.
+- Updated `get_client_portal_logo()` to use the transparent app asset as the Client Portal logo source.
+- Removed the dark gradient background from the sidebar logo container.
+- Removed border and card-like styling from the sidebar logo container.
+- Removed the dark gradient background, border, radius, and padding from the mobile logo image.
+- Preserved logo aspect ratio with `height: auto`, `max-width`, `max-height`, and `object-fit: contain`.
+- Kept existing Client Portal sidebar/header layout and navigation behavior.
+- Did not redesign the portal.
+
+Changed files:
+
+```text
+construction_management/portal_utils.py
+construction_management/public/css/qatra_client_portal.css
+construction_management/public/images/qatra-logo-transparent.png
+```
+
+Key CSS classes updated:
+
+```text
+.qatra-portal-logo
+.qatra-portal-logo img
+.qatra-portal-sidebar-collapsed .qatra-portal-logo
+.qatra-portal-sidebar-collapsed .qatra-portal-logo img
+.qatra-portal-mobile-logo
+```
+
+## Runtime Verification
+
+Rendered route verification on `Qatra.local` as portal user `mradulmishra010@gmail.com`:
+
+| Route | Status | Transparent logo URL present | Server error |
+|---|---:|---|---|
+| `/client-portal/dashboard` | 200 | Yes | No |
+| `/client-portal/projects` | 200 | Yes | No |
+| `/client-portal/approvals` | 200 | Yes | No |
+| `/client-portal/documents` | 200 | Yes | No |
+| `/client-portal/gallery` | 200 | Yes | No |
+| `/client-portal/payments` | 200 | Yes | No |
+
+Asset/build verification:
+
+- `sites/assets/construction_management/images/qatra-logo-transparent.png` exists after build.
+- `sites/assets/construction_management/css/qatra_client_portal.css` exists after build.
+- `get_client_portal_logo()` returns `/assets/construction_management/images/qatra-logo-transparent.png`.
+
+Desktop CSS verification:
+
+- Sidebar logo container uses `background: transparent`.
+- Sidebar logo container uses `border: 0`.
+- Logo image uses `height: auto`, `max-width: 150px`, `max-height: 60px`, and `object-fit: contain`.
+- Collapsed sidebar logo uses transparent container styling and avoids the previous `translateX()` cropping behavior.
+
+Mobile CSS verification:
+
+- Mobile logo uses `background: transparent`.
+- Mobile logo uses `border: 0`.
+- Mobile logo uses `height: auto`, `width: 118px`, `max-height: 42px`, and `object-fit: contain`.
+
+Cache/build:
+
+```text
+bench --site Qatra.local clear-cache
+bench build --app construction_management
+```
+
+No schema migration was required.
+
+Note:
+
+The local HTTP server was not running on `127.0.0.1:8000`, and `qatra.local` was not resolvable from the shell, so browser-based screenshot verification could not be performed from the command line. Verification was done through Frappe page rendering, built asset checks, image metadata checks, and CSS checks for desktop/mobile logo states.
+
+## Implementation Status
+
+Implemented
+
+## Verification Status
+
+Runtime Verified
+
+## Client Response
+
+The Client Portal logo has been updated to use a clear transparent Qatra logo without the background box. The logo now preserves its original proportions and displays cleanly across the Client Portal layout for desktop, collapsed sidebar, and mobile header states.
+
+---
+
+# Concern 5 - Client Portal Responsive Layout
+
+## Client Concern
+
+> The Client Portal is not properly responsive on different screen sizes. Some content is cut off or does not fit correctly, especially on mobile. Please review the layout of the entire portal and ensure it displays correctly on both mobile and desktop.
+
+## Investigation Status
+
+PARTIALLY CONFIRMED
+
+The Client Portal already had some responsive breakpoints, but portal-wide inspection found several layout risks that could cause cut-off content, cramped controls, or unusable tables on smaller screens.
+
+## Route Audit
+
+| Route | Template | Responsive Status | Main Issues |
+|---|---|---|---|
+| `/client-portal` | `client-portal.html` | Reviewed | Login layout already stacks at tablet/mobile; kept existing layout. |
+| `/client-portal/dashboard` | `client-portal-dashboard.html` | Fixed | Large grids and hero/card sections needed stronger min-width and two-column/later one-column behavior. |
+| `/client-portal/projects` | `client-portal-projects.html` | Fixed | Toolbar controls and project cards needed stronger wrapping and min-width controls. |
+| `/client-portal/project/<name>` | `client-portal-project.html` | Fixed | Stats, quick links, financial cards, and activity rows needed consistent grid collapse behavior. |
+| `/client-portal/reports` | `client-portal-reports.html` | Fixed | Filter toolbar and report cards needed better mobile stacking and text wrapping. |
+| `/client-portal/report/<name>` | `client-portal-report.html` | Fixed | Report tables, DPR task cards, photos, attachment links, and long notes needed better mobile behavior. |
+| `/client-portal/documents` | `client-portal-documents.html` | Fixed | Document cards used desktop columns and action buttons that could crowd on mobile. |
+| `/client-portal/gallery` | `client-portal-gallery.html` | Fixed | Gallery grid was generally safe; card/image/text min-width and wrapping were strengthened. |
+| `/client-portal/approvals` | `client-portal-approvals.html` | Fixed | Status tabs and compact approval cards needed mobile wrapping and full-width action behavior. |
+| `/client-portal/approval/<name>` | `client-portal-approval.html` | Fixed | Detail metadata, remarks textarea, attachment link, and action buttons needed mobile-safe stacking. |
+| `/client-portal/payments` | `client-portal-payments.html` | Fixed | Payment tables and financial cards were the highest overflow risk; mobile card-style report rows were added. |
+| `/client-portal/logout` | `client-portal-logout.html` | Reviewed | Simple logout placeholder; no page-specific responsive issue found. |
+
+## Root Causes Found
+
+- Some shared layout containers and cards did not consistently set `min-width: 0`, which can cause flex/grid children to overflow.
+- The root portal body class used `overflow-x: clip`, which could hide overflow symptoms instead of exposing/fixing the offending component.
+- Report/payment table rows used fixed minimum widths for desktop readability, but mobile needed a better transformation than page-level horizontal overflow.
+- Report table cells did not have header labels available for stacked mobile card rendering.
+- Several filter/toolbars could compress controls on mobile instead of stacking cleanly.
+- Document cards used a three-column desktop layout that needed stronger mobile action stacking.
+- DPR/report detail cards with images and count blocks needed clearer one-column behavior on mobile.
+- Approval status tabs and approval action rows needed stronger small-screen behavior.
+- Large currency and numeric values needed extra wrapping/font safeguards inside cards.
+
+## Shared Layout Fixes
+
+- Removed root `overflow-x: clip` from the portal body class.
+- Added shared `max-width: 100%` and `min-width: 0` safeguards to portal shell, content, cards, document/gallery/approval/payment containers, and shared dashboard cards.
+- Added general media safety for images, videos, canvas, and iframes.
+- Added focused text wrapping for links, headings, paragraphs, spans, strong text, and definition values.
+- Added consistent breakpoints for `1200px`, `768px`, `640px`, `480px`, and `360px`.
+- Preserved desktop layouts while reducing four-column grids to two columns on narrower laptop/tablet widths and one column on mobile.
+- Kept mobile sidebar drawer behavior intact. Existing JS already opens/closes the drawer, closes on backdrop click, and closes when a nav link is selected.
+
+## Page-Specific Fixes
+
+### Dashboard
+
+- Strengthened hero, KPI, project, financial, summary, journey, and activity card responsiveness.
+- Reduced multi-column grids at laptop/tablet widths.
+- Added wrapping safeguards for large numbers and long project/customer text.
+
+### Projects
+
+- Strengthened project filter toolbar stacking.
+- Preserved project card layout on desktop.
+- Ensured project cards and progress sections can shrink without overflow.
+
+### Project Detail
+
+- Strengthened detail stat cards, quick links, financial cards, activity rows, and overview sections.
+- Ensured desktop four-column cards collapse to two columns and then one column.
+
+### Reports
+
+- Strengthened report filter toolbar and report card wrapping.
+- Ensured report cards do not force fixed width on mobile.
+
+### Report Detail
+
+- Added stronger mobile handling for report data tables.
+- Added mobile one-column handling for DPR task cards, images, note panels, count cards, photo grids, and attachment links.
+- Preserved local table behavior for desktop and card-style rows for mobile.
+
+### Documents
+
+- Document cards collapse from icon/content/actions layout to a one-column mobile card.
+- View/download action buttons wrap and become tappable mobile controls.
+- Long file names and metadata now wrap safely.
+
+### Gallery
+
+- Gallery grid keeps responsive auto-fill behavior.
+- Added stronger card/media/text min-width and wrapping safeguards.
+- Images remain contained with aspect ratio and `object-fit: cover`.
+
+### Approvals
+
+- Status tabs become a responsive grid on mobile.
+- Approval metadata collapses from desktop row to two columns and then one column.
+- Review/View action becomes full-width on small screens.
+
+### Approval Detail
+
+- Detail grid and response actions stack on mobile.
+- Remarks textarea remains full width.
+- Long source/attachment text wraps.
+
+### Payments
+
+- Payment summary grids collapse from four columns to two and then one.
+- Payment/report tables now transform into mobile card rows instead of forcing whole-page horizontal scroll.
+- Large AED values wrap and scale safely within cards.
+
+## Table Responsiveness
+
+Client Portal report/payment tables now keep their desktop grid layout at larger widths. At mobile width, header rows are hidden and each data row becomes a card. JavaScript copies table header text into each data cell as `data-label`, so mobile users can still understand each value after the row stacks.
+
+Changed JS behavior:
+
+```text
+construction_management/public/js/qatra_client_portal.js
+```
+
+- Reads `[data-qatra-report-header]`.
+- Copies each header cell text to matching body cells as `data-label`.
+- Existing search, pagination, and CSV download behavior remains unchanged.
+
+## Breakpoints Tested
+
+Code-level and built-asset checks covered these breakpoint rules:
+
+| Width | Verification Method | Status |
+|---:|---|---|
+| 1200px | CSS breakpoint check | PASS |
+| 920px | Existing sidebar/tablet breakpoint reviewed | PASS |
+| 768px | CSS breakpoint check | PASS |
+| 640px | Mobile report table transformation check | PASS |
+| 480px | Small mobile card/control breakpoint check | PASS |
+| 360px | Narrow mobile header/table row breakpoint check | PASS |
+
+Requested browser viewport list:
+
+```text
+1440x900
+1366x768
+1024x768
+768x1024
+430x932
+390x844
+375x812
+360x800
+320x568
+```
+
+These exact browser viewport screenshots were not captured because the local HTTP server was not listening on `127.0.0.1:8000` during verification. The pages were verified through Frappe route rendering, source/CSS inspection, built asset inspection, and breakpoint rule checks.
+
+## Page Verification Matrix
+
+| Page | Desktop | Tablet | Mobile | Overflow | Notes |
+|---|---|---|---|---|---|
+| Login | PASS | PASS | PASS | No issue found in code review | Server-rendered HTTP 200. |
+| Dashboard | FIXED | FIXED | FIXED | No page-level overflow expected from patched grids | Server-rendered HTTP 200. |
+| Projects | FIXED | FIXED | FIXED | No page-level overflow expected from patched toolbar/cards | Server-rendered HTTP 200. |
+| Project Detail | FIXED | FIXED | FIXED | No page-level overflow expected from patched grids | `PROJ-0015` rendered HTTP 200. |
+| Reports | FIXED | FIXED | FIXED | No page-level overflow expected from patched toolbar/cards | Server-rendered HTTP 200. |
+| Report Detail | FIXED | FIXED | FIXED | Tables become mobile cards | `monthly-project-performance-report` for `PROJ-0015` rendered HTTP 200. |
+| Documents | FIXED | FIXED | FIXED | No page-level overflow expected from patched document cards | Server-rendered HTTP 200. |
+| Gallery | FIXED | FIXED | FIXED | No page-level overflow expected from responsive image grid | Server-rendered HTTP 200. |
+| Approvals | FIXED | FIXED | FIXED | No page-level overflow expected from patched tabs/cards | Server-rendered HTTP 200. |
+| Approval Detail | FIXED | FIXED | FIXED | No page-level overflow expected from patched detail/actions | `CAR-2026-00003` rendered HTTP 200. |
+| Payments | FIXED | FIXED | FIXED | Tables become mobile cards | Server-rendered HTTP 200. |
+
+Browser viewport visual QA remains recommended before client sign-off because screenshots could not be captured from the command line environment.
+
+## Runtime Verification
+
+Rendered route verification on `Qatra.local`:
+
+| Route | Status | Server Error | Shell Rendered |
+|---|---:|---|---|
+| `/client-portal` | 200 | No | Login shell rendered |
+| `/client-portal/dashboard` | 200 | No | Yes |
+| `/client-portal/projects` | 200 | No | Yes |
+| `/client-portal/project/PROJ-0015` | 200 | No | Yes |
+| `/client-portal/reports` | 200 | No | Yes |
+| `/client-portal/report/monthly-project-performance-report?project=PROJ-0015` | 200 | No | Yes |
+| `/client-portal/documents` | 200 | No | Yes |
+| `/client-portal/gallery` | 200 | No | Yes |
+| `/client-portal/approvals` | 200 | No | Yes |
+| `/client-portal/approval/CAR-2026-00003` | 200 | No | Yes |
+| `/client-portal/payments` | 200 | No | Yes |
+
+Built asset verification:
+
+- `sites/assets/construction_management/css/qatra_client_portal.css` contains the Concern 5 responsive hardening rules.
+- `sites/assets/construction_management/js/qatra_client_portal.js` contains the mobile report-table `data-label` logic.
+
+Cache/build:
+
+```text
+bench build --app construction_management
+bench --site Qatra.local clear-cache
+```
+
+No migration was required.
+
+## Implementation Status
+
+Implemented
+
+## Verification Status
+
+Partially Verified
+
+Reason:
+
+- All requested routes rendered successfully on `Qatra.local`.
+- CSS/JS responsive breakpoint and built asset checks passed.
+- Exact browser viewport screenshot testing could not be completed because no local HTTP server was running on `127.0.0.1:8000`.
+
+## Client Response
+
+The Client Portal responsive layout has been reviewed across all portal pages and strengthened for desktop, tablet, and mobile layouts. Shared layout containers, cards, filters, documents, gallery, approvals, approval detail, reports, and payments have been updated so content wraps or stacks cleanly instead of being cut off. Payment and report tables now adapt into readable mobile card rows, while desktop layouts remain compact and professional.

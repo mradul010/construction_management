@@ -1,5 +1,84 @@
 {% extends "construction_management/templates/client_portal/base.html" %}
 
+{% set status_tabs = [("Pending", pending_count), ("Approved", approved_count), ("Rejected", rejected_count), ("All", total_count)] %}
+
 {% block portal_content %}
-{% include "construction_management/templates/client_portal/page_shell.html" %}
+<section class="qatra-portal-hero qatra-portal-hero--compact">
+	<p class="qatra-eyebrow">{{ page_kicker }}</p>
+	<h1>{{ page_title }}</h1>
+	<p>{{ page_subtitle }}</p>
+</section>
+
+<section class="qatra-portal-toolbar qatra-approval-toolbar">
+	<div>
+		<span>{{ total_count }} published request{% if total_count != 1 %}s{% endif %}</span>
+		<strong>{% if selected_project %}{{ selected_project.display_name }}{% else %}All Projects{% endif %}</strong>
+	</div>
+	<label>
+		<span>Project</span>
+		<select data-qatra-approval-filter="project">
+			<option value="" {% if not selected_project %}selected{% endif %}>All Projects</option>
+			{% for project in projects %}
+			<option value="{{ project.name }}" {% if selected_project and selected_project.name == project.name %}selected{% endif %}>{{ project.display_name }}</option>
+			{% endfor %}
+		</select>
+	</label>
+	<label>
+		<span>Type</span>
+		<select data-qatra-approval-filter="type">
+			<option value="" {% if not selected_type %}selected{% endif %}>All Types</option>
+			{% for approval_type in approval_types %}
+			<option value="{{ approval_type }}" {% if selected_type == approval_type %}selected{% endif %}>{{ approval_type }}</option>
+			{% endfor %}
+		</select>
+	</label>
+</section>
+
+<nav class="qatra-approval-tabs" aria-label="Approval status filters">
+	{% for tab, count in status_tabs %}
+	<a class="{% if selected_status == tab %}is-active{% endif %}" href="/client-portal/approvals?status={{ tab }}{% if selected_project %}&project={{ selected_project.name | urlencode }}{% endif %}{% if selected_type %}&type={{ selected_type | urlencode }}{% endif %}">
+		<span>{{ tab }}</span>
+		<strong>{{ count }}</strong>
+	</a>
+	{% endfor %}
+</nav>
+
+{% if approvals %}
+<section class="qatra-approval-list">
+	{% for approval in approvals %}
+	<article class="qatra-approval-card qatra-approval-card--{{ approval.status | lower }}">
+		<header class="qatra-approval-card__top">
+			<span class="qatra-status-badge qatra-status-badge--{{ approval.status | lower }}">{{ approval.status }}{% if approval.is_overdue %} · Overdue{% endif %}</span>
+			<strong>{{ approval.approval_type or "General" }}</strong>
+		</header>
+		<div class="qatra-approval-card__summary">
+			<h2>{{ approval.subject }}</h2>
+			<p>{{ approval.description | striptags | truncate(150) if approval.description else "No description provided." }}</p>
+		</div>
+		<dl class="qatra-approval-meta-grid">
+			<div><dt>Project</dt><dd>{{ approval.display_project }}</dd></div>
+			<div><dt>Source</dt><dd>{{ approval.display_source or "Manual Request" }}</dd></div>
+			<div><dt>Requested</dt><dd>{{ approval.display_requested_on }}</dd></div>
+			<div><dt>Due Date</dt><dd>{{ approval.display_due_date }}</dd></div>
+		</dl>
+		<footer class="qatra-approval-card__footer">
+			{% if approval.has_attachment %}<span class="qatra-approval-attachment-chip">Attachment available</span>{% else %}<span></span>{% endif %}
+			<a class="qatra-approval-card__action" href="{{ approval.detail_route }}">{% if approval.status == "Pending" %}Review Request{% else %}View Decision{% endif %}</a>
+		</footer>
+	</article>
+	{% endfor %}
+</section>
+{% else %}
+<section class="qatra-dashboard-empty-card qatra-portal-empty-state">
+	{% if selected_status == "Pending" %}
+	<p>No approval requests are currently waiting for your response.</p>
+	{% elif selected_status == "Approved" %}
+	<p>No approved requests found.</p>
+	{% elif selected_status == "Rejected" %}
+	<p>No rejected requests found.</p>
+	{% else %}
+	<p>No approval requests have been published yet.</p>
+	{% endif %}
+</section>
+{% endif %}
 {% endblock %}

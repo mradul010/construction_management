@@ -13,7 +13,7 @@
 	color: var(--qatra-ink);
 	font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 	min-height: 100vh;
-	overflow-x: clip;
+	overflow-x: visible;
 }
 
 .qatra-client-portal,
@@ -508,22 +508,21 @@
 
 .qatra-client-portal .qatra-portal-logo {
 	align-items: center;
-	background: linear-gradient(135deg, var(--qatra-navy), var(--qatra-navy-soft));
-	border: 1px solid rgba(216, 184, 95, 0.34);
-	border-radius: 8px;
+	background: transparent;
+	border: 0;
 	display: flex;
-	justify-content: center;
-	min-height: 64px;
+	justify-content: flex-start;
+	min-height: 62px;
 	min-width: 0;
-	padding: 10px 12px;
+	padding: 2px 0;
 	text-decoration: none;
 }
 
 .qatra-client-portal .qatra-portal-logo img {
 	display: block;
 	height: auto;
-	max-height: 44px;
-	max-width: 166px;
+	max-height: 60px;
+	max-width: 150px;
 	object-fit: contain;
 	width: auto;
 }
@@ -773,14 +772,14 @@
 .qatra-client-portal.qatra-portal-sidebar-collapsed .qatra-portal-logo {
 	min-height: 46px;
 	overflow: hidden;
-	padding: 8px;
+	padding: 0;
 	width: 48px;
 }
 
 .qatra-client-portal.qatra-portal-sidebar-collapsed .qatra-portal-logo img {
-	max-height: 30px;
-	max-width: 90px;
-	transform: translateX(-10px);
+	max-height: 42px;
+	max-width: 48px;
+	transform: none;
 }
 
 .qatra-client-portal.qatra-portal-sidebar-collapsed .qatra-portal-collapse-button {
@@ -835,12 +834,13 @@
 }
 
 .qatra-client-portal .qatra-portal-mobile-logo {
-	background: linear-gradient(135deg, var(--qatra-navy), var(--qatra-navy-soft));
-	border: 1px solid rgba(216, 184, 95, 0.34);
-	border-radius: 8px;
-	height: 42px;
+	background: transparent;
+	border: 0;
+	display: block;
+	height: auto;
+	max-height: 42px;
 	object-fit: contain;
-	padding: 6px 8px;
+	padding: 0;
 	width: 118px;
 }
 
@@ -3143,13 +3143,13 @@
 	}
 
 	.qatra-client-portal.qatra-portal-sidebar-collapsed .qatra-portal-logo {
-		min-height: 64px;
+		min-height: 62px;
 		width: auto;
 	}
 
 	.qatra-client-portal.qatra-portal-sidebar-collapsed .qatra-portal-logo img {
-		max-height: 64px;
-		max-width: 190px;
+		max-height: 60px;
+		max-width: 150px;
 		transform: none;
 	}
 
@@ -3712,5 +3712,782 @@
 
 	.qatra-client-portal .qatra-document-card__actions {
 		flex-wrap: wrap;
+	}
+}
+
+
+.qatra-approval-toolbar {
+	align-items: end;
+}
+
+.qatra-approval-tabs {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 10px;
+	margin: 0 0 20px;
+}
+
+.qatra-approval-tabs a {
+	align-items: center;
+	background: var(--qatra-white);
+	border: 1px solid var(--qatra-border);
+	border-radius: 8px;
+	color: var(--qatra-ink);
+	display: inline-flex;
+	gap: 10px;
+	min-height: 44px;
+	padding: 10px 14px;
+	text-decoration: none;
+}
+
+.qatra-approval-tabs a.is-active {
+	background: var(--qatra-navy);
+	border-color: var(--qatra-navy);
+	color: var(--qatra-white);
+}
+
+.qatra-approval-tabs strong {
+	background: rgba(216, 184, 95, 0.18);
+	border-radius: 999px;
+	min-width: 28px;
+	padding: 2px 8px;
+	text-align: center;
+}
+
+.qatra-approval-grid {
+	display: grid;
+	gap: 16px;
+	grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+}
+
+.qatra-approval-card,
+.qatra-approval-detail,
+.qatra-approval-response,
+.qatra-approval-decision {
+	background: var(--qatra-white);
+	border: 1px solid var(--qatra-border);
+	border-radius: 8px;
+	box-shadow: 0 14px 34px rgba(11, 19, 36, 0.06);
+}
+
+.qatra-approval-card {
+	display: flex;
+	flex-direction: column;
+	gap: 14px;
+	min-height: 320px;
+	padding: 20px;
+}
+
+.qatra-approval-card header,
+.qatra-approval-detail__heading,
+.qatra-approval-response__actions {
+	align-items: center;
+	display: flex;
+	gap: 12px;
+	justify-content: space-between;
+}
+
+.qatra-approval-card h2 {
+	color: var(--qatra-navy);
+	font-size: 1.18rem;
+	line-height: 1.25;
+	margin: 0;
+}
+
+.qatra-approval-card p {
+	color: var(--qatra-muted);
+	line-height: 1.55;
+	margin: 0;
+}
+
+.qatra-approval-card dl,
+.qatra-approval-detail dl,
+.qatra-approval-decision dl {
+	display: grid;
+	gap: 10px;
+	margin: 0;
+}
+
+.qatra-approval-card dl div,
+.qatra-approval-detail dl div,
+.qatra-approval-decision dl div {
+	display: grid;
+	gap: 2px;
+}
+
+.qatra-approval-card dt,
+.qatra-approval-detail dt,
+.qatra-approval-decision dt {
+	color: var(--qatra-muted);
+	font-size: 0.76rem;
+	font-weight: 750;
+	text-transform: uppercase;
+}
+
+.qatra-approval-card dd,
+.qatra-approval-detail dd,
+.qatra-approval-decision dd {
+	color: var(--qatra-ink);
+	margin: 0;
+}
+
+.qatra-status-badge {
+	border-radius: 999px;
+	display: inline-flex;
+	font-size: 0.76rem;
+	font-weight: 800;
+	padding: 6px 10px;
+}
+
+.qatra-status-badge--pending {
+	background: rgba(216, 184, 95, 0.18);
+	color: #8a6516;
+}
+
+.qatra-status-badge--approved {
+	background: rgba(34, 139, 94, 0.14);
+	color: #16613f;
+}
+
+.qatra-status-badge--rejected {
+	background: rgba(180, 35, 24, 0.12);
+	color: #9f1f17;
+}
+
+.qatra-approval-card__action,
+.qatra-approval-attachment,
+.qatra-approval-button {
+	align-items: center;
+	border: 0;
+	border-radius: 8px;
+	display: inline-flex;
+	font-weight: 800;
+	justify-content: center;
+	min-height: 42px;
+	padding: 10px 14px;
+	text-decoration: none;
+}
+
+.qatra-approval-card__action,
+.qatra-approval-button--approve {
+	background: var(--qatra-navy);
+	color: var(--qatra-white);
+}
+
+.qatra-approval-attachment {
+	background: rgba(216, 184, 95, 0.16);
+	color: var(--qatra-navy);
+	margin-top: 18px;
+}
+
+.qatra-approval-button--reject {
+	background: #fff1f0;
+	color: #9f1f17;
+}
+
+.qatra-approval-button:disabled {
+	opacity: 0.65;
+}
+
+.qatra-approval-detail {
+	display: grid;
+	gap: 22px;
+	grid-template-columns: minmax(0, 1fr) minmax(260px, 0.36fr);
+	padding: 22px;
+}
+
+.qatra-approval-richtext {
+	color: var(--qatra-ink);
+	line-height: 1.65;
+	margin-top: 18px;
+}
+
+.qatra-approval-response,
+.qatra-approval-decision {
+	margin-top: 18px;
+	padding: 22px;
+}
+
+.qatra-approval-response label {
+	display: grid;
+	gap: 8px;
+}
+
+.qatra-approval-response label span {
+	color: var(--qatra-muted);
+	font-size: 0.78rem;
+	font-weight: 800;
+	text-transform: uppercase;
+}
+
+.qatra-approval-response textarea {
+	border: 1px solid var(--qatra-border);
+	border-radius: 8px;
+	font: inherit;
+	min-height: 112px;
+	padding: 12px;
+	resize: vertical;
+}
+
+.qatra-approval-response__actions {
+	justify-content: flex-end;
+	margin-top: 14px;
+}
+
+.qatra-approval-response p {
+	color: var(--qatra-muted);
+	margin: 12px 0 0;
+}
+
+.qatra-approval-response p.is-error {
+	color: #9f1f17;
+}
+
+@media (max-width: 780px) {
+	.qatra-approval-detail {
+		grid-template-columns: 1fr;
+	}
+
+	.qatra-approval-response__actions {
+		align-items: stretch;
+		flex-direction: column-reverse;
+	}
+}
+
+.qatra-approval-list {
+	display: grid;
+	gap: 14px;
+}
+
+.qatra-approval-list .qatra-approval-card {
+	gap: 12px;
+	min-height: 0;
+	padding: 18px;
+}
+
+.qatra-approval-card__top,
+.qatra-approval-card__footer {
+	align-items: center;
+	display: flex;
+	gap: 12px;
+	justify-content: space-between;
+}
+
+.qatra-approval-card__top strong {
+	color: var(--qatra-gold-dark);
+	font-size: 0.82rem;
+	text-transform: uppercase;
+}
+
+.qatra-approval-card__summary {
+	display: grid;
+	gap: 5px;
+}
+
+.qatra-approval-card__summary h2 {
+	color: var(--qatra-navy);
+	font-size: 1.1rem;
+	line-height: 1.22;
+	margin: 0;
+}
+
+.qatra-approval-card__summary p {
+	color: var(--qatra-muted);
+	line-height: 1.45;
+	margin: 0;
+}
+
+.qatra-approval-meta-grid {
+	display: grid;
+	gap: 12px 20px;
+	grid-template-columns: minmax(170px, 2fr) minmax(150px, 1.5fr) minmax(110px, 1fr) minmax(110px, 1fr);
+	margin: 0;
+}
+
+.qatra-approval-meta-grid div {
+	display: grid;
+	gap: 3px;
+	min-width: 0;
+}
+
+.qatra-approval-meta-grid dt {
+	color: var(--qatra-muted);
+	font-size: 0.72rem;
+	font-weight: 800;
+	text-transform: uppercase;
+}
+
+.qatra-approval-meta-grid dd {
+	color: var(--qatra-ink);
+	font-size: 0.92rem;
+	line-height: 1.35;
+	margin: 0;
+	min-width: 0;
+}
+
+.qatra-approval-attachment-chip {
+	color: var(--qatra-muted);
+	font-size: 0.88rem;
+	font-weight: 700;
+}
+
+.qatra-approval-list .qatra-approval-card__action {
+	flex: 0 0 auto;
+	min-height: 38px;
+	padding: 8px 14px;
+}
+
+.qatra-approval-detail-page {
+	display: grid;
+	gap: 16px;
+}
+
+.qatra-approval-back-link {
+	color: var(--qatra-muted);
+	font-weight: 750;
+	text-decoration: none;
+}
+
+.qatra-approval-detail-header,
+.qatra-approval-detail-panel {
+	background: var(--qatra-white);
+	border: 1px solid var(--qatra-border);
+	border-radius: 8px;
+	box-shadow: 0 14px 34px rgba(11, 19, 36, 0.06);
+	padding: 22px;
+}
+
+.qatra-approval-detail-header div {
+	align-items: center;
+	display: flex;
+	gap: 10px;
+}
+
+.qatra-approval-type-label {
+	color: var(--qatra-gold-dark);
+	font-size: 0.8rem;
+	font-weight: 800;
+	text-transform: uppercase;
+}
+
+.qatra-approval-detail-header h1 {
+	color: var(--qatra-navy);
+	font-size: clamp(1.6rem, 3vw, 2.4rem);
+	line-height: 1.12;
+	margin: 14px 0 8px;
+}
+
+.qatra-approval-detail-header p {
+	color: var(--qatra-muted);
+	margin: 0;
+}
+
+.qatra-approval-detail-panel h2,
+.qatra-approval-response h2,
+.qatra-approval-decision h2 {
+	color: var(--qatra-navy);
+	font-size: 1rem;
+	margin: 0 0 14px;
+}
+
+.qatra-approval-detail-grid {
+	display: grid;
+	gap: 12px 20px;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	margin: 0;
+}
+
+.qatra-approval-detail-grid div {
+	display: grid;
+	gap: 3px;
+}
+
+.qatra-approval-detail-grid dt {
+	color: var(--qatra-muted);
+	font-size: 0.72rem;
+	font-weight: 800;
+	text-transform: uppercase;
+}
+
+.qatra-approval-detail-grid dd {
+	margin: 0;
+}
+
+.qatra-approval-detail-grid a {
+	color: var(--qatra-navy);
+	font-weight: 800;
+}
+
+.qatra-approval-detail-page .qatra-approval-richtext {
+	margin-top: 0;
+}
+
+@media (max-width: 920px) {
+	.qatra-approval-meta-grid {
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+	}
+}
+
+@media (max-width: 620px) {
+	.qatra-approval-card__top,
+	.qatra-approval-card__footer {
+		align-items: stretch;
+		flex-direction: column;
+	}
+
+	.qatra-approval-meta-grid,
+	.qatra-approval-detail-grid {
+		grid-template-columns: 1fr;
+	}
+
+	.qatra-approval-list .qatra-approval-card__action {
+		width: 100%;
+	}
+}
+
+/* Concern 5: portal-wide responsive hardening */
+.qatra-client-portal .qatra-portal-shell,
+.qatra-client-portal .qatra-portal-content,
+.qatra-client-portal .qatra-portal-main,
+.qatra-client-portal .qatra-portal-topbar,
+.qatra-client-portal .qatra-portal-mobile-header,
+.qatra-client-portal .qatra-dashboard-command-hero,
+.qatra-client-portal .qatra-dashboard-white-card,
+.qatra-client-portal .qatra-dashboard-soft-card,
+.qatra-client-portal .qatra-dashboard-empty-card,
+.qatra-client-portal .qatra-dashboard-empty-state,
+.qatra-client-portal .qatra-dashboard-project-card,
+.qatra-client-portal .qatra-dashboard-summary-card,
+.qatra-client-portal .qatra-dashboard-report-card,
+.qatra-client-portal .qatra-dashboard-financial-card,
+.qatra-client-portal .qatra-dashboard-detail-stat-card,
+.qatra-client-portal .qatra-dashboard-quick-access-card,
+.qatra-client-portal .qatra-payment-summary-card,
+.qatra-client-portal .qatra-payment-doc-card,
+.qatra-client-portal .qatra-document-card,
+.qatra-client-portal .qatra-gallery-card,
+.qatra-client-portal .qatra-approval-card,
+.qatra-client-portal .qatra-approval-detail-header,
+.qatra-client-portal .qatra-approval-detail-panel,
+.qatra-client-portal .qatra-approval-response,
+.qatra-client-portal .qatra-approval-decision {
+	max-width: 100%;
+	min-width: 0;
+}
+
+.qatra-client-portal img,
+.qatra-client-portal video,
+.qatra-client-portal canvas,
+.qatra-client-portal iframe {
+	max-width: 100%;
+}
+
+.qatra-client-portal a,
+.qatra-client-portal p,
+.qatra-client-portal h1,
+.qatra-client-portal h2,
+.qatra-client-portal h3,
+.qatra-client-portal h4,
+.qatra-client-portal h5,
+.qatra-client-portal dd,
+.qatra-client-portal strong,
+.qatra-client-portal span {
+	overflow-wrap: anywhere;
+}
+
+.qatra-client-portal .qatra-dashboard-project-switcher {
+	scrollbar-width: thin;
+}
+
+.qatra-client-portal .qatra-dashboard-project-switcher,
+.qatra-client-portal .qatra-dashboard-report-table {
+	-webkit-overflow-scrolling: touch;
+}
+
+.qatra-client-portal .qatra-dashboard-project-tab {
+	min-width: min(210px, 82vw);
+}
+
+.qatra-client-portal .qatra-dashboard-info-pill,
+.qatra-client-portal .qatra-dashboard-btn,
+.qatra-client-portal .qatra-dashboard-filter-button,
+.qatra-client-portal .qatra-dashboard-panel-button,
+.qatra-client-portal .qatra-report-download-button,
+.qatra-client-portal .qatra-report-pagination button,
+.qatra-client-portal .qatra-document-card__actions a,
+.qatra-client-portal .qatra-approval-card__action,
+.qatra-client-portal .qatra-approval-button {
+	white-space: normal;
+}
+
+.qatra-client-portal .qatra-report-table-toolbar label,
+.qatra-client-portal .qatra-report-table-toolbar input,
+.qatra-client-portal .qatra-report-table-toolbar select {
+	min-width: 0;
+	max-width: 100%;
+	width: 100%;
+}
+
+.qatra-client-portal .qatra-dashboard-report-row span::before {
+	display: none;
+}
+
+@media (max-width: 1200px) {
+	.qatra-client-portal .qatra-dashboard-portfolio-grid,
+	.qatra-client-portal .qatra-dashboard-financial-grid,
+	.qatra-client-portal .qatra-dashboard-detail-stats-grid,
+	.qatra-client-portal .qatra-dashboard-quick-access-grid,
+	.qatra-client-portal .qatra-payment-summary-grid {
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+	}
+
+	.qatra-client-portal .qatra-dashboard-hero-grid,
+	.qatra-client-portal .qatra-dashboard-content-grid {
+		grid-template-columns: minmax(0, 1fr);
+	}
+}
+
+@media (max-width: 768px) {
+	.qatra-client-portal .qatra-portal-mobile-header {
+		gap: 10px;
+		padding: 10px 14px;
+	}
+
+	.qatra-client-portal .qatra-portal-mobile-logo {
+		width: min(112px, 34vw);
+	}
+
+	.qatra-client-portal .qatra-portal-header-signout {
+		min-width: 0;
+	}
+
+	.qatra-client-portal .qatra-dashboard-command-hero,
+	.qatra-client-portal .qatra-portal-hero,
+	.qatra-client-portal .qatra-dashboard-white-card,
+	.qatra-client-portal .qatra-dashboard-soft-card,
+	.qatra-client-portal .qatra-financial-section,
+	.qatra-client-portal .qatra-approval-detail-header,
+	.qatra-client-portal .qatra-approval-detail-panel,
+	.qatra-client-portal .qatra-approval-response,
+	.qatra-client-portal .qatra-approval-decision {
+		padding: 22px;
+	}
+
+	.qatra-client-portal .qatra-dashboard-pill-row,
+	.qatra-client-portal .qatra-dashboard-hero-actions,
+	.qatra-client-portal .qatra-report-table-toolbar,
+	.qatra-client-portal .qatra-report-table-footer,
+	.qatra-client-portal .qatra-project-overview-header,
+	.qatra-client-portal .qatra-dashboard-card-header,
+	.qatra-client-portal .qatra-dpr-update-head,
+	.qatra-client-portal .qatra-dpr-subsection-head,
+	.qatra-client-portal .qatra-payment-doc-top,
+	.qatra-client-portal .qatra-dashboard-report-card-top {
+		align-items: stretch;
+		flex-direction: column;
+	}
+
+	.qatra-client-portal .qatra-dashboard-btn,
+	.qatra-client-portal .qatra-dashboard-panel-button,
+	.qatra-client-portal .qatra-report-download-button {
+		width: 100%;
+	}
+
+	.qatra-client-portal .qatra-dpr-copy-grid,
+	.qatra-client-portal .qatra-dpr-task-grid,
+	.qatra-client-portal .qatra-dpr-task-card--with-image,
+	.qatra-client-portal .qatra-dpr-photo-grid,
+	.qatra-client-portal .qatra-dashboard-photo-grid {
+		grid-template-columns: 1fr;
+	}
+
+	.qatra-client-portal .qatra-dpr-update-counts {
+		min-width: 0;
+		width: 100%;
+	}
+
+	.qatra-client-portal .qatra-dpr-task-image img {
+		height: auto;
+		min-height: 0;
+	}
+
+	.qatra-client-portal .qatra-document-card {
+		grid-template-columns: minmax(0, 1fr);
+	}
+
+	.qatra-client-portal .qatra-file-icon {
+		height: 54px;
+		width: 54px;
+	}
+
+	.qatra-client-portal .qatra-document-card__actions {
+		display: grid;
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+	}
+
+	.qatra-client-portal .qatra-document-card__actions a {
+		justify-content: center;
+		min-height: 42px;
+		text-align: center;
+	}
+
+	.qatra-client-portal .qatra-approval-tabs {
+		display: grid;
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+	}
+
+	.qatra-client-portal .qatra-approval-tabs a {
+		justify-content: space-between;
+	}
+}
+
+@media (max-width: 640px) {
+	.qatra-client-portal .qatra-dashboard-report-table {
+		border: 0;
+		overflow-x: visible;
+	}
+
+	.qatra-client-portal .qatra-dashboard-report-row--head {
+		display: none;
+	}
+
+	.qatra-client-portal .qatra-dashboard-report-row {
+		background: var(--qatra-white);
+		border: 1px solid var(--qatra-border);
+		border-radius: 8px;
+		display: grid;
+		gap: 10px;
+		grid-template-columns: 1fr;
+		margin-top: 12px;
+		min-width: 0;
+		padding: 14px;
+	}
+
+	.qatra-client-portal .qatra-dashboard-report-row + .qatra-dashboard-report-row {
+		border-top: 1px solid var(--qatra-border);
+	}
+
+	.qatra-client-portal .qatra-dashboard-report-row span {
+		align-items: baseline;
+		display: flex;
+		gap: 12px;
+		justify-content: space-between;
+		min-width: 0;
+		text-align: right;
+	}
+
+	.qatra-client-portal .qatra-dashboard-report-row span::before {
+		color: var(--qatra-muted);
+		content: attr(data-label);
+		display: block;
+		flex: 0 0 min(118px, 42%);
+		font-size: 0.72rem;
+		font-weight: 850;
+		text-align: left;
+		text-transform: uppercase;
+	}
+
+	.qatra-client-portal .qatra-report-pagination {
+		flex-wrap: wrap;
+	}
+
+	.qatra-client-portal .qatra-report-pagination span {
+		text-align: center;
+		width: 100%;
+	}
+}
+
+@media (max-width: 480px) {
+	.qatra-client-portal .qatra-portal-main {
+		padding: 18px 12px;
+	}
+
+	.qatra-client-portal .qatra-portal-mobile-header {
+		grid-template-columns: auto minmax(0, 1fr) auto;
+	}
+
+	.qatra-client-portal .qatra-portal-mobile-logo {
+		width: min(96px, 30vw);
+	}
+
+	.qatra-client-portal .qatra-dashboard-command-hero,
+	.qatra-client-portal .qatra-portal-hero,
+	.qatra-client-portal .qatra-dashboard-white-card,
+	.qatra-client-portal .qatra-dashboard-soft-card,
+	.qatra-client-portal .qatra-financial-section,
+	.qatra-client-portal .qatra-dashboard-report-card,
+	.qatra-client-portal .qatra-payment-doc-card,
+	.qatra-client-portal .qatra-document-card,
+	.qatra-client-portal .qatra-gallery-card__body,
+	.qatra-client-portal .qatra-approval-card,
+	.qatra-client-portal .qatra-approval-detail-header,
+	.qatra-client-portal .qatra-approval-detail-panel,
+	.qatra-client-portal .qatra-approval-response,
+	.qatra-client-portal .qatra-approval-decision {
+		padding: 16px;
+	}
+
+	.qatra-client-portal .qatra-dashboard-hero-copy h1,
+	.qatra-client-portal .qatra-portal-hero h1 {
+		font-size: clamp(1.65rem, 9vw, 2rem);
+	}
+
+	.qatra-client-portal .qatra-dashboard-section-title,
+	.qatra-client-portal .qatra-dashboard-toolbar h2 {
+		font-size: 1.25rem;
+	}
+
+	.qatra-client-portal .qatra-dashboard-portfolio-grid,
+	.qatra-client-portal .qatra-dashboard-summary-grid,
+	.qatra-client-portal .qatra-dashboard-financial-grid,
+	.qatra-client-portal .qatra-dashboard-detail-stats-grid,
+	.qatra-client-portal .qatra-dashboard-quick-access-grid,
+	.qatra-client-portal .qatra-payment-summary-grid,
+	.qatra-client-portal .qatra-payment-doc-meta,
+	.qatra-client-portal .qatra-document-card dl,
+	.qatra-client-portal .qatra-approval-tabs {
+		grid-template-columns: 1fr;
+	}
+
+	.qatra-client-portal .qatra-document-card__actions,
+	.qatra-client-portal .qatra-approval-response__actions {
+		grid-template-columns: 1fr;
+	}
+
+	.qatra-client-portal .qatra-approval-button,
+	.qatra-client-portal .qatra-document-card__actions a {
+		width: 100%;
+	}
+
+	.qatra-client-portal .qatra-payment-summary-card strong,
+	.qatra-client-portal .qatra-dashboard-financial-card strong,
+	.qatra-client-portal .qatra-dashboard-metric strong {
+		font-size: clamp(1rem, 6vw, 1.35rem);
+	}
+}
+
+@media (max-width: 360px) {
+	.qatra-client-portal .qatra-portal-mobile-logo {
+		width: 82px;
+	}
+
+	.qatra-client-portal .qatra-portal-header-signout {
+		font-size: 0.72rem;
+		padding: 0 8px;
+	}
+
+	.qatra-client-portal .qatra-portal-menu-button {
+		height: 38px;
+		width: 38px;
+	}
+
+	.qatra-client-portal .qatra-dashboard-report-row span {
+		align-items: flex-start;
+		flex-direction: column;
+		text-align: left;
+	}
+
+	.qatra-client-portal .qatra-dashboard-report-row span::before {
+		flex-basis: auto;
 	}
 }

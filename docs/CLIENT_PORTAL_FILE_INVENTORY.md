@@ -22,8 +22,11 @@
 | 18 | `construction_management/www/client-portal-documents.html` | Template | Placeholder shell | `/client-portal/documents` | Active |
 | 19 | `construction_management/www/client_portal_gallery.py` | Page controller | Gallery placeholder | `/client-portal/gallery` | Active |
 | 20 | `construction_management/www/client-portal-gallery.html` | Template | Placeholder shell | `/client-portal/gallery` | Active |
-| 21 | `construction_management/www/client_portal_approvals.py` | Page controller | Approvals placeholder | `/client-portal/approvals` | Active |
-| 22 | `construction_management/www/client-portal-approvals.html` | Template | Placeholder shell | `/client-portal/approvals` | Active |
+| 21 | `construction_management/www/client_portal_approvals.py` | Page controller | Approval list context | `/client-portal/approvals` | Active |
+| 22 | `construction_management/www/client-portal-approvals.html` | Template | Approval list UI | `/client-portal/approvals` | Active |
+| 22A | `construction_management/www/client_portal_approval.py` | Page controller | Approval detail context | `/client-portal/approval/<name>` | Active |
+| 22B | `construction_management/www/client-portal-approval.html` | Template | Approval detail and response UI | `/client-portal/approval/<name>` | Active |
+| 22C | `construction_management/construction_management/doctype/client_approval_request/` | DocType | Portal-facing client approval lifecycle | Desk and Client Portal | Active |
 | 23 | `construction_management/www/client_portal_logout.py` | Page controller | Logout page context | `/client-portal/logout` | Active |
 | 24 | `construction_management/www/client-portal-logout.html` | Template | Logout/sign-out page | `/client-portal/logout` | Active |
 | 25 | `construction_management/templates/client_portal/base.html` | Template | Client portal layout shell | All new client portal pages | Active |

@@ -4,7 +4,7 @@ from urllib.parse import quote
 
 import frappe
 from frappe import _
-from frappe.utils import add_days, date_diff, flt, fmt_money, formatdate, get_datetime, getdate, today
+from frappe.utils import add_days, date_diff, flt, fmt_money, formatdate, get_datetime, getdate, now_datetime, today
 
 
 CONSTRUCTION_PORTAL_ITEMS = [
@@ -17,6 +17,7 @@ CONSTRUCTION_PORTAL_ITEMS = [
 	{"title": _("Logout"), "route": "/?cmd=web_logout"},
 ]
 
+QATRA_CLIENT_PORTAL_LOGO = "/assets/construction_management/images/qatra-logo-transparent.png"
 QATRA_CLIENT_PORTAL_FALLBACK_LOGO = "/assets/construction_management/images/qatra-logo.svg"
 QATRA_CLIENT_PORTAL_ASSET_VERSION = "20260922-progress-responsive"
 SALES_INVOICE_DISPLAY_REFERENCE_FIELDS = (
@@ -56,6 +57,33 @@ PROJECT_PORTAL_FILE_FIELDS = [
 	"uploaded_by",
 	"published_on",
 	"creation",
+]
+
+CLIENT_APPROVAL_STATUSES = ("Pending", "Approved", "Rejected", "Cancelled", "Expired")
+CLIENT_APPROVAL_FILTER_STATUSES = ("Pending", "Approved", "Rejected", "All")
+CLIENT_APPROVAL_FIELDS = [
+	"name",
+	"project",
+	"customer",
+	"approval_type",
+	"subject",
+	"description",
+	"attachment",
+	"source_doctype",
+	"source_name",
+	"source_title",
+	"publish_to_client_portal",
+	"visible_from",
+	"visible_until",
+	"due_date",
+	"status",
+	"requested_by",
+	"requested_on",
+	"response_by",
+	"response_on",
+	"response_remarks",
+	"creation",
+	"modified",
 ]
 
 QATRA_CLIENT_PORTAL_ITEMS = [
@@ -210,14 +238,7 @@ def setup_client_portal_context(context, active_page):
 
 
 def get_client_portal_logo():
-	company = get_default_client_portal_company()
-	if company:
-		try:
-			return frappe.db.get_value("Company", company, "company_logo") or QATRA_CLIENT_PORTAL_FALLBACK_LOGO
-		except Exception:
-			return QATRA_CLIENT_PORTAL_FALLBACK_LOGO
-
-	return QATRA_CLIENT_PORTAL_FALLBACK_LOGO
+	return QATRA_CLIENT_PORTAL_LOGO
 
 
 def get_client_portal_company_name():
@@ -399,9 +420,9 @@ def set_client_portal_project_display_fields(project, project_meta, customer_fie
 def get_client_portal_project_counts(project_name, customers):
 	customers = [customer for customer in (customers or []) if customer]
 	if not project_name or not customers:
-		return frappe._dict({"boqs": 0, "ra_bills": 0, "dprs": 0, "documents": 0, "gallery": 0})
+		return frappe._dict({"boqs": 0, "ra_bills": 0, "dprs": 0, "documents": 0, "gallery": 0, "pending_approvals": 0})
 
-	counts = frappe._dict({"boqs": 0, "ra_bills": 0, "dprs": 0, "documents": 0, "gallery": 0})
+	counts = frappe._dict({"boqs": 0, "ra_bills": 0, "dprs": 0, "documents": 0, "gallery": 0, "pending_approvals": 0})
 	boq_customer_field = get_boq_customer_field()
 	counts.boqs = frappe.db.count(
 		"BOQ",
@@ -435,6 +456,9 @@ def get_client_portal_project_counts(project_name, customers):
 	if portal_counts:
 		counts.documents = portal_counts.documents
 		counts.gallery = portal_counts.gallery
+	approval_counts = get_project_approval_counts([project_name], customers).get(project_name)
+	if approval_counts:
+		counts.pending_approvals = approval_counts.pending
 
 	return counts
 
@@ -895,12 +919,255 @@ def get_dashboard_counts_for_projects(project_names, customers):
 		if project_name in counts:
 			counts[project_name].documents = project_counts.documents
 			counts[project_name].gallery = project_counts.gallery
+	approval_counts = get_project_approval_counts(project_names, customers)
+	for project_name, project_counts in approval_counts.items():
+		if project_name in counts:
+			counts[project_name].pending_approvals = project_counts.pending
 
 	return counts
 
 
 def get_empty_project_counts():
 	return frappe._dict({"reports": 0, "documents": 0, "gallery": 0, "pending_approvals": 0})
+
+
+def get_client_portal_approvals(customers, project_name=None, status=None, approval_type=None):
+	customers = [customer for customer in (customers or []) if customer]
+	project_names = get_authorized_project_names_for_client_approvals(customers, project_name)
+	if not customers or not project_names or not frappe.db.exists("DocType", "Client Approval Request"):
+		return []
+
+	selected_status = normalize_client_approval_status_filter(status)
+	filters = {
+		"customer": ["in", customers],
+		"project": ["in", project_names],
+		"publish_to_client_portal": 1,
+		"status": ["not in", ["Draft", "Cancelled"]],
+	}
+	if selected_status != "All":
+		filters["status"] = selected_status
+	if approval_type:
+		filters["approval_type"] = approval_type
+
+	rows = frappe.get_all(
+		"Client Approval Request",
+		filters=filters,
+		fields=CLIENT_APPROVAL_FIELDS,
+		order_by="modified desc",
+		ignore_permissions=True,
+	)
+	project_map = get_portal_project_display_map(project_names, customers)
+	visible_rows = []
+	for row in rows:
+		if not is_client_approval_visible(row):
+			continue
+		if row.customer != (project_map.get(row.project) or {}).get("customer"):
+			continue
+		visible_rows.append(prepare_client_approval_row(row, project_map))
+
+	return sort_client_approvals(visible_rows)
+
+
+def get_authorized_project_names_for_client_approvals(customers, project_name=None):
+	customers = [customer for customer in (customers or []) if customer]
+	if project_name:
+		project = get_authorized_customer_project(project_name, customers)
+		return [project.name]
+	return [project.name for project in get_customer_projects(customers)]
+
+
+def normalize_client_approval_status_filter(status):
+	status = status or "Pending"
+	return status if status in CLIENT_APPROVAL_FILTER_STATUSES else "Pending"
+
+
+def get_client_approval_types(customers=None, project_name=None):
+	if not frappe.db.exists("DocType", "Client Approval Request"):
+		return []
+	filters = {"publish_to_client_portal": 1, "status": ["not in", ["Draft", "Cancelled"]]}
+	customers = [customer for customer in (customers or []) if customer]
+	if customers:
+		filters["customer"] = ["in", customers]
+	if project_name:
+		filters["project"] = project_name
+	return frappe.get_all("Client Approval Request", filters=filters, pluck="approval_type", distinct=True, ignore_permissions=True)
+
+
+def get_project_approval_counts(project_names, customers):
+	project_names = [project for project in (project_names or []) if project]
+	customers = [customer for customer in (customers or []) if customer]
+	counts = {project: frappe._dict({"pending": 0}) for project in project_names}
+	if not project_names or not customers or not frappe.db.exists("DocType", "Client Approval Request"):
+		return counts
+
+	rows = frappe.get_all(
+		"Client Approval Request",
+		filters={
+			"customer": ["in", customers],
+			"project": ["in", project_names],
+			"publish_to_client_portal": 1,
+			"status": "Pending",
+		},
+		fields=CLIENT_APPROVAL_FIELDS,
+		ignore_permissions=True,
+	)
+	project_map = get_portal_project_display_map(project_names, customers)
+	for row in rows:
+		if row.project not in counts:
+			continue
+		if row.customer != (project_map.get(row.project) or {}).get("customer"):
+			continue
+		if is_client_approval_visible(row):
+			counts[row.project].pending += 1
+	return counts
+
+
+def get_authorized_client_approval(approval_name, customers):
+	customers = [customer for customer in (customers or []) if customer]
+	if not approval_name or not customers or not frappe.db.exists("DocType", "Client Approval Request"):
+		frappe.throw(_("Not permitted."), frappe.PermissionError)
+	row = frappe.db.get_value("Client Approval Request", approval_name, CLIENT_APPROVAL_FIELDS, as_dict=True)
+	if not row or row.customer not in customers:
+		frappe.throw(_("Not permitted."), frappe.PermissionError)
+	validate_project_in_customers(row.project, customers)
+	if not is_client_approval_visible(row, include_history=True):
+		frappe.throw(_("Not permitted."), frappe.PermissionError)
+	project_map = get_portal_project_display_map([row.project], customers)
+	return prepare_client_approval_row(row, project_map)
+
+
+def is_client_approval_visible(approval, reference_date=None, include_history=True):
+	if not approval or not approval.get("publish_to_client_portal"):
+		return False
+	if approval.get("status") == "Draft" or approval.get("status") == "Cancelled":
+		return False
+	if not include_history and approval.get("status") != "Pending":
+		return False
+	reference_date = getdate(reference_date or today())
+	if approval.get("visible_from") and getdate(approval.visible_from) > reference_date:
+		return False
+	if approval.get("visible_until") and getdate(approval.visible_until) < reference_date:
+		return False
+	return True
+
+
+def prepare_client_approval_row(row, project_map=None):
+	row = frappe._dict(row)
+	project_info = (project_map or {}).get(row.project) or {}
+	row.display_project = project_info.get("display_name") or row.project
+	row.display_customer = get_client_portal_customer_name(row.customer)
+	row.display_requested_on = formatdate(row.requested_on or row.creation) if (row.requested_on or row.creation) else _("Not specified")
+	row.display_response_on = formatdate(row.response_on) if row.response_on else _("Not specified")
+	row.display_due_date = formatdate(row.due_date) if row.due_date else _("Not specified")
+	row.is_overdue = bool(row.status == "Pending" and row.due_date and getdate(row.due_date) < getdate(today()))
+	row.detail_route = f"/client-portal/approval/{quote(row.name, safe='')}"
+	row.display_source = get_client_approval_source_label(row)
+	row.attachment_url = get_client_approval_attachment_url(row)
+	row.has_attachment = bool(row.attachment)
+	return row
+
+
+def get_client_approval_source_label(row):
+	if not row.get("source_doctype") or not row.get("source_name"):
+		return _("Manual Request")
+	return f"{row.source_doctype}: {row.get('source_title') or row.source_name}"
+
+
+def get_client_approval_attachment_url(row):
+	if not row.get("attachment"):
+		return None
+	if not str(row.attachment).startswith("/private/"):
+		return row.attachment
+	return "/api/method/construction_management.portal_utils.download_client_approval_attachment?approval_name=" + quote(row.name, safe="")
+
+
+def sort_client_approvals(rows):
+	status_rank = {"Pending": 0, "Approved": 1, "Rejected": 2, "Expired": 3, "Cancelled": 4}
+	return sorted(
+		rows or [],
+		key=lambda row: (
+			status_rank.get(row.get("status"), 9),
+			str(row.get("due_date") or "9999-12-31") if row.get("status") == "Pending" else "9999-12-31",
+			str(row.get("response_on") or row.get("requested_on") or row.get("creation") or ""),
+		),
+		reverse=False,
+	)
+
+
+@frappe.whitelist()
+def respond_to_client_approval(approval_name, decision, remarks=None):
+	if frappe.session.user == "Guest":
+		frappe.throw(_("Please sign in to continue."), frappe.PermissionError)
+	if decision not in ("Approved", "Rejected"):
+		frappe.throw(_("Invalid approval decision."))
+	remarks = (remarks or "").strip()
+	if decision == "Rejected" and not remarks:
+		frappe.throw(_("Please provide a reason for rejection."))
+
+	access = require_client_portal_user()
+	approval = get_authorized_client_approval(approval_name, access.customers)
+	if approval.status != "Pending":
+		frappe.throw(_("This approval request has already been responded to."))
+	if not is_client_approval_visible(approval, include_history=False):
+		frappe.throw(_("This approval request is no longer available for response."), frappe.PermissionError)
+
+	locked = frappe.db.sql(
+		"select status from `tabClient Approval Request` where name=%s for update",
+		(approval.name,),
+		as_dict=True,
+	)
+	if not locked or locked[0].status != "Pending":
+		frappe.throw(_("This approval request has already been responded to."))
+
+	doc = frappe.get_doc("Client Approval Request", approval.name)
+	doc.status = decision
+	doc.response_by = frappe.session.user
+	doc.response_on = now_datetime()
+	doc.response_remarks = remarks
+	doc.save(ignore_permissions=True)
+	add_client_approval_comment(doc, decision)
+	handle_client_approval_response(doc)
+	frappe.db.commit()
+	return {"name": doc.name, "status": doc.status, "response_on": doc.response_on}
+
+
+def add_client_approval_comment(doc, decision):
+	comment = _("Client {0} via Client Portal").format(decision.lower())
+	if doc.response_remarks:
+		comment = f"{comment}: {doc.response_remarks}"
+	doc.add_comment("Comment", comment)
+
+
+def handle_client_approval_response(approval_request):
+	# Intentionally no generic source sync. Internal Desk approval states can mean
+	# different things from an external client response and need explicit mappings.
+	return None
+
+
+@frappe.whitelist()
+def download_client_approval_attachment(approval_name):
+	access = require_client_portal_user()
+	approval = get_authorized_client_approval(approval_name, access.customers)
+	if not approval.attachment:
+		frappe.throw(_("No attachment is available for this approval request."), frappe.DoesNotExistError)
+	file_doc = get_file_doc_for_url(approval.attachment)
+	if not file_doc:
+		frappe.throw(_("Attachment file was not found."), frappe.DoesNotExistError)
+	frappe.local.response["type"] = "redirect"
+	frappe.local.response["location"] = file_doc.file_url or approval.attachment
+
+
+def get_file_doc_for_url(file_url):
+	if not file_url:
+		return None
+	rows = frappe.get_all(
+		"File",
+		filters={"file_url": file_url},
+		fields=["name", "file_name", "file_url", "is_private"],
+		limit_page_length=1,
+		ignore_permissions=True,
+	)
+	return frappe._dict(rows[0]) if rows else None
 
 
 def get_project_portal_file_counts(project_names, customers):
