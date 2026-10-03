@@ -79,7 +79,7 @@
 	</div>
 	<div class="qatra-dashboard-detail-stat-card qatra-dashboard-detail-stat-card--dark">
 		<span>Pending Approvals</span>
-		<strong>0</strong>
+		<strong>{{ project_counts.pending_approvals }}</strong>
 	</div>
 </section>
 
@@ -246,10 +246,10 @@
 		<h3>Site Photos</h3>
 		<span>{{ project_counts.gallery }} published image{% if project_counts.gallery != 1 %}s{% endif %}</span>
 	</a>
-	<a href="/client-portal/approvals" class="qatra-dashboard-quick-access-card qatra-dashboard-quick-access-card--dark">
+	<a href="/client-portal/approvals?project={{ project.name | urlencode }}" class="qatra-dashboard-quick-access-card qatra-dashboard-quick-access-card--dark">
 		<p>Approvals</p>
 		<h3>Pending Review</h3>
-		<span>0 open requests</span>
+		<span>{{ project_counts.pending_approvals }} open request{% if project_counts.pending_approvals != 1 %}s{% endif %}</span>
 	</a>
 </section>
 {% endblock %}

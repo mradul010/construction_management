@@ -140,7 +140,31 @@ Document files support common project document formats such as PDF, Office files
 
 The client portal shows published entries only to website users linked to the same Customer and authorized Project. Documents appear at `/client-portal/documents`, and image entries appear at `/client-portal/gallery`.
 
-## 10. What Each Value Means
+## 10. Approvals
+
+Approvals are handled through `Client Approval Request` in ERPNext.
+
+ERPNext staff workflow:
+
+1. Open `Client Approval Request`.
+2. Select the Project. Customer fills automatically from the Project.
+3. Select Approval Type and enter Subject.
+4. Add Description, optional source document, and optional attachment.
+5. Enable `Publish to Client Portal`.
+6. Save. The request becomes `Pending`.
+
+Client workflow:
+
+1. Log in to `/client-portal`.
+2. Open Approvals.
+3. Filter by Project, Status, or Type if needed.
+4. Open the request.
+5. Review details and attachment.
+6. Approve or Reject. Rejection requires remarks.
+
+Client approvals are separate from internal ERPNext approvals. For example, client approval of a request linked to an RA Bill does not automatically call the internal RA Bill approval method.
+
+## 11. What Each Value Means
 
 | Value | Meaning |
 |---|---|
@@ -153,7 +177,7 @@ The client portal shows published entries only to website users linked to the sa
 | Collection Progress | Invoice collections compared with invoice receivable |
 | Remaining Contract Value | Contract value not yet invoiced |
 
-## 11. Common Portal Statuses
+## 12. Common Portal Statuses
 
 Project statuses can include Open, In Progress, Active, On Hold, Completed, and Closed.
 
@@ -161,7 +185,7 @@ RA Bill statuses include Draft, Submitted, Approved, Invoiced, and Cancelled.
 
 Report statuses depend on the Daily Progress Report and virtual report availability. Published DPRs appear in client report views when `Show on Client Portal` is enabled.
 
-## 12. Complete Business Flow
+## 13. Complete Business Flow
 
 ```text
 Customer account is linked

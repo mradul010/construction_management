@@ -157,7 +157,7 @@ Active menu state:
 | Report Detail | `/client-portal/report/<name>` | `www/client-portal-report.html` | `www/client_portal_report.py` | `qatra_client_portal.js` | Virtual reports or Daily Progress Report | `get_authorized_client_report()` |
 | Documents | `/client-portal/documents` | `www/client-portal-documents.html` | `www/client_portal_documents.py` | `qatra_client_portal.js` | Placeholder page shell | Authenticated client |
 | Gallery | `/client-portal/gallery` | `www/client-portal-gallery.html` | `www/client_portal_gallery.py` | `qatra_client_portal.js` | Placeholder page shell | Authenticated client |
-| Approvals | `/client-portal/approvals` | `www/client-portal-approvals.html` | `www/client_portal_approvals.py` | `qatra_client_portal.js` | Placeholder page shell | Authenticated client |
+| Approvals | `/client-portal/approvals` | `www/client-portal-approvals.html` | `www/client_portal_approvals.py` | `qatra_client_portal.js` | Client Approval Request list | Authenticated client, Customer/Project filtered |
 | Payments | `/client-portal/payments` | `www/client-portal-payments.html` | `www/client_portal_payments.py` | `qatra_client_portal.js` | Sales Invoice, Payment Entry Reference, Payment Entry | Authorized project/customer |
 | Logout | `/client-portal/logout` | `www/client-portal-logout.html` | `www/client_portal_logout.py` | inline template redirect | Logout endpoint | Any visitor |
 | Legacy BOQ List | `/boq` | `www/boq.html` | `www/boq.py` | `portal.js` | BOQ | Single resolved portal Customer |
@@ -814,7 +814,7 @@ FLOW G - Payment:
 | `construction_management/www/client_portal_payments.py` | Payments page context and statement formatting | Uses selected authorized project |
 | `construction_management/www/client_portal_documents.py` | Placeholder page | Auth only |
 | `construction_management/www/client_portal_gallery.py` | Placeholder page | Auth only |
-| `construction_management/www/client_portal_approvals.py` | Placeholder page | Auth only |
+| `construction_management/www/client_portal_approvals.py` | Approval list context | Customer/Project filtered Client Approval Request records |
 | `construction_management/www/client_portal_logout.py` | Logout page context | Template performs sign-out behavior |
 | `construction_management/www/client-portal*.html` | Primary portal templates | Server-rendered data |
 | `construction_management/templates/client_portal/base.html` | Portal shell | Includes CSS and JS |
@@ -921,7 +921,7 @@ INFORMATIONAL:
 ## 30. Current Limitations
 
 - The new `/client-portal` does not expose direct BOQ, RA Bill, or Work Progress pages.
-- Documents/Gallery/Approvals do not yet query real data.
+- Approvals now query `Client Approval Request`; Documents/Gallery query `Project Portal File` and approved DPR sources.
 - Customer resolution has multiple fallbacks; ambiguous contacts with multiple Customers are allowed but the display `context.customer` is only the first Customer.
 - Project stage journey assumes fixed labels `Design`, `Procurement`, `Construction`, `Finishing`, `Handover` when the project stage matches one of them.
 - Financial summaries use the first detected currency for display unless mixed currency logic switches contract totals to base amounts; mixed display remains a simplification.
@@ -940,3 +940,21 @@ INFORMATIONAL:
 ## 32. Final Architecture Summary
 
 The Qatra Client Portal is a Frappe website portal with centralized Customer resolution and mostly server-rendered pages. It presents project portfolio, project financials, reports, and payments for Customers linked to the logged-in Website User. BOQ and RA Bill logic is mature in the Desk DocTypes and older Construction Portal routes; the new client portal currently consumes billing and progress outputs rather than exposing direct BOQ/RA Bill detail pages. The core security model is Customer/project filtering in `portal_utils.py`, with legacy pages adding explicit document ownership validation before loading detail documents.
+
+## Client Approval Request Workflow
+
+`Client Approval Request` is the portal-facing approval lifecycle for `/client-portal/approvals` and `/client-portal/approval/<name>`.
+
+Main backend helpers in `construction_management/portal_utils.py`:
+
+```text
+get_client_portal_approvals()
+get_authorized_client_approval()
+get_project_approval_counts()
+is_client_approval_visible()
+respond_to_client_approval()
+download_client_approval_attachment()
+```
+
+Visibility requires `publish_to_client_portal = 1`, authorized Customer/Project, valid visibility window, and a non-Draft/non-Cancelled status. `Pending` requests are actionable; `Approved` and `Rejected` remain visible as history. Source documents are validated for project/customer relationship where possible but are not auto-mutated.
+

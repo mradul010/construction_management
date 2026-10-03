@@ -44,6 +44,7 @@ website_route_rules = [
     {"from_route": "/client-portal/documents", "to_route": "client-portal-documents"},
     {"from_route": "/client-portal/gallery", "to_route": "client-portal-gallery"},
     {"from_route": "/client-portal/approvals", "to_route": "client-portal-approvals"},
+    {"from_route": "/client-portal/approval/<path:name>", "to_route": "client-portal-approval"},
     {"from_route": "/client-portal/payments", "to_route": "client-portal-payments"},
     {"from_route": "/client-portal/logout", "to_route": "client-portal-logout"},
 ]

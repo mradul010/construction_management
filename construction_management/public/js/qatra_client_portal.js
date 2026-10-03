@@ -127,8 +127,18 @@
 			const nextButton = table.querySelector("[data-qatra-report-next]");
 			const pageLabel = table.querySelector("[data-qatra-report-page]");
 			const countLabel = table.querySelector("[data-qatra-report-count]");
+			const header = table.querySelector("[data-qatra-report-header]");
+			const headings = header ? getCellText(header) : [];
 			const rows = Array.from(table.querySelectorAll("[data-qatra-report-row]"));
 			let page = 1;
+
+			rows.forEach(function (row) {
+				Array.from(row.querySelectorAll("span")).forEach(function (cell, index) {
+					if (headings[index] && !cell.hasAttribute("data-label")) {
+						cell.setAttribute("data-label", headings[index]);
+					}
+				});
+			});
 
 			function getFilteredRows() {
 				const query = searchInput ? searchInput.value.trim().toLowerCase() : "";
@@ -249,6 +259,87 @@
 		if (projectStatus) {
 			projectStatus.addEventListener("change", filterProjects);
 		}
+
+
+		document.querySelectorAll("[data-qatra-approval-filter]").forEach(function (select) {
+			select.addEventListener("change", function () {
+				const params = new URLSearchParams(window.location.search);
+				const key = select.getAttribute("data-qatra-approval-filter");
+				if (select.value) {
+					params.set(key, select.value);
+				} else {
+					params.delete(key);
+				}
+				if (!params.get("status")) {
+					params.set("status", "Pending");
+				}
+				window.location.href = "/client-portal/approvals?" + params.toString();
+			});
+		});
+
+		document.querySelectorAll("[data-qatra-approval-response]").forEach(function (form) {
+			const approvalName = form.getAttribute("data-approval-name");
+			const remarksInput = form.querySelector("[data-qatra-approval-remarks]");
+			const message = form.querySelector("[data-qatra-approval-message]");
+			const buttons = Array.from(form.querySelectorAll("[data-qatra-approval-decision]"));
+
+			function setBusy(busy) {
+				buttons.forEach(function (button) {
+					button.disabled = busy;
+				});
+			}
+
+			function setMessage(value, isError) {
+				if (!message) {
+					return;
+				}
+				message.textContent = value || "";
+				message.classList.toggle("is-error", Boolean(isError));
+			}
+
+			buttons.forEach(function (button) {
+				button.addEventListener("click", function () {
+					const decision = button.getAttribute("data-qatra-approval-decision");
+					const remarks = remarksInput ? remarksInput.value.trim() : "";
+					if (decision === "Rejected" && !remarks) {
+						setMessage("Please provide a reason for rejection.", true);
+						if (remarksInput) {
+							remarksInput.focus();
+						}
+						return;
+					}
+					if (!window.confirm("Submit this " + decision.toLowerCase() + " response?")) {
+						return;
+					}
+
+					setBusy(true);
+					setMessage("Submitting response...", false);
+					frappe.call({
+						method: "construction_management.portal_utils.respond_to_client_approval",
+						args: {
+							approval_name: approvalName,
+							decision: decision,
+							remarks: remarks,
+						},
+						callback: function () {
+							setMessage("Response saved.", false);
+							window.location.reload();
+						},
+						error: function (error) {
+							const serverMessages = error && error._server_messages ? JSON.parse(error._server_messages) : null;
+							let errorMessage = "Unable to submit response.";
+							if (serverMessages && serverMessages.length) {
+								try {
+									errorMessage = JSON.parse(serverMessages[0]).message || errorMessage;
+								} catch (e) {}
+							}
+							setMessage(errorMessage, true);
+							setBusy(false);
+						},
+					});
+				});
+			});
+		});
 
 		document.addEventListener("keydown", function (event) {
 			if (event.key === "Escape") {

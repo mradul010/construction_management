@@ -1,0 +1,58 @@
+{% extends "construction_management/templates/client_portal/base.html" %}
+
+{% block portal_content %}
+<section class="qatra-approval-detail-page">
+	<a class="qatra-approval-back-link" href="/client-portal/approvals">Back to Approvals</a>
+
+	<header class="qatra-approval-detail-header">
+		<div>
+			<span class="qatra-status-badge qatra-status-badge--{{ approval.status | lower }}">{{ approval.status }}{% if approval.is_overdue %} · Overdue{% endif %}</span>
+			<span class="qatra-approval-type-label">{{ approval.approval_type or "General" }}</span>
+		</div>
+		<h1>{{ approval.subject }}</h1>
+		<p>{{ approval.display_project }}</p>
+	</header>
+
+	<section class="qatra-approval-detail-panel">
+		<h2>Request Details</h2>
+		<dl class="qatra-approval-detail-grid">
+			<div><dt>Project</dt><dd>{{ approval.display_project }}</dd></div>
+			<div><dt>Type</dt><dd>{{ approval.approval_type or "General" }}</dd></div>
+			<div><dt>Requested</dt><dd>{{ approval.display_requested_on }}</dd></div>
+			<div><dt>Due Date</dt><dd>{{ approval.display_due_date }}</dd></div>
+			<div><dt>Source</dt><dd>{{ approval.display_source or "Manual Request" }}</dd></div>
+			<div><dt>Attachment</dt><dd>{% if approval.attachment_url %}<a href="{{ approval.attachment_url }}" target="_blank" rel="noopener">View Attachment</a>{% else %}Not attached{% endif %}</dd></div>
+		</dl>
+	</section>
+
+	<section class="qatra-approval-detail-panel">
+		<h2>Description</h2>
+		<div class="qatra-approval-richtext">{{ approval.description or "No description provided." }}</div>
+	</section>
+
+	{% if approval.status == "Pending" %}
+	<section class="qatra-approval-response" data-qatra-approval-response data-approval-name="{{ approval.name }}">
+		<h2>Your Response</h2>
+		<label>
+			<span>Remarks</span>
+			<textarea data-qatra-approval-remarks rows="4" placeholder="Add remarks for your decision"></textarea>
+		</label>
+		<div class="qatra-approval-response__actions">
+			<button type="button" class="qatra-approval-button qatra-approval-button--reject" data-qatra-approval-decision="Rejected">Reject</button>
+			<button type="button" class="qatra-approval-button qatra-approval-button--approve" data-qatra-approval-decision="Approved">Approve</button>
+		</div>
+		<p data-qatra-approval-message></p>
+	</section>
+	{% elif approval.status in ("Approved", "Rejected") %}
+	<section class="qatra-approval-decision">
+		<h2>Decision</h2>
+		<dl class="qatra-approval-detail-grid">
+			<div><dt>Status</dt><dd>{{ approval.status }}</dd></div>
+			<div><dt>Response By</dt><dd>{{ approval.response_by or "Not specified" }}</dd></div>
+			<div><dt>Response On</dt><dd>{{ approval.display_response_on }}</dd></div>
+			<div><dt>Remarks</dt><dd>{{ approval.response_remarks or "No remarks provided." }}</dd></div>
+		</dl>
+	</section>
+	{% endif %}
+</section>
+{% endblock %}
