@@ -33,6 +33,10 @@ frappe.ui.form.on("Construction BOM", {
 		});
 	},
 
+	refresh(frm) {
+		calculate_construction_bom_parent_total_weight(frm);
+	},
+
 	validate(frm) {
 		sync_construction_bom_items(frm);
 	},
@@ -68,6 +72,10 @@ frappe.ui.form.on("Construction BOM Item", {
 		ensure_construction_bom_item(cdt, cdn, "mark_no", "item_code");
 		ensure_construction_bom_item(cdt, cdn, "mark_item", "mark_item_item_code");
 	},
+
+	total_weight(frm) {
+		calculate_construction_bom_parent_total_weight(frm);
+	},
 });
 
 function sync_construction_bom_items(frm) {
@@ -78,14 +86,17 @@ function sync_construction_bom_items(frm) {
 		row.total_wt_mt = values.total_wt_mt;
 	});
 	frm.refresh_field("items");
+	calculate_construction_bom_parent_total_weight(frm);
 }
 
 function update_construction_bom_item(frm, cdt, cdn) {
 	const row = locals[cdt][cdn];
 	const values = get_construction_bom_weight_values(row);
-	frappe.model.set_value(cdt, cdn, "serial_no", row.idx);
-	frappe.model.set_value(cdt, cdn, "total_weight", values.total_weight);
-	frappe.model.set_value(cdt, cdn, "total_wt_mt", values.total_wt_mt);
+	Promise.all([
+		frappe.model.set_value(cdt, cdn, "serial_no", row.idx),
+		frappe.model.set_value(cdt, cdn, "total_weight", values.total_weight),
+		frappe.model.set_value(cdt, cdn, "total_wt_mt", values.total_wt_mt),
+	]).then(() => calculate_construction_bom_parent_total_weight(frm));
 }
 
 function get_construction_bom_weight_values(row) {
@@ -123,4 +134,16 @@ function ensure_construction_bom_item(cdt, cdn, sourceField, targetField) {
 			}
 		},
 	});
+}
+
+function calculate_construction_bom_parent_total_weight(frm) {
+	let total = 0;
+	(frm.doc.items || []).forEach((row) => {
+		total += flt(row.total_weight);
+	});
+
+	if (flt(frm.doc.total_weight) !== flt(total)) {
+		frm.set_value("total_weight", total);
+	}
+	frm.refresh_field("total_weight");
 }

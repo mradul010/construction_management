@@ -18,10 +18,13 @@ class ConstructionBOM(Document):
 		self.validate_project_and_boq()
 		self.validate_items()
 		self.update_item_values()
+		self.update_total_weight()
 
 	def before_submit(self):
 		self.validate_project_and_boq()
 		self.validate_items()
+		self.update_item_values()
+		self.update_total_weight()
 
 	def validate_project_and_boq(self):
 		if not self.project:
@@ -81,6 +84,9 @@ class ConstructionBOM(Document):
 		for row in self.items:
 			row.serial_no = row.idx
 			row.total_weight, row.total_wt_mt = get_weight_values(row.qty, row.unit_weight)
+
+	def update_total_weight(self):
+		self.total_weight = sum(flt(row.total_weight) for row in self.get("items") or [])
 
 
 def get_weight_values(qty, unit_weight):

@@ -38,6 +38,7 @@ class ConstructionActivity(Document):
 
 	def validate(self):
 		self.validate_items()
+		self.update_total_weight()
 		self.validate_stage_sequence()
 
 	def on_cancel(self):
@@ -76,6 +77,10 @@ class ConstructionActivity(Document):
 				frappe.throw(_("Qty must be greater than zero in row {0}.").format(row.idx))
 			if flt(row.unit_weight) < 0:
 				frappe.throw(_("Unit Weight cannot be negative in row {0}.").format(row.idx))
+
+	def update_total_weight(self):
+		if self.meta.has_field("total_weight"):
+			self.total_weight = sum(flt(row.total_weight) for row in self.get("items") or [])
 
 	def validate_stage_sequence(self):
 		if self.stage == "Unloading":

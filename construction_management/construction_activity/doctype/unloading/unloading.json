@@ -6,7 +6,7 @@
  "doctype": "DocType",
  "document_type": "Transaction",
  "engine": "InnoDB",
- "field_order": ["naming_series", "details_section", "company", "project", "building_number", "column_break_1", "activity_date", "vehicle_no", "items_section", "items", "remarks_section", "remarks", "amended_from"],
+ "field_order": ["naming_series", "details_section", "company", "project", "building_number", "column_break_1", "activity_date", "vehicle_no", "items_section", "items", "total_weight", "remarks_section", "remarks", "amended_from"],
  "fields": [
   {"default": "UNL-.YYYY.-.#####", "fieldname": "naming_series", "fieldtype": "Select", "label": "Series", "options": "UNL-.YYYY.-.#####", "reqd": 1, "set_only_once": 1},
   {"fieldname": "details_section", "fieldtype": "Section Break", "label": "Details"},
@@ -18,6 +18,7 @@
   {"fieldname": "vehicle_no", "fieldtype": "Data", "in_list_view": 1, "label": "Vehicle No."},
   {"fieldname": "items_section", "fieldtype": "Section Break", "label": "Items"},
   {"fieldname": "items", "fieldtype": "Table", "label": "Items", "options": "Construction Activity Item", "reqd": 1},
+  {"default": "0", "description": "Total weight of all items in KG", "fieldname": "total_weight", "fieldtype": "Float", "label": "Total Weight", "read_only": 1},
   {"fieldname": "remarks_section", "fieldtype": "Section Break", "label": "Remarks"},
   {"fieldname": "remarks", "fieldtype": "Small Text", "label": "Remarks"},
   {"fieldname": "amended_from", "fieldtype": "Link", "label": "Amended From", "no_copy": 1, "options": "Unloading", "print_hide": 1, "read_only": 1}

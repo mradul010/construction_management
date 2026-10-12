@@ -12,6 +12,8 @@
   "building_number",
   "boq",
   "posting_date",
+  "column_break_1",
+  "total_weight",
   "items_section",
   "items",
   "remarks_section",
@@ -42,6 +44,10 @@
    "options": "Project",
    "reqd": 1,
    "search_index": 1
+  },
+  {
+   "fieldname": "column_break_1",
+   "fieldtype": "Column Break"
   },
   {
    "fieldname": "building_number",
@@ -81,6 +87,14 @@
    "label": "Items",
    "options": "Construction BOM Item",
    "reqd": 1
+  },
+  {
+   "default": "0",
+   "description": "Total weight of all items in KG",
+   "fieldname": "total_weight",
+   "fieldtype": "Float",
+   "label": "Total Weight",
+   "read_only": 1
   },
   {
    "fieldname": "remarks_section",
