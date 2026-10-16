@@ -79,6 +79,7 @@ app_include_js = [
 ]
 
 doctype_js = {
+    "Journal Entry": "public/js/journal_entry.js",
     "Company": "public/js/company.js",
     "Project": "public/js/project_dpr.js",
     "Purchase Order": "public/js/purchase_order.js",
