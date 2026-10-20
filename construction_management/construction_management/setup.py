@@ -6,6 +6,8 @@ from frappe.utils import flt
 
 
 def after_install():
+	from construction_management.construction_management.report.uae_vat_201_return.configuration import setup as setup_vat201
+	setup_vat201()
 	from construction_management.construction_management.report.project_profitability.setup import configure_report
 	configure_report()
 	create_boq_client_script()
@@ -30,6 +32,8 @@ def after_install():
 
 
 def after_migrate():
+	from construction_management.construction_management.report.uae_vat_201_return.configuration import setup as setup_vat201
+	setup_vat201()
 	from construction_management.construction_management.report.project_profitability.setup import configure_report
 	configure_report()
 	create_boq_client_script()
