@@ -60,6 +60,13 @@ def normalize(filters, settings):
 		f.from_date, f.to_date = periods[0].from_date, periods[0].to_date
 	elif f.period_type != "Custom Date Range":
 		frappe.throw(_("Invalid VAT Return Period"))
+	elif not f.from_date and not f.to_date:
+		# Open the confirmed first return, not an unrelated current-month selection.
+		periods = sorted(settings.get("custom_vat201_periods", []), key=lambda p: getdate(p.from_date))
+		if periods:
+			f.from_date, f.to_date = periods[0].from_date, periods[0].to_date
+		else:
+			f.from_date, f.to_date = getdate(today()).replace(day=1), getdate(today())
 	if not f.from_date or not f.to_date or getdate(f.from_date) > getdate(f.to_date):
 		frappe.throw(_("A valid From Date and To Date are required"))
 	f.from_date, f.to_date = getdate(f.from_date), getdate(f.to_date)
@@ -74,8 +81,11 @@ def taxpayer(company, settings, f):
 	address_names = frappe.get_all("Dynamic Link", filters={"parenttype": "Address", "link_doctype": "Company", "link_name": company}, pluck="parent")
 	addresses = frappe.get_list("Address", filters={"name": ["in", address_names]}, fields=["address_line1", "address_line2", "city", "state", "country", "pincode"], limit_page_length=1) if address_names else []
 	address = ", ".join(str(v) for v in addresses[0].values() if v) if addresses else None
-	return dict(company=company, legal_name_english=company_doc.company_name, legal_name_arabic=settings.get("custom_vat201_legal_name_arabic"),
+	return dict(company=company, legal_name_english=settings.get("custom_vat201_legal_name_english") or company_doc.company_name, legal_name_arabic=settings.get("custom_vat201_legal_name_arabic"),
 		trn=company_doc.tax_id, address=address, currency="AED", base_currency=company_doc.default_currency,
+		registration_date=str(settings.custom_vat201_registration_date) if settings.get("custom_vat201_registration_date") else None,
+		registered_emirate=settings.get("custom_vat201_registered_emirate"),
+		filing_frequency=period.get("frequency"), quarter_number=period.get("quarter_number"),
 		from_date=str(f.from_date), to_date=str(f.to_date), stagger=period.get("stagger"), due_date=str(period.due_date) if period.get("due_date") else None,
 		tax_year_end=str(period.tax_year_end) if period.get("tax_year_end") else None,
 		period_label=period.get("label"), period_status=period.get("status"), period_kind="Configured filing period" if period else "Analytical period",
@@ -226,6 +236,16 @@ def ledger_sides(entry, mappings, headers, events):
 	return [(side if side in ("Output","Input") else "Unallocated", credit-debit if side=="Output" else debit-credit)]
 
 
+def account_mappings(rows):
+	"""One ledger scan per account, even when legacy rows map it on both sides."""
+	sides = defaultdict(set)
+	for row in rows:
+		side = row.get("custom_vat201_side")
+		sides[row.account].update(("Input", "Output") if side == "Both" else (side,))
+	return {account: "Both" if values == {"Input", "Output"} else next(iter(values)) if len(values) == 1 else None
+		for account, values in sides.items()}
+
+
 def build(filters):
 	filters = frappe._dict(frappe.parse_json(filters) or {})
 	if not filters.company:
@@ -244,7 +264,7 @@ def build(filters):
 		warnings.append(_("Analytical period; this selection is not a configured VAT filing period"))
 	if not f.include_adjustments:
 		warnings.append(_("Adjustments are excluded; this is an analytical report"))
-	mappings = {a.account:a.get("custom_vat201_side") for a in settings.get("uae_vat_accounts", [])}
+	mappings = account_mappings(settings.get("uae_vat_accounts", []))
 	if not mappings or any(v not in ("Output","Input","Both") for v in mappings.values()):
 		warnings.append(_("VAT accounts and ledger sides must be configured in UAE VAT Settings"))
 	accounts = frappe.get_list("Account",filters={"company":f.company},fields=["name","account_type"],limit_page_length=0)

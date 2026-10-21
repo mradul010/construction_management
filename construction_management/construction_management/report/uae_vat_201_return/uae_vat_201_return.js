@@ -7,12 +7,21 @@
 			method: endpoint + "period_context",
 			args: { filters: report.get_filter_values() },
 		});
-		report.set_filter_value({
+		const values = {
 			from_date: message.from_date,
 			to_date: message.to_date,
 			trn: message.trn || __("Not Configured"),
 			vat_stagger: message.stagger || __("Not Configured"),
-		});
+		};
+		const previous = report._no_refresh;
+		report._no_refresh = true;
+		try {
+			for (const [fieldname, value] of Object.entries(values)) {
+				await report.get_filter(fieldname).set_value(value);
+			}
+		} finally {
+			report._no_refresh = previous;
+		}
 		report.refresh();
 	}
 	function export_file(type) {
@@ -43,6 +52,20 @@
 				const previous = report._no_refresh;
 				report._no_refresh = true;
 				try {
+					if (!report.get_filter_value("from_date") && !report.get_filter_value("to_date")) {
+						const values = {
+							period_type: message.filing_frequency === "Quarterly" ? "Quarterly" : "Custom Date Range",
+							from_date: message.from_date, to_date: message.to_date,
+							year: Number(message.from_date.slice(0, 4)),
+							quarter: String(message.quarter_number || 1),
+						};
+						for (const [fieldname, value] of Object.entries(values)) {
+							await report.get_filter(fieldname).set_value(value);
+						}
+					}
+					if (!report.get_filter_value("profit_margin_scheme") && message.profit_margin_scheme) {
+						await report.get_filter("profit_margin_scheme").set_value(message.profit_margin_scheme);
+					}
 					await report.get_filter("trn").set_value(message.trn || __("Not Configured"));
 					await report
 						.get_filter("vat_stagger")
@@ -75,14 +98,12 @@
 				fieldname: "from_date",
 				label: __("From Date"),
 				fieldtype: "Date",
-				default: frappe.datetime.month_start(),
 				reqd: 1,
 			},
 			{
 				fieldname: "to_date",
 				label: __("To Date"),
 				fieldtype: "Date",
-				default: frappe.datetime.get_today(),
 				reqd: 1,
 			},
 			{

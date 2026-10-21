@@ -1,5 +1,91 @@
 # UAE VAT 201 Return
 
+## Confirmed Configuration Update: 2026-10-21
+
+Qatra.local now has UAE VAT Settings for QATRA BUILDING CONTG LLC. The user-confirmed
+TRN 105452509000003 is stored in standard Company.tax_id. The Company name/ID,
+addresses, submitted invoices and GL entries were not renamed or rewritten.
+Three missing settings fields were added by the existing app setup hook:
+custom_vat201_legal_name_english (QATRA BUILDING CONTG LLC OPC),
+custom_vat201_registration_date (2026-05-01), and
+custom_vat201_registered_emirate (Ras Al Khaimah). Existing filing-period fields
+continue to store frequency, stagger and Profit Margin Scheme; no duplicate
+TRN/frequency/scheme fields or VAT accounts were created.
+
+One existing VAT 5% - QBC account is mapped as Both. Legacy separate Input/Output
+rows for the same account are merged in memory to Both; they do not duplicate
+ledger scans or tax events. Invoice document type establishes the side; returns
+retain their saved signs. Journals/payments need approved source-GL classifications,
+not a debit/credit guess. Reverse charge retains its specific document treatment.
+
+Configured quarterly calendar, February-January cycle:
+
+| Start | End | Cycle Quarter | Due Date |
+| --- | --- | --- | --- |
+| 2026-05-01 | 2026-07-31 | 2 | 2026-08-31 (user confirmed) |
+| 2026-08-01 | 2026-10-31 | 3 | Not yet confirmed |
+| 2026-11-01 | 2027-01-31 | 4 | Not yet confirmed |
+| 2027-02-01 | 2027-04-30 | 1 | Not yet confirmed |
+
+All four records have Profit Margin Scheme No. Quarter number denotes the cycle,
+not the sequence since registration: the first registered return is cycle Q2.
+No February-April 2026 return was created before registration. Later due dates
+were not guessed from calendar/holiday assumptions. Future periods can be added
+using the same existing table. No submission or finalized status was asserted.
+
+Opening the report without explicit dates selects the first configured return;
+explicit custom/quarterly selections remain authoritative. Dates/quarter/TRN/stagger
+are synchronized with refresh suppressed, avoiding cascading requests. The first
+return header includes registration details and Quarterly frequency; Excel/PDF
+use the same registered legal name and maintained period details.
+
+### Actual First-Period Reconciliation
+
+Read-only runtime verification for 2026-05-01 through 2026-07-31:
+
+| Evidence | AED | Result |
+| --- | ---: | --- |
+| Sales invoice VAT / Output GL | 55,062.68 | Invoice tax rows match GL |
+| Purchase invoice VAT / Input GL | 36,515.54 | Invoice tax rows match GL |
+| Unallocated journal debit minus credit | -48,718.56 | Not approved as Input/Output |
+
+All 308 VAT-bearing invoice vouchers (13 sales, 295 purchases) reconcile individually
+at currency precision. Seven actual purchase credit notes across the available
+data were checked against GL with their negative signs. Sales-credit-note behavior
+is covered by isolated fixtures; no submitted sales return was found in this period.
+Duplicate Input/Output mappings were tested in memory and did not change totals,
+source counts or reconciliation. Standard report execution and workbook generation
+passed, as did 25 Python and four JavaScript tests.
+
+The live return remains **Needs Review**, with 354 candidate rows (13 sales,
+322 purchase tax/item rows, 19 journal GL rows). No classifications were auto-created
+or approved. Classified boxes therefore remain zero with explicit nonzero ledger
+differences; this is NOT a nil return or a reconciled final VAT liability.
+
+The original Not Configured fields resulted from absent UAE VAT Settings and a
+blank Company.tax_id. October's default date selection also had no submitted VAT
+transactions: sales VAT ends in July and purchase VAT postings end in September.
+Selecting the confirmed first return now exposes its actual evidence and warnings.
+
+Box 1a is the unchanged official Abu Dhabi row, not an existing saved approved
+classification (there were none). All 13 first-period sales invoices store
+vat_emirate = Ras Al Khaimah. That does not by itself prove the applicable Emirate
+for each supply; no company-address rule or automatic migration to Box 1f was added.
+An accountant must confirm the closely connected establishment/place-of-supply
+basis and the appropriate Emirate with supporting evidence.
+
+Journal ACC-JV-2026-00001 references QTI/0001 and ACC-JV-2026-00002 references
+QTI0002/advance payment for Villa 167. Their combined VAT credits are 49,315.77;
+remaining first-period journal VAT debits are 597.21. These are evidence leads,
+not approved return amounts. Review original advance tax invoices, avoid overlap
+with subsequent invoicing, and establish petty-cash VAT recoverability/taxable-base
+allocations before approving source GL rows. Signatory details, Arabic legal name,
+future due dates and supporting accounting classifications remain unprovided.
+
+The investigation below describes the earlier, unconfigured baseline and is
+retained as historical context; the configuration above supersedes its readiness
+statements. This update does not perform FTA submission.
+
 ## Investigation Before Implementation
 
 Environment inspected: Qatra.local; Frappe 16.31.0, ERPNext 16.32.1.

@@ -54,7 +54,9 @@ def execute(filters=None):
 			description=review["review"],observed_vat=flt(review.get("raw_vat")) if result["header"]["base_currency"]=="AED" else None,row_id=f"review_{index}",parent_id="reviews",indent=1,_review=True))
 	header = result["header"]
 	metadata = " | ".join(f"{label}: {escape_html(str(header.get(key) or 'Not Configured'))}" for key,label in
-		(("company","Company"),("trn","TRN"),("from_date","From"),("to_date","To"),("stagger","Stagger"),("due_date","Due Date")))
+		(("company","Company"),("legal_name_english","Registered Legal Name"),("trn","TRN"),
+		("registration_date","Registration Date"),("registered_emirate","Registered Emirate"),
+		("from_date","From"),("to_date","To"),("filing_frequency","Frequency"),("stagger","Stagger"),("due_date","Due Date")))
 	message = f"<strong>{escape_html(result['status'])}</strong><br>{metadata}<br>AED | ERP-generated preparation report; not submitted to the FTA."
 	if result["warnings"]:
 		message += "<br>" + "<br>".join(escape_html(w) for w in result["warnings"])

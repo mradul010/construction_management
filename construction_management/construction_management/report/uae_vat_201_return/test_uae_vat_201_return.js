@@ -74,6 +74,40 @@ test("VAT period options do not silently select Profit Margin Scheme", () => {
 	assert.equal(report.filters.find((f) => f.fieldname === "show_zero").default, 1);
 });
 
+test("initial load selects the configured first return without refresh loops", async () => {
+	const { report, frappe } = setup();
+	const values = { company: "TEST", period_type: "Custom Date Range" };
+	frappe.call = async () => ({ message: {
+		from_date: "2026-05-01", to_date: "2026-07-31", quarter_number: 2,
+		filing_frequency: "Quarterly", trn: "105452509000003", stagger: "February-January",
+		profit_margin_scheme: "No",
+	} });
+	const instance = {
+		_no_refresh: true,
+		page: { add_inner_button() {} },
+		get_filter_values: () => ({ ...values }),
+		get_filter_value: key => values[key],
+		get_filter: key => ({ set_value: async value => {
+			assert.equal(instance._no_refresh, true);
+			values[key] = value;
+		} }),
+	};
+	await report.onload(instance);
+	assert.equal(values.from_date, "2026-05-01");
+	assert.equal(values.to_date, "2026-07-31");
+	assert.equal(values.period_type, "Quarterly");
+	assert.equal(values.year, 2026);
+	assert.equal(values.quarter, "2");
+	assert.equal(values.profit_margin_scheme, "No");
+	assert.equal(instance._no_refresh, true);
+	values.from_date = "2026-08-01";
+	values.to_date = "2026-10-31";
+	values.quarter = "3";
+	await report.onload(instance);
+	assert.equal(values.from_date, "2026-08-01");
+	assert.equal(values.quarter, "3");
+});
+
 test("capture handler blocks cell selection and calls permission-checked drilldown", async () => {
 	const { report, calls } = setup();
 	const handlers = {};

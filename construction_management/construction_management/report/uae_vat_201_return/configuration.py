@@ -10,6 +10,9 @@ def setup():
 	fields = [
 		("custom_vat201_periods", "Table", "VAT 201 Filing Periods", "VAT 201 Filing Period"),
 		("custom_vat201_classifications", "Table", "VAT 201 Classifications", "VAT 201 Classification"),
+		("custom_vat201_legal_name_english", "Data", "Registered Legal Name in English", None),
+		("custom_vat201_registration_date", "Date", "VAT Registration Date", None),
+		("custom_vat201_registered_emirate", "Select", "Registered Emirate", "\nAbu Dhabi\nDubai\nSharjah\nAjman\nUmm Al Quwain\nRas Al Khaimah\nFujairah"),
 		("custom_vat201_legal_name_arabic", "Data", "Legal Name in Arabic", None),
 		("custom_vat201_signatory_english", "Data", "Signatory Name in English", None),
 		("custom_vat201_signatory_arabic", "Data", "Signatory Name in Arabic", None),
@@ -44,6 +47,8 @@ def validate_settings(doc, method=None):
 	for period in doc.get("custom_vat201_periods", []):
 		if not period.from_date or not period.to_date or getdate(period.from_date) > getdate(period.to_date):
 			frappe.throw(_("Each VAT filing period requires valid start and end dates"))
+		if doc.get("custom_vat201_registration_date") and getdate(period.from_date) < getdate(doc.custom_vat201_registration_date):
+			frappe.throw(_("VAT filing periods cannot start before the VAT registration date"))
 		if period.frequency=="Quarterly" and not 1 <= cint(period.quarter_number) <= 4:
 			frappe.throw(_("Quarterly filing periods require an explicitly configured VAT Quarter Number from 1 to 4"))
 		for other in doc.get("custom_vat201_periods", []):
