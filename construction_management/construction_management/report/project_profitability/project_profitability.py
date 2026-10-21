@@ -174,7 +174,7 @@ def execute(filters=None):
 	currency = get_company_currency(filters.company)
 	mapped = [e for e in entries if e.project]
 	unmapped = [e for e in entries if not e.project]
-	columns = [{"fieldname": "project", "label": _("Project"), "fieldtype": "Link", "options": "Project", "width": 140},
+	columns = [{"fieldname": "project", "label": _("Project"), "fieldtype": "Link", "options": "Project", "width": 140, "hidden": 1},
 		{"fieldname": "project_name", "label": _("Project Name"), "fieldtype": "Data", "width": 230}]
 	if filters.view_type != "Summary":
 		columns += [{"fieldname": "label", "label": _("Account / Cost Center"), "fieldtype": "Data", "width": 320}]

@@ -29,22 +29,14 @@ def get_general_ledger_filters(filters, cost_center):
 	if center.company != filters.company:
 		frappe.throw(_("Cost Center does not belong to the selected company"))
 
-	account_filters = {"company": filters.company, "is_group": 0}
-	if filters.get("account"):
-		account_filters["name"] = ["in", get_accounts_with_children(filters.account)]
-	if filters.get("account_type"):
-		field = "root_type" if filters.account_type in ROOT_TYPES else "account_type"
-		account_filters[field] = filters.account_type
-	accounts = frappe.get_list("Account", filters=account_filters, pluck="name", limit_page_length=0)
-	if not accounts:
-		frappe.throw(_("No accessible accounts match the report filters"))
-
 	ledger_filters = {
 		"company": filters.company,
 		"from_date": filters.from_date,
 		"to_date": filters.to_date,
 		"cost_center": [cost_center],
-		"account": accounts,
+		# QueryReport parses this token to an empty MultiSelectList before refreshing.
+		# A blank string is ignored by that control and would retain stale accounts.
+		"account": [filters.account] if filters.get("account") else "[]",
 		"project": normalize_filter_values(filters.get("project")),
 		"finance_book": filters.get("finance_book") or "",
 		"include_default_book_entries": cint(filters.include_default_book_entries),
@@ -67,6 +59,8 @@ def get_general_ledger_filters(filters, cost_center):
 			ledger_filters[dimension.fieldname] = normalize_filter_values(filters.get(dimension.fieldname))
 
 	warnings = []
+	if filters.get("account_type"):
+		warnings.append(_("General Ledger does not apply the Account Type filter ({0}). Its totals may differ from Cost Spent.").format(filters.account_type))
 	if center.is_group:
 		warnings.append(_("General Ledger includes child Cost Centers. This row shows only entries posted directly to the selected Cost Center."))
 	if filters.get("voucher_type"):

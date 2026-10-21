@@ -14,7 +14,7 @@ function setup() {
 		query_report: { get_filter_values: () => ({ project: "PROJ-0016" }) },
 		call: async (args) => {
 			calls.push(args);
-			return { message: { filters: { cost_center: [args.args.cost_center], project: ["PROJ-0016"] }, warnings: [] } };
+			return { message: { filters: { cost_center: [args.args.cost_center], project: ["PROJ-0016"], account: "[]" }, warnings: [] } };
 		},
 		set_route: (...route) => calls.push(route),
 	};
@@ -38,7 +38,7 @@ test("formatter preserves currency markup, numeric data and zero; skips total ro
 });
 
 test("click routes all requested centers with filters and stops cell handling", async () => {
-	for (const center of ["Concrete - QBC", "Scaffolding & Forms - QBC", "Tools & Consumables - QBC"]) {
+	for (const center of ["Concrete - QBC", "Steel - QBC", "Scaffolding & Forms - QBC", "Tools & Consumables - QBC"]) {
 		const { report, frappe, calls } = setup();
 		let handler;
 		let removed = 0;
@@ -67,5 +67,39 @@ test("click routes all requested centers with filters and stops cell handling", 
 		assert.equal(calls[0].args.filters.project, "PROJ-0016");
 		assert.deepEqual(calls[1], ["query-report", "General Ledger"]);
 		assert.equal(frappe.route_options.cost_center[0], center);
+		assert.equal(frappe.route_options.account, "[]");
 	}
+});
+
+test("installed Frappe router clears stale GL accounts before consecutive refreshes", async () => {
+	const path = require("node:path");
+	const bench = path.resolve(__dirname, "../../../../../..");
+	const frappe = {
+		ui: { form: { ControlData: class {} } },
+		views: { BaseList: class {} },
+		query_reports: {}, standard_pages: {}, provide() {},
+		run_serially: async (steps) => { for (const step of steps) await step(); },
+	};
+	const context = vm.createContext({ frappe, window: {}, DataTable: class {}, CSS: { escape: s => s } });
+	vm.runInContext(fs.readFileSync(`${bench}/apps/frappe/frappe/public/js/frappe/form/controls/multiselect_list.js`, "utf8"), context);
+	vm.runInContext(fs.readFileSync(`${bench}/apps/frappe/frappe/public/js/frappe/views/reports/query_report.js`, "utf8").replace('import DataTable from "frappe-datatable";', ""), context);
+	const account = Object.create(frappe.ui.form.ControlMultiSelectList.prototype);
+	Object.assign(account, {
+		df: { fieldname: "account" }, values: ["Previously Selected - QBC"],
+		$list_wrapper: { find: () => ({ toggleClass() {} }) },
+		parse_validate_and_set_in_model() {}, update_status() {}, update_selected_values() {},
+	});
+	const ledger = Object.create(frappe.views.QueryReport.prototype);
+	ledger.filters = [account];
+	// Passing an empty string does not clear this v16 control.
+	await ledger.set_route_filters({ account: "" });
+	assert.equal(account.values.length, 1);
+	for (const center of ["Concrete - QBC", "Steel - QBC", "Tools & Consumables - QBC", "Scaffolding & Forms - QBC"]) {
+		await ledger.set_route_filters({ account: "[]", cost_center: [center] });
+		assert.equal(account.values.length, 0);
+	}
+	await ledger.set_route_filters({ account: ["Explicit Account - QBC"] });
+	assert.equal(account.values[0], "Explicit Account - QBC");
+	await ledger.set_route_filters({ account: "[]" });
+	assert.equal(account.values.length, 0);
 });
