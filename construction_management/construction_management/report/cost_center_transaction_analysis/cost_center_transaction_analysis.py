@@ -18,6 +18,62 @@ ACCOUNTING_SUMMARY_VIEW = "Accounting Summary"
 DETAIL_VIEW = "Transaction Details"
 
 
+@frappe.whitelist()
+def get_general_ledger_filters(filters, cost_center):
+	"""Translate the existing report scope to standard General Ledger filters."""
+	frappe.has_permission("GL Entry", "read", throw=True)
+	filters = frappe._dict(frappe.parse_json(filters))
+	validate_filters(filters)
+	center = frappe.get_doc("Cost Center", cost_center)
+	center.check_permission("read")
+	if center.company != filters.company:
+		frappe.throw(_("Cost Center does not belong to the selected company"))
+
+	account_filters = {"company": filters.company, "is_group": 0}
+	if filters.get("account"):
+		account_filters["name"] = ["in", get_accounts_with_children(filters.account)]
+	if filters.get("account_type"):
+		field = "root_type" if filters.account_type in ROOT_TYPES else "account_type"
+		account_filters[field] = filters.account_type
+	accounts = frappe.get_list("Account", filters=account_filters, pluck="name", limit_page_length=0)
+	if not accounts:
+		frappe.throw(_("No accessible accounts match the report filters"))
+
+	ledger_filters = {
+		"company": filters.company,
+		"from_date": filters.from_date,
+		"to_date": filters.to_date,
+		"cost_center": [cost_center],
+		"account": accounts,
+		"project": normalize_filter_values(filters.get("project")),
+		"finance_book": filters.get("finance_book") or "",
+		"include_default_book_entries": cint(filters.include_default_book_entries),
+		"show_cancelled_entries": cint(filters.show_cancelled_entries),
+		"voucher_no": filters.get("voucher_no") or "",
+		"categorize_by": "",
+		"disable_opening_balance_calculation": 1,
+		"show_opening_entries": 1,
+		"include_dimensions": 1,
+		"presentation_currency": get_company_currency(filters.company),
+		"party_type": "",
+		"party": [],
+		"against_voucher_no": "",
+		"ignore_err": 0,
+		"ignore_cr_dr_notes": 0,
+		"show_net_values_in_party_account": 0,
+	}
+	for dimension in get_accounting_dimensions(as_list=False):
+		if dimension.document_type != "Finance Book":
+			ledger_filters[dimension.fieldname] = normalize_filter_values(filters.get(dimension.fieldname))
+
+	warnings = []
+	if center.is_group:
+		warnings.append(_("General Ledger includes child Cost Centers. This row shows only entries posted directly to the selected Cost Center."))
+	if filters.get("voucher_type"):
+		warnings.append(_("General Ledger has no Voucher Type filter; entries from other voucher types may also appear."))
+	return {"filters": ledger_filters, "warnings": warnings}
+
+
 def execute(filters=None):
 	filters = frappe._dict(filters or {})
 	validate_filters(filters)

@@ -1,0 +1,88 @@
+{
+  "doctype": "DocType",
+  "name": "VAT 201 Filing Period",
+  "module": "Construction Management",
+  "istable": 1,
+  "editable_grid": 1,
+  "engine": "InnoDB",
+  "field_order": [
+    "label",
+    "from_date",
+    "to_date",
+    "due_date",
+    "stagger",
+    "tax_year_end",
+    "frequency",
+    "quarter_number",
+    "status",
+    "profit_margin_scheme",
+    "submission_date"
+  ],
+  "fields": [
+    {
+      "fieldname": "label",
+      "fieldtype": "Data",
+      "label": "Period Label",
+      "in_list_view": 1
+    },
+    {
+      "fieldname": "from_date",
+      "fieldtype": "Date",
+      "label": "Period Start",
+      "in_list_view": 1
+    },
+    {
+      "fieldname": "to_date",
+      "fieldtype": "Date",
+      "label": "Period End",
+      "in_list_view": 1
+    },
+    {
+      "fieldname": "due_date",
+      "fieldtype": "Date",
+      "label": "Due Date",
+      "in_list_view": 1
+    },
+    {
+      "fieldname": "stagger",
+      "fieldtype": "Data",
+      "label": "VAT Stagger",
+      "in_list_view": 1
+    },
+    {
+      "fieldname": "tax_year_end",
+      "fieldtype": "Date",
+      "label": "Tax Year End"
+    },
+    {
+      "fieldname": "frequency",
+      "fieldtype": "Select",
+      "label": "Filing Frequency",
+      "options": "Monthly\nQuarterly"
+    },
+    {
+      "fieldname": "quarter_number",
+      "fieldtype": "Int",
+      "label": "VAT Quarter Number",
+      "depends_on": "eval:doc.frequency == 'Quarterly'"
+    },
+    {
+      "fieldname": "status",
+      "fieldtype": "Select",
+      "label": "Status",
+      "options": "Open\nUnder Review\nFinalized"
+    },
+    {
+      "fieldname": "profit_margin_scheme",
+      "fieldtype": "Select",
+      "label": "Profit Margin Scheme",
+      "options": "\nYes\nNo"
+    },
+    {
+      "fieldname": "submission_date",
+      "fieldtype": "Date",
+      "label": "Date of Submission"
+    }
+  ],
+  "permissions": []
+}

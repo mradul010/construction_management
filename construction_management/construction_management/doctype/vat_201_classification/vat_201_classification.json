@@ -1,0 +1,128 @@
+{
+  "doctype": "DocType",
+  "name": "VAT 201 Classification",
+  "module": "Construction Management",
+  "istable": 1,
+  "editable_grid": 1,
+  "engine": "InnoDB",
+  "field_order": [
+    "voucher_type",
+    "voucher_no",
+    "source_row",
+    "box",
+    "tax_date",
+    "recovery_confirmed",
+    "recovery_percent",
+    "override_base",
+    "taxable_base_aed",
+    "aed_exchange_rate",
+    "is_adjustment",
+    "adjustment_type",
+    "reason",
+    "supporting_reference",
+    "approved",
+    "approved_by",
+    "approval_time"
+  ],
+  "fields": [
+    {
+      "fieldname": "voucher_type",
+      "fieldtype": "Link",
+      "label": "Voucher Type",
+      "options": "DocType",
+      "in_list_view": 1
+    },
+    {
+      "fieldname": "voucher_no",
+      "fieldtype": "Dynamic Link",
+      "label": "Voucher Number",
+      "options": "voucher_type",
+      "in_list_view": 1
+    },
+    {
+      "fieldname": "source_row",
+      "fieldtype": "Data",
+      "label": "Tax / Item / GL Entry Row ID",
+      "in_list_view": 1
+    },
+    {
+      "fieldname": "box",
+      "fieldtype": "Select",
+      "label": "VAT 201 Box",
+      "options": "1a\n1b\n1c\n1d\n1e\n1f\n1g\n2\n3\n4\n5\n6\n7\n9\n10\nOutside VAT",
+      "in_list_view": 1
+    },
+    {
+      "fieldname": "tax_date",
+      "fieldtype": "Date",
+      "label": "Reviewed Tax Date",
+      "in_list_view": 1
+    },
+    {
+      "fieldname": "recovery_confirmed",
+      "fieldtype": "Check",
+      "label": "Recoverability Reviewed"
+    },
+    {
+      "fieldname": "recovery_percent",
+      "fieldtype": "Percent",
+      "label": "Recoverable VAT %"
+    },
+    {
+      "fieldname": "override_base",
+      "fieldtype": "Check",
+      "label": "Use Reviewed Taxable Base"
+    },
+    {
+      "fieldname": "taxable_base_aed",
+      "fieldtype": "Currency",
+      "label": "Reviewed Taxable Base (AED)",
+      "options": "AED"
+    },
+    {
+      "fieldname": "aed_exchange_rate",
+      "fieldtype": "Float",
+      "label": "AED per Company Base Currency"
+    },
+    {
+      "fieldname": "is_adjustment",
+      "fieldtype": "Check",
+      "label": "Tax Adjustment"
+    },
+    {
+      "fieldname": "adjustment_type",
+      "fieldtype": "Select",
+      "label": "Adjustment Type",
+      "options": "\nVAT Correction\nBad Debt Relief\nCommercial Property Tax Paid by Buyer\nAnnual Input Tax Apportionment\nCapital Assets Scheme\nImport Adjustment\nTourist Refund\nOther Reviewed Tax Event"
+    },
+    {
+      "fieldname": "reason",
+      "fieldtype": "Small Text",
+      "label": "Reason / Place-of-Supply Basis"
+    },
+    {
+      "fieldname": "supporting_reference",
+      "fieldtype": "Data",
+      "label": "Supporting Evidence / Customs Reference"
+    },
+    {
+      "fieldname": "approved",
+      "fieldtype": "Check",
+      "label": "Approved"
+    },
+    {
+      "fieldname": "approved_by",
+      "fieldtype": "Link",
+      "label": "Approved By",
+      "options": "User",
+      "read_only": 1
+    },
+    {
+      "fieldname": "approval_time",
+      "fieldtype": "Datetime",
+      "label": "Approval Time",
+      "read_only": 1
+    }
+  ],
+  "permissions": []
+}

@@ -221,6 +221,9 @@ has_permission = {
 # Hook on document methods and events
 
 doc_events = {
+	"UAE VAT Settings": {
+		"validate": "construction_management.construction_management.report.uae_vat_201_return.configuration.validate_settings",
+	},
 	"Sales Invoice": {
 		"validate": [
 			"construction_management.construction_management.utils.accounting.apply_construction_accounts_to_sales_invoice",

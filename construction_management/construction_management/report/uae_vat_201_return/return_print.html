@@ -1,0 +1,44 @@
+{% set h = result.header %}
+{% macro text(value) %}{{ (value or 'Not Configured')|e }}{% endmacro %}
+{% macro table(keys) %}
+<table><thead><tr><th>Box</th><th>Description</th><th>Amount (AED)</th><th>VAT Amount (AED)</th><th>Adjustment (AED)</th></tr></thead><tbody>
+{% for b in result.boxes if b.box in keys %}
+<tr><td>{{ b.box }}</td><td>{{ b.description }}</td>{% for field in ['amount','vat_amount','adjustment'] %}<td class="num">{{ frappe.utils.fmt_money(b[field], precision=precision) }}</td>{% endfor %}</tr>
+{% endfor %}</tbody></table>
+{% endmacro %}
+<html><head><meta charset="utf-8"><style>
+body {font-family: Arial, sans-serif; font-size: 10pt; color: #222;}
+h1 {font-size: 19pt; margin: 0 0 8px;} h2 {font-size: 12pt; background: #e8ebed; padding: 8px; margin: 14px 0 0;}
+table {width: 100%; border-collapse: collapse; table-layout: fixed; margin-bottom: 12px;}
+td,th {padding: 7px; border: 1px solid #999; word-wrap: break-word; vertical-align: top;} th {background: #f1f3f4; text-align: left;}
+th:nth-child(1) {width: 7%;} th:nth-child(2) {width: 39%;} .num {text-align: right; white-space: nowrap; font-size: 9pt;}
+.page {page-break-after: always;} .page:last-child {page-break-after: auto;}
+.meta td {width: 50%;} .status {border: 2px solid #777; padding: 8px; margin: 8px 0;} .note {font-size: 9pt; color: #444;}
+</style></head><body>
+<div class="page">
+<h1>UAE VAT 201 RETURN</h1><div class="status">{{ result.status }} — ERP-generated preparation report. Not submitted to the FTA.</div>
+<h2>Taxpayer Information</h2>
+<table class="meta"><tr><td>TRN<br>{{ text(h.trn) }}</td><td>VAT Return Period<br>{{ h.from_date }} – {{ h.to_date }}</td></tr>
+<tr><td>Legal Name of Entity (English)<br>{{ text(h.legal_name_english) }}</td><td>VAT Stagger<br>{{ text(h.stagger) }}</td></tr>
+<tr><td>Legal Name of Entity (Arabic)<br>{{ text(h.legal_name_arabic) }}</td><td>VAT Return Due Date<br>{{ text(h.due_date) }}</td></tr>
+<tr><td>Address<br>{{ text(h.address) }}</td><td>Tax Year End<br>{{ text(h.tax_year_end) }}</td></tr></table>
+<p>{{ h.period_kind }} | Reporting Currency: AED</p>
+<h2>VAT on Sales and All Other outputs</h2>{{ table(['1a','1b','1c','1d','1e']) }}
+<p class="note">Unclassified transactions are excluded from the boxes and listed in the review section of the report and audit export. Needs Review figures are provisional.</p>
+</div>
+<div class="page"><h1>UAE VAT 201 RETURN</h1><p>{{ h.company }} | {{ h.from_date }} – {{ h.to_date }} | {{ result.status }}</p>
+<h2>VAT on Sales and All Other outputs</h2>{{ table(['1f','1g','2','3','4','5','6','7','8']) }}
+<h2>VAT on Expenses and All Other Inputs</h2>{{ table(['9','10','11']) }}
+<p class="note">ERP-generated preparation report. Not submitted to the FTA.</p></div>
+<div class="page"><h1>UAE VAT 201 RETURN</h1><p>{{ h.company }} | {{ h.from_date }} – {{ h.to_date }} | {{ result.status }}</p>
+<h2>Net VAT Due</h2>
+<table><thead><tr><th>Box</th><th>Description</th><th>Amount (AED)</th></tr></thead><tbody>{% for b in result.boxes if b.box in ['12','13','14'] %}<tr><td>{{ b.box }}</td><td>{{ b.description }}</td><td class="num">{{ frappe.utils.fmt_money(b.amount,precision=precision) }}</td></tr>{% endfor %}</tbody></table>
+<h2>Profit Margin Scheme</h2><p>Did you apply the profit margin scheme in respect of any supplies made during the tax period?<br>{{ text(h.profit_margin_scheme) }}</p>
+<h2>Authorised Signatory</h2><table class="meta">
+<tr><td>Name in English<br>{{ text(h.signatory_english) }}</td><td>Name in Arabic<br>{{ text(h.signatory_arabic) }}</td></tr>
+<tr><td>Mobile Country Code<br>{{ text(h.mobile_code) }}</td><td>Mobile Number<br>{{ text(h.mobile) }}</td></tr>
+<tr><td>Date of Submission (as recorded)<br>{{ text(h.submission_date) }}</td><td>Email Address<br>{{ text(h.email) }}</td></tr></table>
+<h2>Tax Reconciliation</h2><table><thead><tr><td>Description</td><td>Report (AED)</td><td>Ledger (AED)</td><td>Difference (AED)</td></tr></thead><tbody>{% for r in result.reconciliation %}<tr><td>{{ r.description }}</td>{% for field in ['report_amount','ledger_amount','difference'] %}<td class="num">{{ frappe.utils.fmt_money(r[field],precision=precision) if r[field] is not none else 'Not Available' }}</td>{% endfor %}</tr>{% endfor %}</tbody></table>
+<p class="note">{{ result.reviews|length }} transactions require classification review. {{ result.warnings|join(' | ') }}</p>
+<p class="note">Prepared {{ frappe.utils.now_datetime() }}. This document is not FTA-certified and does not confirm submission.</p>
+</div></body></html>

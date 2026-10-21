@@ -1,4 +1,46 @@
 frappe.query_reports["Cost Center Transaction Analysis"] = {
+	formatter(value, row, column, data, default_formatter) {
+		const formatted = default_formatter(value, row, column, data);
+		if (column.fieldname !== "cost_spent" || !data?.cost_center || value == null) {
+			return formatted;
+		}
+		return `<a href="/app/query-report/General%20Ledger" class="cost-spent-ledger"
+			data-cost-center="${frappe.utils.escape_html(data.cost_center)}"
+			title="${frappe.utils.escape_html(__("Open General Ledger"))}">${formatted}</a>`;
+	},
+
+	after_datatable_render(datatable) {
+		const wrapper = datatable.wrapper;
+		if (wrapper.cost_spent_click_handler) {
+			for (const type of ["click", "mousedown", "dblclick"]) {
+				wrapper.removeEventListener(type, wrapper.cost_spent_click_handler, true);
+			}
+		}
+		wrapper.cost_spent_click_handler = async (event) => {
+			const link = event.target.closest(".cost-spent-ledger");
+			if (!link || !wrapper.contains(link)) return;
+			event.preventDefault();
+			event.stopImmediatePropagation();
+			if (event.type !== "click") return;
+			const { message } = await frappe.call({
+				method: "construction_management.construction_management.report.cost_center_transaction_analysis.cost_center_transaction_analysis.get_general_ledger_filters",
+				args: {
+					filters: frappe.query_report.get_filter_values(),
+					cost_center: link.dataset.costCenter,
+				},
+			});
+			if (message.warnings.length) {
+				frappe.msgprint(message.warnings.map(frappe.utils.escape_html).join("<br>"));
+			}
+			frappe.route_options = message.filters;
+			frappe.set_route("query-report", "General Ledger");
+		};
+		// Capture before DataTable handles mousedown as a cell selection.
+		for (const type of ["click", "mousedown", "dblclick"]) {
+			wrapper.addEventListener(type, wrapper.cost_spent_click_handler, true);
+		}
+	},
+
 	filters: [
 		{
 			fieldname: "company",
