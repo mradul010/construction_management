@@ -19,6 +19,42 @@ DETAIL_VIEW = "Transaction Details"
 
 
 @frappe.whitelist()
+def get_expense_detail_filters(filters, cost_center, gl_entry=None):
+	from frappe.desk.query_report import get_report_doc
+	get_report_doc("Cost Center Transaction Analysis")
+	get_report_doc("Cost Center Expense Details")
+	frappe.has_permission("GL Entry", "read", throw=True)
+	filters = frappe._dict(frappe.parse_json(filters))
+	validate_filters(filters)
+	center = frappe.get_doc("Cost Center", cost_center)
+	center.check_permission("read")
+	if center.company != filters.company:
+		frappe.throw(_("Cost Center does not belong to the selected company"))
+	if filters.cost_center and cost_center not in get_filtered_cost_centers(filters):
+		frappe.throw(_("Cost Center is outside the selected report scope"))
+
+	detail_filters = {key: filters.get(key) or "" for key in (
+		"company", "from_date", "to_date", "project", "account", "account_type",
+		"finance_book", "voucher_type", "voucher_no",
+	)}
+	detail_filters.update(
+		cost_center=cost_center,
+		account_type=filters.get("account_type") or "All",
+		# Summary rows group each center's own postings, not a subtree aggregate.
+		include_child_cost_centers=0,
+		include_default_book_entries=cint(filters.include_default_book_entries),
+		show_cancelled_entries=cint(filters.show_cancelled_entries),
+		gl_entry=gl_entry or "",
+		parent_filters=frappe.as_json(filters),
+	)
+	for dimension in get_accounting_dimensions(as_list=False):
+		if dimension.document_type != "Finance Book":
+			# Empty strings do not clear a reused MultiSelectList control.
+			detail_filters[dimension.fieldname] = normalize_filter_values(filters.get(dimension.fieldname)) or "[]"
+	return {"filters": detail_filters}
+
+
+@frappe.whitelist()
 def get_general_ledger_filters(filters, cost_center):
 	"""Translate the existing report scope to standard General Ledger filters."""
 	frappe.has_permission("GL Entry", "read", throw=True)
@@ -306,12 +342,18 @@ def get_summary_data(filters):
 
 def get_detail_data(filters):
 	conditions, values = get_conditions(filters)
+	if filters.get("gl_entry"):
+		conditions.append("`tabGL Entry`.`name` = %(gl_entry)s")
+		values["gl_entry"] = filters.gl_entry
 	currency = get_company_currency(filters.company)
 	project_field = "`tabGL Entry`.`project` AS project," if frappe.get_meta("GL Entry").has_field("project") else ""
 
 	rows = frappe.db.sql(
 		f"""
 		SELECT
+			`tabGL Entry`.`name` AS gl_entry,
+			`tabGL Entry`.`docstatus` AS gl_docstatus,
+			`tabGL Entry`.`is_cancelled`,
 			`tabGL Entry`.`posting_date`,
 			`tabGL Entry`.`cost_center`,
 			`tabGL Entry`.`account`,

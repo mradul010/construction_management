@@ -14,7 +14,7 @@ function setup() {
 		query_report: { get_filter_values: () => ({ project: "PROJ-0016" }) },
 		call: async (args) => {
 			calls.push(args);
-			return { message: { filters: { cost_center: [args.args.cost_center], project: ["PROJ-0016"], account: "[]" }, warnings: [] } };
+			return { message: { filters: { cost_center: args.args.cost_center, project: "PROJ-0016", account: "", gl_entry: args.args.gl_entry } } };
 		},
 		set_route: (...route) => calls.push(route),
 	};
@@ -65,10 +65,34 @@ test("click routes all requested centers with filters and stops cell handling", 
 		assert.ok(prevented && stopped);
 		assert.equal(calls[0].args.cost_center, center);
 		assert.equal(calls[0].args.filters.project, "PROJ-0016");
-		assert.deepEqual(calls[1], ["query-report", "General Ledger"]);
-		assert.equal(frappe.route_options.cost_center[0], center);
-		assert.equal(frappe.route_options.account, "[]");
+		assert.ok(calls[0].method.endsWith(".get_expense_detail_filters"));
+		assert.equal(calls[0].args.gl_entry, "");
+		assert.deepEqual(calls[1], ["query-report", "Cost Center Expense Details"]);
+		assert.equal(frappe.route_options.cost_center, center);
+		assert.equal(frappe.route_options.account, "");
+		event.target.closest = () => ({ dataset: { costCenter: center, glEntry: "GLE-1" } });
+		await handler(event);
+		assert.equal(frappe.route_options.gl_entry, "GLE-1");
 	}
+});
+
+test("expense details restores the original parent filters and uses standard numeric export", () => {
+	const { frappe } = setup();
+	vm.runInNewContext(fs.readFileSync(`${__dirname}/../cost_center_expense_details/cost_center_expense_details.js`, "utf8"), {
+		frappe, __: s => s, erpnext: { utils: { add_dimensions() {} } },
+	});
+	const report = frappe.query_reports["Cost Center Expense Details"];
+	let back;
+	report.onload({
+		page: { add_inner_button: (label, callback) => back = callback },
+		get_filter_value: () => JSON.stringify({ company: "QBC", cost_center: "Group - QBC", include_child_cost_centers: 1, view_mode: "Transaction Details" }),
+	});
+	back();
+	assert.equal(frappe.route_options.cost_center, "Group - QBC");
+	assert.equal(frappe.route_options.include_child_cost_centers, 1);
+	assert.equal(frappe.route_options.view_mode, "Transaction Details");
+	assert.equal(report.filters.find(f => f.fieldname === "account").fieldtype, "Link");
+	assert.equal(report.formatter(10, {}, { fieldname: "net_cost" }, {}, () => "AED 10.00"), "AED 10.00");
 });
 
 test("installed Frappe router clears stale GL accounts before consecutive refreshes", async () => {
