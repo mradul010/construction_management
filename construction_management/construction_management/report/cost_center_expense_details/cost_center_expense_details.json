@@ -1,0 +1,19 @@
+{
+ "doctype": "Report",
+ "name": "Cost Center Expense Details",
+ "report_name": "Cost Center Expense Details",
+ "module": "Construction Management",
+ "ref_doctype": "GL Entry",
+ "report_type": "Script Report",
+ "is_standard": "Yes",
+ "disabled": 0,
+ "prepared_report": 0,
+ "add_total_row": 1,
+ "roles": [
+  {"role": "System Manager"},
+  {"role": "Accounts Manager"},
+  {"role": "Accounts User"},
+  {"role": "Construction Manager"},
+  {"role": "Projects Manager"}
+ ]
+}

@@ -4,9 +4,10 @@ frappe.query_reports["Cost Center Transaction Analysis"] = {
 		if (column.fieldname !== "cost_spent" || !data?.cost_center || value == null) {
 			return formatted;
 		}
-		return `<a href="/app/query-report/General%20Ledger" class="cost-spent-ledger"
+		return `<a href="/app/query-report/Cost%20Center%20Expense%20Details" class="cost-spent-ledger"
 			data-cost-center="${frappe.utils.escape_html(data.cost_center)}"
-			title="${frappe.utils.escape_html(__("Open General Ledger"))}">${formatted}</a>`;
+			data-gl-entry="${frappe.utils.escape_html(data.gl_entry || "")}"
+			title="${frappe.utils.escape_html(__("Open Cost Center Expense Details"))}">${formatted}</a>`;
 	},
 
 	after_datatable_render(datatable) {
@@ -23,17 +24,15 @@ frappe.query_reports["Cost Center Transaction Analysis"] = {
 			event.stopImmediatePropagation();
 			if (event.type !== "click") return;
 			const { message } = await frappe.call({
-				method: "construction_management.construction_management.report.cost_center_transaction_analysis.cost_center_transaction_analysis.get_general_ledger_filters",
+				method: "construction_management.construction_management.report.cost_center_transaction_analysis.cost_center_transaction_analysis.get_expense_detail_filters",
 				args: {
 					filters: frappe.query_report.get_filter_values(),
 					cost_center: link.dataset.costCenter,
+					gl_entry: link.dataset.glEntry || "",
 				},
 			});
-			if (message.warnings.length) {
-				frappe.msgprint(message.warnings.map(frappe.utils.escape_html).join("<br>"));
-			}
 			frappe.route_options = message.filters;
-			frappe.set_route("query-report", "General Ledger");
+			frappe.set_route("query-report", "Cost Center Expense Details");
 		};
 		// Capture before DataTable handles mousedown as a cell selection.
 		for (const type of ["click", "mousedown", "dblclick"]) {
