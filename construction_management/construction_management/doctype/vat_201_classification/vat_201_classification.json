@@ -6,6 +6,13 @@
   "editable_grid": 1,
   "engine": "InnoDB",
   "field_order": [
+    "origin",
+    "review_status",
+    "system_reason",
+    "source_fingerprint",
+    "source_evidence",
+    "review_remarks",
+    "journal_treatment",
     "voucher_type",
     "voucher_no",
     "source_row",
@@ -25,6 +32,13 @@
     "approval_time"
   ],
   "fields": [
+    {"fieldname": "origin", "label": "Classification Origin", "fieldtype": "Select", "options": "Manual\nSystem Derived", "read_only": 1},
+    {"fieldname": "review_status", "label": "Review Status", "fieldtype": "Select", "options": "Pending Review\nApproved\nRejected\nNeeds Review", "read_only": 1, "in_list_view": 1},
+    {"fieldname": "system_reason", "label": "System Analysis", "fieldtype": "Small Text", "read_only": 1},
+    {"fieldname": "source_fingerprint", "label": "Source Fingerprint", "fieldtype": "Data", "read_only": 1},
+    {"fieldname": "source_evidence", "label": "Source Evidence", "fieldtype": "Code", "options": "JSON", "read_only": 1, "permlevel": 1},
+    {"fieldname": "review_remarks", "label": "Review Remarks", "fieldtype": "Small Text"},
+    {"fieldname": "journal_treatment", "label": "Journal / Payment Treatment", "fieldtype": "Select", "options": "\nUnresolved\nVAT settlement\nVAT payment\nVAT reclassification\nVAT correction\nTaxable adjustment\nReverse-charge adjustment"},
     {
       "fieldname": "voucher_type",
       "fieldtype": "Link",
@@ -49,7 +63,7 @@
       "fieldname": "box",
       "fieldtype": "Select",
       "label": "VAT 201 Box",
-      "options": "1a\n1b\n1c\n1d\n1e\n1f\n1g\n2\n3\n4\n5\n6\n7\n9\n10\nOutside VAT",
+      "options": "\n1a\n1b\n1c\n1d\n1e\n1f\n1g\n2\n3\n4\n5\n6\n7\n9\n10\nOutside VAT",
       "in_list_view": 1
     },
     {

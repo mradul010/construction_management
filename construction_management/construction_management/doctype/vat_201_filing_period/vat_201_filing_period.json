@@ -10,15 +10,23 @@
     "from_date",
     "to_date",
     "due_date",
+    "due_date_basis",
     "stagger",
     "tax_year_end",
     "frequency",
     "quarter_number",
     "status",
     "profit_margin_scheme",
-    "submission_date"
+    "submission_date",
+    "filing_reference",
+    "return_approved_by",
+    "return_approved_on"
   ],
   "fields": [
+    {"fieldname": "filing_reference", "label": "FTA Filing Receipt Reference", "fieldtype": "Data"},
+    {"fieldname": "return_approved_by", "label": "Return Approved By", "fieldtype": "Link", "options": "User", "read_only": 1},
+    {"fieldname": "return_approved_on", "label": "Return Approved On", "fieldtype": "Datetime", "read_only": 1},
+    {"fieldname": "due_date_basis", "label": "Due Date Basis", "fieldtype": "Select", "options": "\nConfirmed\nProvisional (28 days)", "in_list_view": 1},
     {
       "fieldname": "label",
       "fieldtype": "Data",
@@ -70,7 +78,7 @@
       "fieldname": "status",
       "fieldtype": "Select",
       "label": "Status",
-      "options": "Open\nUnder Review\nFinalized"
+      "options": "Draft\nNeeds Review\nReady for Approval\nApproved\nFiled\nOpen\nUnder Review\nFinalized"
     },
     {
       "fieldname": "profit_margin_scheme",

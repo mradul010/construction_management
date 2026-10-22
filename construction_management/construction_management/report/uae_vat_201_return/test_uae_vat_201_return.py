@@ -137,6 +137,44 @@ class TestUAEVAT201Return(unittest.TestCase):
 		headers[("Purchase Invoice","PI-TEST")]["is_return"]=1
 		self.assertEqual(engine.ledger_sides(row,{"VAT":"Both"},headers,[]),[("Output",-50),("Input",-50)])
 
+	def test_shared_account_is_merged_without_duplicate_or_last_row_side(self):
+		rows = [frappe._dict(account="VAT", custom_vat201_side=side) for side in ("Output", "Input", "Input")]
+		self.assertEqual(engine.account_mappings(rows), {"VAT": "Both"})
+		for dt, debit, credit, expected in (
+			("Sales Invoice", 0, 50, ("Output", 50)),
+			("Sales Invoice", 50, 0, ("Output", -50)),
+			("Purchase Invoice", 50, 0, ("Input", 50)),
+			("Purchase Invoice", 0, 50, ("Input", -50)),
+			("Journal Entry", 0, 50, ("Unallocated", -50)),
+		):
+			row = frappe._dict(account="VAT", voucher_type=dt, debit=debit, credit=credit)
+			self.assertEqual(engine.ledger_sides(row, engine.account_mappings(rows), {}, []), [expected])
+
+	def test_first_return_default_and_cross_year_cycle(self):
+		settings = frappe._dict(custom_vat201_periods=[
+			frappe._dict(from_date="2026-05-01", to_date="2026-07-31", frequency="Quarterly", quarter_number=2),
+			frappe._dict(from_date="2026-11-01", to_date="2027-01-31", frequency="Quarterly", quarter_number=4),
+		])
+		f = engine.normalize({}, settings)
+		self.assertEqual((f.from_date, f.to_date), (date(2026,5,1), date(2026,7,31)))
+		f = engine.normalize(dict(period_type="Quarterly", year=2026, quarter=4), settings)
+		self.assertEqual((f.from_date, f.to_date), (date(2026,11,1), date(2027,1,31)))
+		f = engine.normalize(dict(from_date="2026-08-01", to_date="2026-10-31"), settings)
+		self.assertEqual((f.from_date, f.to_date), (date(2026,8,1), date(2026,10,31)))
+
+	def test_taxpayer_uses_registered_legal_name_not_company_rename(self):
+		settings = frappe._dict(custom_vat201_legal_name_english="Registered Name OPC",
+			custom_vat201_registration_date="2026-05-01", custom_vat201_registered_emirate="Ras Al Khaimah",
+			custom_vat201_periods=[frappe._dict(from_date="2026-05-01", to_date="2026-07-31", frequency="Quarterly", quarter_number=2, profit_margin_scheme="No", due_date="2026-08-31")])
+		with patch.object(frappe,"get_doc", return_value=frappe._dict(company_name="ERP Name", tax_id="105452509000003", default_currency="AED")), patch.object(frappe,"get_all", return_value=[]):
+			header = engine.taxpayer("ERP Name", settings, engine.normalize({},settings))
+		self.assertEqual(header["legal_name_english"], "Registered Name OPC")
+		self.assertEqual(header["registered_emirate"], "Ras Al Khaimah")
+		self.assertEqual(header["trn"], "105452509000003")
+		self.assertEqual(header["filing_frequency"], "Quarterly")
+		self.assertEqual(header["profit_margin_scheme"], "No")
+		self.assertEqual(header["due_date"], "2026-08-31")
+
 	def test_profit_margin_scheme_is_blocked(self):
 		with patch.object(engine,"access"),patch.object(engine,"settings_for",return_value=frappe._dict()),patch.object(engine,"taxpayer",return_value={"profit_margin_scheme":"Yes"}):
 			with self.assertRaises(frappe.ValidationError):
@@ -153,7 +191,7 @@ class TestUAEVAT201Return(unittest.TestCase):
 		result=dict(header={"company":"Test Company","trn":"TEST","from_date":"2026-06-01"},status="Needs Review",warnings=["=UNTRUSTED()"],boxes=list(engine.aggregate([self.event()]).values()),events=[self.event()],reviews=[],reconciliation=[dict(description="Output VAT",report_amount=50,ledger_amount=49,difference=1)])
 		book=load_workbook(io.BytesIO(workbook_bytes(result)))
 		values=[c.value for row in book.active for c in row]
-		for text in ("Test Company","VAT 201 Summary","Transaction Details","Tax Reconciliation","Classification Review"):
+		for text in ("Test Company","VAT 201 Summary","Transaction Details","Tax Reconciliation","Needs Attention"):
 			self.assertIn(text,values)
 		self.assertIn("'=UNTRUSTED()",values)
 		self.assertFalse(any(c.data_type=="f" for row in book.active for c in row))

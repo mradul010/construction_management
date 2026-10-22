@@ -46,6 +46,12 @@ def normalize(filters, settings):
 	f = frappe._dict(frappe.parse_json(filters) or {})
 	f.period_type = f.get("period_type") or "Custom Date Range"
 	f.year = cint(f.get("year") or getdate(today()).year)
+	if f.get("filing_period"):
+		period = next((p for p in settings.get("custom_vat201_periods", []) if f.filing_period == f"{p.from_date} to {p.to_date}"), None)
+		if not period:
+			frappe.throw(_("Select a configured VAT filing period for this Company"))
+		f.from_date, f.to_date = period.from_date, period.to_date
+		f.period_type = "Custom Date Range"
 	if f.period_type == "Monthly":
 		month = cint(f.get("month"))
 		if not 1 <= month <= 12:
@@ -60,6 +66,13 @@ def normalize(filters, settings):
 		f.from_date, f.to_date = periods[0].from_date, periods[0].to_date
 	elif f.period_type != "Custom Date Range":
 		frappe.throw(_("Invalid VAT Return Period"))
+	elif not f.from_date and not f.to_date:
+		# Open the confirmed first return, not an unrelated current-month selection.
+		periods = sorted(settings.get("custom_vat201_periods", []), key=lambda p: getdate(p.from_date))
+		if periods:
+			f.from_date, f.to_date = periods[0].from_date, periods[0].to_date
+		else:
+			f.from_date, f.to_date = getdate(today()).replace(day=1), getdate(today())
 	if not f.from_date or not f.to_date or getdate(f.from_date) > getdate(f.to_date):
 		frappe.throw(_("A valid From Date and To Date are required"))
 	f.from_date, f.to_date = getdate(f.from_date), getdate(f.to_date)
@@ -74,8 +87,12 @@ def taxpayer(company, settings, f):
 	address_names = frappe.get_all("Dynamic Link", filters={"parenttype": "Address", "link_doctype": "Company", "link_name": company}, pluck="parent")
 	addresses = frappe.get_list("Address", filters={"name": ["in", address_names]}, fields=["address_line1", "address_line2", "city", "state", "country", "pincode"], limit_page_length=1) if address_names else []
 	address = ", ".join(str(v) for v in addresses[0].values() if v) if addresses else None
-	return dict(company=company, legal_name_english=company_doc.company_name, legal_name_arabic=settings.get("custom_vat201_legal_name_arabic"),
+	return dict(company=company, legal_name_english=settings.get("custom_vat201_legal_name_english") or company_doc.company_name, legal_name_arabic=settings.get("custom_vat201_legal_name_arabic"),
 		trn=company_doc.tax_id, address=address, currency="AED", base_currency=company_doc.default_currency,
+		registration_date=str(settings.custom_vat201_registration_date) if settings.get("custom_vat201_registration_date") else None,
+		registered_emirate=settings.get("custom_vat201_registered_emirate"),
+		filing_frequency=period.get("frequency"), quarter_number=period.get("quarter_number"),
+		due_date_basis=period.get("due_date_basis"),
 		from_date=str(f.from_date), to_date=str(f.to_date), stagger=period.get("stagger"), due_date=str(period.due_date) if period.get("due_date") else None,
 		tax_year_end=str(period.tax_year_end) if period.get("tax_year_end") else None,
 		period_label=period.get("label"), period_status=period.get("status"), period_kind="Configured filing period" if period else "Analytical period",
@@ -101,17 +118,24 @@ def source_data(f, rules, candidate_accounts):
 		or_filters = [["posting_date", "between", [f.from_date, f.to_date]]]
 		if dated:
 			or_filters.append(["name", "in", dated])
-		docs = frappe.get_list(dt, filters={"company": f.company, "docstatus": 1}, or_filters=or_filters,
-			fields=fields_existing(dt, ["name","posting_date",party,"base_net_total","currency","conversion_rate","is_return","return_against","reverse_charge"]), limit_page_length=0)
+		doc_filters = {"company": f.company, "docstatus": 1}
+		docs = frappe.get_list(dt, filters=doc_filters, or_filters=or_filters,
+			fields=fields_existing(dt, ["name","posting_date",party,"base_net_total","currency","conversion_rate","is_return","return_against","reverse_charge", "vat_emirate", "project", "bill_no", "bill_date", "tax_id", "remarks", "ra_bill", "recoverable_standard_rated_expenses", "recoverable_reverse_charge", "custom_vat201_supply_emirate", "custom_vat201_supply_verified", "custom_vat201_evidence_reference", "custom_vat201_recovery_verified", "custom_vat201_recovery_percent"]), limit_page_length=0)
 		if not docs:
 			continue
-		posted = set(frappe.get_list("GL Entry", filters={"company":f.company,"voucher_type":dt,"voucher_no":["in",[d.name for d in docs]],"docstatus":1,"is_cancelled":0}, pluck="voucher_no",limit_page_length=0))
+		posted_gl = frappe.get_list("GL Entry", filters={"company":f.company,"voucher_type":dt,"voucher_no":["in",[d.name for d in docs]],"docstatus":1,"is_cancelled":0}, fields=["name","voucher_no","account","debit","credit"],limit_page_length=0)
+		posted = {g.voucher_no for g in posted_gl}
+		if dt != "POS Invoice" and any(d.name not in posted for d in docs):
+			warnings.append(_("Some submitted {0} documents have no accessible active GL; verify missing postings or source permissions").format(dt))
+		gl_by_account = defaultdict(list)
+		for g in posted_gl:
+			gl_by_account[(g.voucher_no,g.account)].append(g)
 		docs = [d for d in docs if d.name in posted]
 		if not docs:
 			continue
 		names = [d.name for d in docs]
 		taxes = frappe.get_all(tax_dt, filters={"parent": ["in", names], "parenttype": dt}, fields=fields_existing(tax_dt,["name","parent","idx","row_id","account_head","charge_type","rate","base_tax_amount_after_discount_amount","base_total","add_deduct_tax","category"]), order_by="idx asc", limit_page_length=0)
-		items = frappe.get_all(item_dt, filters={"parent": ["in", names], "parenttype":dt}, fields=fields_existing(item_dt,["name","parent","base_net_amount","income_account","expense_account","is_zero_rated","is_exempt"]), limit_page_length=0)
+		items = frappe.get_all(item_dt, filters={"parent": ["in", names], "parenttype":dt}, fields=fields_existing(item_dt,["name","parent","base_net_amount","income_account","expense_account","is_zero_rated","is_exempt","description","project","item_code"]), limit_page_length=0)
 		by_tax, by_item = defaultdict(list), defaultdict(list)
 		for row in taxes:
 			by_tax[row.parent].append(row)
@@ -119,7 +143,16 @@ def source_data(f, rules, candidate_accounts):
 			by_item[row.parent].append(row)
 		for doc in docs:
 			headers[(dt,doc.name)] = doc
+			evidence = dict(project=doc.get("project"), is_return=doc.get("is_return"), return_against=doc.get("return_against"),
+				source_emirate=doc.get("vat_emirate"), bill_no=doc.get("bill_no"), bill_date=doc.get("bill_date"),
+				source_tax_id=doc.get("tax_id"), remarks=doc.get("remarks"), ra_bill=doc.get("ra_bill"),
+				recovery_source_amount=doc.get("recoverable_standard_rated_expenses"),
+				verified_supply_emirate=doc.get("custom_vat201_supply_emirate"), supply_verified=doc.get("custom_vat201_supply_verified"),
+				verification_reference=doc.get("custom_vat201_evidence_reference"), recovery_verified=doc.get("custom_vat201_recovery_verified"),
+				verified_recovery_percent=doc.get("custom_vat201_recovery_percent"),
+				item_evidence=[dict(i) for i in by_item[doc.name]])
 			vat_taxes = [t for t in by_tax[doc.name] if t.account_head in candidate_accounts and number(t.base_tax_amount_after_discount_amount)]
+			evidence["vat_rows_count"] = len(vat_taxes)
 			for tax in vat_taxes:
 				base = None
 				if tax.charge_type == "On Net Total":
@@ -133,24 +166,36 @@ def source_data(f, rules, candidate_accounts):
 				vat = number(tax.base_tax_amount_after_discount_amount)
 				if tax.get("add_deduct_tax") == "Deduct":
 					vat = -vat
-				sources.append(dict(voucher_type=dt,voucher_no=doc.name,source_row=tax.name,posting_date=doc.posting_date,party=doc.get(party),
-					base=base,raw_vat=vat,tax_rate=tax.rate,tax_account=tax.account_head,account=None,reverse_charge=doc.get("reverse_charge"),currency=doc.currency))
+				gl_rows = gl_by_account[(doc.name,tax.account_head)]
+				gl_tax = sum((number(g.credit)-number(g.debit) if dt in ("Sales Invoice","POS Invoice") else number(g.debit)-number(g.credit) for g in gl_rows), Decimal(0))
+				account_tax = sum((number(t.base_tax_amount_after_discount_amount)*(-1 if t.get("add_deduct_tax")=="Deduct" else 1) for t in vat_taxes if t.account_head==tax.account_head), Decimal(0))
+				sources.append(dict(evidence, voucher_type=dt,voucher_no=doc.name,source_row=tax.name,posting_date=doc.posting_date,party=doc.get(party),
+					base=base,raw_vat=vat,tax_rate=tax.rate,tax_account=tax.account_head,account=None,reverse_charge=doc.get("reverse_charge"),currency=doc.currency,
+					gl_evidence=[dict(g) for g in gl_rows], invoice_tax_difference=money(account_tax-gl_tax)))
 			for item in by_item[doc.name]:
 				if vat_taxes and not (item.get("is_zero_rated") or item.get("is_exempt")):
 					continue
-				sources.append(dict(voucher_type=dt,voucher_no=doc.name,source_row=item.name,posting_date=doc.posting_date,party=doc.get(party),base=item.base_net_amount,
+				sources.append(dict(evidence, voucher_type=dt,voucher_no=doc.name,source_row=item.name,posting_date=doc.posting_date,party=doc.get(party),base=item.base_net_amount,
 					raw_vat=Decimal(0),tax_rate=0,tax_account=None,account=item.get("income_account") or item.get("expense_account"),currency=doc.currency,
 					treatment_hint="Exempt" if item.get("is_exempt") else "Zero Rated" if item.get("is_zero_rated") else "Unclassified"))
 	return sources, headers, warnings
 
 
-def apply_rule(source, rule, base_currency):
+def apply_rule(source, rule, base_currency, *, source_verified=False):
 	"""Return an event or a review reason. Amounts always originate in posted evidence."""
 	box = rule.box
 	if box not in OUTPUT + INPUT + ["Outside VAT"]:
 		return None, "Invalid VAT 201 box"
-	if not rule.get("approved_by") or not rule.get("reason") or not rule.get("supporting_reference"):
+	if (not source_verified and not rule.get("approved_by")) or not rule.get("reason") or not rule.get("supporting_reference"):
 		return None, "Classification approval and supporting evidence are incomplete"
+	if rule.get("requires_review"):
+		return None, "Source cancelled, amended or changed; classification requires renewed review"
+	if source.get("invoice_tax_difference") and not source.get("reverse_charge") == "Y":
+		return None, "Source invoice VAT does not reconcile with active GL postings"
+	if rule.get("source_fingerprint"):
+		from construction_management.construction_management.report.uae_vat_201_return.review import fingerprint
+		if rule.source_fingerprint != fingerprint(source):
+			return None, "Source evidence changed since review; approval must be renewed"
 	if box=="Outside VAT":
 		return dict(source,box=box,amount=0,vat_amount=0,adjustment=0,tax_date=str(rule.tax_date),reason=rule.reason,supporting_reference=rule.supporting_reference,classification="Outside VAT scope",company=source.get("company")),None
 	if box in INPUT and (not rule.get("recovery_confirmed") or not 0 <= flt(rule.recovery_percent) <= 100):
@@ -168,8 +213,8 @@ def apply_rule(source, rule, base_currency):
 		return None, "Zero-rated/exempt supplies cannot contain posted VAT"
 	if source["voucher_type"] in ("Sales Invoice","POS Invoice") and box in INPUT:
 		return None, "Sales invoices cannot be claimed as input VAT"
-	if source["voucher_type"] == "Purchase Invoice" and box in OUTPUT[:7]:
-		return None, "Purchase invoices cannot be classified as domestic sales"
+	if source["voucher_type"] == "Purchase Invoice" and box in OUTPUT[:7]+["2","4","5"]:
+		return None, "Purchase invoices cannot be classified as sales supplies or tourist refunds"
 	if box=="2" and (vat>0 or base>0):
 		return None, "Tourist refunds require negative posted tax corrections"
 	if box in ("3","10") and source["voucher_type"] == "Purchase Invoice" and source.get("reverse_charge") != "Y":
@@ -226,12 +271,22 @@ def ledger_sides(entry, mappings, headers, events):
 	return [(side if side in ("Output","Input") else "Unallocated", credit-debit if side=="Output" else debit-credit)]
 
 
-def build(filters):
+def account_mappings(rows):
+	"""One ledger scan per account, even when legacy rows map it on both sides."""
+	sides = defaultdict(set)
+	for row in rows:
+		side = row.get("custom_vat201_side")
+		sides[row.account].update(("Input", "Output") if side == "Both" else (side,))
+	return {account: "Both" if values == {"Input", "Output"} else next(iter(values)) if len(values) == 1 else None
+		for account, values in sides.items()}
+
+
+def build(filters, settings_override=None):
 	filters = frappe._dict(frappe.parse_json(filters) or {})
 	if not filters.company:
 		frappe.throw(_("Company is mandatory"))
 	access(filters.company)
-	settings = settings_for(filters.company)
+	settings = settings_override if settings_override is not None else settings_for(filters.company)
 	f = normalize(filters,settings)
 	header = taxpayer(f.company,settings,f)
 	if header["profit_margin_scheme"] == "Yes":
@@ -244,7 +299,9 @@ def build(filters):
 		warnings.append(_("Analytical period; this selection is not a configured VAT filing period"))
 	if not f.include_adjustments:
 		warnings.append(_("Adjustments are excluded; this is an analytical report"))
-	mappings = {a.account:a.get("custom_vat201_side") for a in settings.get("uae_vat_accounts", [])}
+	if header.get("due_date_basis") == "Provisional (28 days)":
+		warnings.append(_("Due date is provisional (period end plus 28 days); confirm against the FTA filing calendar"))
+	mappings = account_mappings(settings.get("uae_vat_accounts", []))
 	if not mappings or any(v not in ("Output","Input","Both") for v in mappings.values()):
 		warnings.append(_("VAT accounts and ledger sides must be configured in UAE VAT Settings"))
 	accounts = frappe.get_list("Account",filters={"company":f.company},fields=["name","account_type"],limit_page_length=0)
@@ -252,7 +309,7 @@ def build(filters):
 	if set(mappings)-accessible_accounts:
 		warnings.append(_("Some configured VAT accounts are restricted; report scope is incomplete"))
 	candidates = ({a.name for a in accounts if a.account_type == "Tax"} | set(mappings)) & accessible_accounts
-	rules = [r for r in settings.get("custom_vat201_classifications", []) if r.approved and r.tax_date]
+	rules = [r for r in settings.get("custom_vat201_classifications", []) if r.approved and r.tax_date and not r.get("requires_review")]
 	sources, headers, source_warnings = source_data(f,rules,candidates)
 	warnings += source_warnings
 	date_filters = [["posting_date","between",[f.from_date,f.to_date]]]
@@ -276,6 +333,8 @@ def build(filters):
 			if g.voucher_type==dt and g.voucher_no in allowed:
 				sources.append(dict(voucher_type=dt,voucher_no=g.voucher_no,source_row=g.name,posting_date=g.posting_date,party=None,
 					base=None,raw_vat=number(g.debit)-number(g.credit),debit=g.debit,credit=g.credit,tax_account=g.account,account=g.account,currency=header["base_currency"]))
+	from construction_management.construction_management.report.uae_vat_201_return.review import enrich_journals, annotate_reviews, control_movement_only
+	enrich_journals(sources)
 	by_source = defaultdict(list)
 	for rule in rules:
 		by_source[(rule.voucher_type,rule.voucher_no,rule.source_row)].append(rule)
@@ -302,13 +361,14 @@ def build(filters):
 				continue
 			seen.add(unique)
 			if rule.box=="Outside VAT":
-				if source.get("tax_account") in mappings:
+				if source.get("tax_account") in mappings and not control_movement_only(source,rule):
 					reviews.append(dict(source,review="A configured VAT-account posting cannot be excluded as Outside VAT"))
 					continue
 				exclusion,error=apply_rule(source,rule,header["base_currency"])
 				if error:
 					reviews.append(dict(source,review=error))
 				else:
+					exclusion.update(classification_status="Approved", classification_id=rule.name, origin=rule.get("origin") or "Manual", journal_treatment=rule.get("journal_treatment"))
 					excluded.append(exclusion)
 				continue
 			if source.get("tax_account") and mappings.get(source["tax_account"]) not in (side,"Both"):
@@ -318,6 +378,7 @@ def build(filters):
 			if error:
 				reviews.append(dict(source,review=error))
 			elif not rule.is_adjustment or f.include_adjustments:
+				event.update(classification_status="Approved", classification_id=rule.name, origin=rule.get("origin") or "Manual", journal_treatment=rule.get("journal_treatment"))
 				events.append(event)
 	boxes = aggregate(events)
 	# Reconciliation uses posting dates; tax-date differences remain visible.
@@ -358,8 +419,33 @@ def build(filters):
 	reconciliation.append(dict(description="Unallocated tax-account ledger (debit - credit)",report_amount=None,ledger_amount=money(ledger_totals["Unallocated"]) if ledger_available["Unallocated"] else None,difference=None,currency="AED"))
 	if reviews:
 		warnings.append(_("{0} transactions require VAT classification review").format(len(reviews)))
-	status = "Needs Review" if warnings or reviews else "Complete"
+	annotate_reviews(reviews, settings, mappings)
+	invoice_checks = []
+	checked = set()
+	for source in sources:
+		key = (source["voucher_type"],source["voucher_no"],source.get("tax_account"))
+		if source["voucher_type"] not in INVOICES or not key[2] or key in checked:
+			continue
+		checked.add(key)
+		invoice_checks.append(dict(voucher_type=key[0],voucher_no=key[1],tax_account=key[2],
+			difference=source.get("invoice_tax_difference"),currency=header["base_currency"]))
+		if source.get("invoice_tax_difference"):
+			warnings.append(_("Invoice tax/GL difference: {0}").format(source["voucher_no"]))
+	observed = {}
+	for side, types in (("sales",("Sales Invoice","POS Invoice")),("purchases",("Purchase Invoice",))):
+		selected = [s for s in sources if s["voucher_type"] in types and s.get("tax_account") in mappings]
+		observed[side+"_vat"] = money(sum((number(s["raw_vat"]) for s in selected),Decimal(0))) if header["base_currency"]=="AED" else None
+		observed[side+"_base"] = money(sum((number(s["base"]) for s in selected if s.get("base") is not None),Decimal(0))) if header["base_currency"]=="AED" else None
+	control = money(sum((number(g.debit)-number(g.credit) for g in ledger if g.account in mappings),Decimal(0))) if header["base_currency"]=="AED" else None
+	reconciliation.append(dict(description="Mapped VAT control account movement (debit - credit)",
+		report_amount=None,ledger_amount=control,difference=None,currency="AED"))
+	if reviews:
+		warnings.append(_("Unapproved sources are NOT included in VAT boxes. Zero classified subtotals are not a nil return; recoverable VAT and net liability are undetermined until review."))
+	status = "Needs Review" if warnings or reviews else "Ready for Approval"
+	if status=="Ready for Approval" and header.get("period_status") in ("Approved","Filed"):
+		status = header["period_status"]
 	if not sources and not ledger:
 		status = "No Transactions"
 	return dict(header=header,filters=f,boxes=list(boxes.values()),events=events,reviews=reviews,excluded=excluded,reconciliation=reconciliation,
-		warnings=list(dict.fromkeys(warnings)),status=status,transaction_count=len(sources))
+		warnings=list(dict.fromkeys(warnings)),status=status,transaction_count=len(sources),
+		invoice_checks=invoice_checks, observed=observed, control_movement=control)
