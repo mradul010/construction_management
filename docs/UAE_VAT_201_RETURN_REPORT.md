@@ -1,5 +1,61 @@
 # UAE VAT 201 Return
 
+## Current Simple Report: 2026-10-21
+
+The report now uses automatic source evidence rather than a classification user
+workflow. This section supersedes the review-screen instructions retained below.
+Select Company and Filing Period, then Refresh. The only other visible filters
+are From Date and To Date; changing dates clears the maintained-period selection.
+
+Four summary cards show recorded Sales VAT, recoverable Purchase VAT, VAT
+Adjustments and net VAT. Official boxes use five visible columns. Transaction
+Details has Sales, Purchases, Journal Entries and Needs Attention tabs, with
+voucher links and source-specific recommended actions. No review, suggestion,
+approval, rejection or classification-status controls remain in the report.
+
+`automatic.py` reads submitted source rows through the existing permission-aware
+reader and calculates eligible events in memory. No classification record or
+approval is generated. Useful valid historical verified decisions remain usable;
+all 354 existing child records and their audit data are retained unchanged.
+
+Ordinary invoice calculation uses saved signed VAT, saved taxable bases and the
+mapped VAT account. A supported transaction-specific sales Emirate or explicit
+zero/exempt item flag establishes the output box. For purchases, the standard
+nonzero recoverable VAT amount or documented source verification establishes
+recovery; default zero is not treated as either full recovery or proven exclusion.
+Documented reverse-charge recovery additionally requires saved matching input
+and output GL evidence. No rate-based invention of tax or taxable bases is used.
+Unresolved journal purpose, tax differences, missing supply/recovery evidence and
+unsupported treatments remain Needs Attention. Journal debit/credit direction
+alone never determines the VAT treatment.
+
+Optional app-owned source fields record verified supply Emirate/evidence on Sales
+Invoice and documented recovery percentage/evidence on Purchase Invoice. These
+are not automatically populated, have no allow-on-submit override, and do not
+modify any historical submitted source. Use normal source-document correction
+procedures where necessary. No per-invoice classification approval is required.
+
+Local first-period recalculation: recorded Sales VAT AED 55,062.68, recorded
+Purchase VAT AED 36,515.54, unallocated journal debit-minus-credit AED -48,718.56.
+All 308 VAT-bearing invoice vouchers match GL individually. Details contain 354
+source rows; 327 need attention (13 sales, 295 VAT purchase rows, 19 journal rows).
+The other 27 purchase item rows have no recorded VAT and generate no input claim.
+These are source-row counts, not unique invoice counts. Qatra's saved sales
+Emirate is company-address-derived, purchase recovery is default zero, and journal
+evidence is unresolved. Consequently net liability and recovery remain Pending
+Verification, not a nil return. The four configured filing periods, confirmed first
+due date and subsequent provisional due dates are preserved.
+
+Excel/CSV contain transaction details, Needs Attention and reconciliation. The
+three-A4-page PDF and report show PRELIMINARY - VERIFICATION REQUIRED when
+unresolved issues exist. No FTA filing is performed. See the latest verification
+section in [Local Completion Report](UAE_VAT_201_LOCAL_COMPLETION.md).
+
+Latest local implementation and evidence workflow: [Local Completion Report](UAE_VAT_201_LOCAL_COMPLETION.md).
+It supersedes the earlier pending-work/configuration limitations below, documents
+the actual remaining accounting evidence gaps, provisional future due dates,
+audited review/status actions, runtime verification and future deployment commands.
+
 ## Confirmed Configuration Update: 2026-10-21
 
 Qatra.local now has UAE VAT Settings for QATRA BUILDING CONTG LLC. The user-confirmed
