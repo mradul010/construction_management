@@ -73,7 +73,9 @@
 		const body = rows
 			.map((row) => {
 				const currency = row.currency || "AED";
-				const vat = row.vat_amount ?? row.raw_vat;
+				const taxable =
+					"invoice_taxable_amount" in row ? row.invoice_taxable_amount : row.base;
+				const vat = "recorded_vat_amount" in row ? row.recorded_vat_amount : row.raw_vat;
 				const values = attention
 					? [
 							voucher(row),
@@ -85,12 +87,12 @@
 							esc(row.posting_date),
 							voucher(row),
 							esc(row.party),
-							money(row.amount ?? row.base, currency),
+							money(taxable, currency),
 							money(vat, currency),
 							esc(row.treatment),
-							esc(row.vat_box),
+							esc(row.vat_box ?? row.box),
 							esc(
-								row.issue || row.remarks || row.reason || row.supporting_reference
+								row.display_remarks || row.issue || row.remarks || row.reason || row.supporting_reference
 							),
 					  ];
 				return `<tr>${values

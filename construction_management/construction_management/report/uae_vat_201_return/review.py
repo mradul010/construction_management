@@ -108,16 +108,13 @@ def suggest(source, mappings, rules=()):
 			box = "10" if source.get("reverse_charge") == "Y" else "9"
 			reasons.append("Potential input VAT from submitted purchase tax row; recoverability and tax point require explicit review")
 			if source.get("reverse_charge") == "Y":
-				reasons.append("Reverse charge also needs a separate Box 3 output classification; default recovery percentage is not approval")
+				reasons.append("Reverse charge uses the saved standard recovery percentage and requires matching Box 3 output/GL evidence")
 			if not source.get("source_tax_id"):
 				reasons.append("Supplier TRN not recorded on invoice; verify original tax invoice")
 			if source.get("reverse_charge") != "Y" and source.get("recovery_source_amount") in (None, ""):
 				reasons.append("Recoverable Standard Rated Expenses (AED) is missing")
 			elif source.get("reverse_charge") != "Y" and not flt(source.get("recovery_source_amount")):
-				if source.get("recovery_source_reference"):
-					reasons.append("Source history records an explicit zero recoverable VAT amount")
-				else:
-					reasons.append("Recoverable Standard Rated Expenses (AED) is default zero without an explicit recovery decision in source history")
+				reasons.append("Saved recoverable VAT amount is zero; no input VAT is claimed")
 		else:
 			reasons.append("Untaxed purchase item: missing VAT does not prove zero-rated/exempt treatment or entitlement")
 	if source.get("base") is None:

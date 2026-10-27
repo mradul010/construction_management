@@ -6,7 +6,7 @@ import frappe
 from frappe import _
 from frappe.utils import escape_html, flt
 
-from construction_management.construction_management.report.uae_vat_201_return.automatic import build, PRELIMINARY
+from construction_management.construction_management.report.uae_vat_201_return.automatic import build, detail_remarks, PRELIMINARY
 from construction_management.construction_management.report.uae_vat_201_return.engine import OUTPUT, INPUT
 
 
@@ -76,6 +76,7 @@ def transactions(filters, box, fieldname=None):
 		else:
 			value = flt(event.get(fieldname or "vat_amount"))
 		event["contribution"] = value
+		event["display_remarks"] = detail_remarks(event)
 	return events
 
 
@@ -87,8 +88,15 @@ def export_rows(result):
 	rows += [[b["box"],b["description"]]+[
 		("Pending Verification" if result["status"] == PRELIMINARY and (not b[k] or b["box"] in ("12","13","14")) else b[k]) for k in ("amount","vat_amount","adjustment")
 	] for b in result["boxes"]]
-	fields = ("posting_date","voucher_type","voucher_no","party","project","base","raw_vat","amount","vat_amount","adjustment","vat_box","treatment","remarks","tax_account","source_row","currency")
-	rows += [["Transaction Details"],list(fields)]+[[r.get(k) for k in fields] for r in result.get("details",result["events"])]
+	fields = ("posting_date","voucher_no","party","invoice_taxable_amount","recorded_vat_amount","treatment","vat_box","display_remarks")
+	rows += [["Transaction Details"],["Date","Voucher Number","Party","Taxable Amount","VAT Amount","VAT Treatment","VAT Box","Remarks"]]
+	for row in result.get("details",result["events"]):
+		values = dict(row)
+		values.setdefault("invoice_taxable_amount",row.get("base"))
+		values.setdefault("recorded_vat_amount",row.get("raw_vat"))
+		values.setdefault("vat_box",row.get("box"))
+		values.setdefault("display_remarks",row.get("remarks"))
+		rows.append([values.get(k) for k in fields])
 	rows += [["Needs Attention"],["Voucher Type","Voucher","Source Row","Issue","Recorded VAT","Recommended Action"]]
 	rows += [[r.get(k) for k in ("voucher_type","voucher_no","source_row","issue","raw_vat","recommended_action")] for r in result["reviews"]]
 	rows += [["Tax Reconciliation"],["Description","Included VAT","Ledger VAT","Difference"]]

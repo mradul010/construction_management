@@ -1,5 +1,132 @@
 # UAE VAT 201 Return
 
+## Simplified Purchase Details and Recovery: 2026-10-27
+
+This section supersedes the earlier extra-column layout and acceptance of every
+saved zero as confirmed non-recoverable VAT. Installed UAE metadata defines
+`recoverable_standard_rated_expenses` as a manual **Currency amount in AED**,
+default zero, not a percentage or checkbox. No installed controller or regional
+hook automatically populates it. The native VAT report sums the maintained amount;
+its tests explicitly assign recovery, including for foreign-currency invoices.
+Reverse charge uses the separate `recoverable_reverse_charge` percentage.
+
+The custom report reuses those fields and semantics, retaining permission-aware
+source reads, saved after-discount/base-currency amounts, signed returns and
+separate reverse-charge output/input evidence. It does not reuse native aggregate
+queries blindly: their positive-amount predicate excludes negative return claims.
+No custom recovery verification/percentage or Version-history gate is used.
+
+Transaction Details and its Excel section now have exactly eight columns:
+Date, Voucher Number, Party, Taxable Amount, VAT Amount, VAT Treatment, VAT Box,
+Remarks. The two monetary columns show actual source amounts in AED; claims stay
+internal to official box totals. Remarks explains eligible recovery or missing
+configuration. Duplicate recovery/return amount columns have been removed.
+
+Populated partial/full recovery amounts are used within the recorded VAT bounds.
+Historical default zeros cannot establish whether eligibility was assessed: they
+are flagged incomplete, not silently claimed or treated as confirmed zero.
+Existing valid reviewed allocations remain supported. An intentional zero can be
+recorded through the existing manager-only **Update VAT Recovery** action, which
+stores the reason and a structured decision in its audit comment for the current
+invoice revision. No new eligibility field is introduced. Only permitted source
+invoices' zero decisions are bulk-read; changed invoices need renewed decisions.
+The action retains normal accounting validation. Report execution never saves
+invoices, changes recovery amounts or creates decisions.
+
+Read-only verification: `ACC-PINV-2026-00293-1` retains taxable AED 1,557.50 and VAT
+77.88; `ACC-PINV-2026-00210-1` retains taxable AED 323.00 and VAT 16.15. Both retain
+saved recovery zero, with incomplete-configuration warnings. If an accountant
+confirms full eligibility, an authorised manager must save **77.88** / **16.15** in
+the existing AED field using Update VAT Recovery with a reason. Partial eligibility
+requires the eligible AED amount; intentional zero requires a documented decision.
+No such invoice correction or blanket recovery grant was made during this fix.
+
+First-period source VAT remains output AED 55,062.68 and purchase AED 36,515.54.
+All 308 invoice/account GL checks reconcile at currency precision. Recovery and
+final liability remain pending, not nil, while evidence is unresolved. Tests cover
+full, partial, explicit zero, default/unconfigured zero, no VAT, signed returns,
+reverse-charge zero/partial/full, eight-column exports and JavaScript rendering.
+Verification passed: 79 Python tests, seven JavaScript tests, eight-column Excel
+checks, both live examples and unchanged source/accounting snapshots. The local
+site cache was cleared; no build or restart was needed for these report files.
+No authenticated browser visual verification is claimed. No core edits, migration,
+cancellation, amendment or accounting-data changes were made.
+
+## Source Amounts Versus Recovery Claims: 2026-10-27
+
+Transaction Details, box drilldowns and Excel/CSV now distinguish source amounts
+from return claims. The former display selected event `amount` and `vat_amount`,
+which are return contributions, under generic taxable/VAT headings. Zero recovery
+correctly reduced the claim to zero, but misleadingly appeared to erase the
+invoice's taxable base and recorded VAT. The source reader still retained those
+values in `base` and `raw_vat`; the accounting data was never zeroed.
+
+Events now also expose independent numeric `invoice_taxable_amount` and
+`recorded_vat_amount`, before applying any recovery factor, plus a separate
+`recoverable_vat_amount`. AED conversion follows the existing saved-rate path,
+not the recovery percentage. Missing source-base allocations stay unknown rather
+than borrowing a reviewed claim allocation. Existing `amount`, `vat_amount` and
+`adjustment` still drive official box totals unchanged.
+
+The detail table labels Taxable Amount, Recorded VAT, Recoverable VAT, VAT Return
+Taxable Amount, VAT Return VAT and VAT Return Adjustment separately. The same
+separation appears in preparation exports, with numeric amounts and an explicit
+Recovery Basis. Purchase treatment states the saved Recoverable Standard Rated
+Expenses (AED) amount and whether recovery is zero, partial or full; the generic
+"Automatic source evidence" wording is no longer used for calculated events.
+
+Read-only Qatra.local verification with saved recovery zero:
+
+| Invoice | Source Taxable (AED) | Recorded VAT (AED) | Recoverable VAT (AED) | Box 9 Claim Base/VAT |
+| --- | ---: | ---: | ---: | --- |
+| ACC-PINV-2026-00293-1 | 1,557.50 | 77.88 | 0.00 | 0.00 / 0.00 |
+| ACC-PINV-2026-00210-1 | 323.00 | 16.15 | 0.00 | 0.00 / 0.00 |
+
+First-period recorded Sales VAT remains 55,062.68; recorded Purchase VAT remains
+36,515.54. Box 9 and Box 13 recoverable claims remain zero. The Recoverable Purchase
+VAT summary card is zero, while adjustments and final net liability remain Pending
+Verification because journal issues are unresolved. No final payable amount is
+asserted. All 308 invoice tax/GL checks match. Both examples passed normal report,
+context/drilldown and workbook checks. 75 Python tests and seven report JavaScript
+tests passed, covering zero/partial/full recovery, returns, independent source
+columns, unchanged claims and export values. Full accounting/source/history hashes
+were unchanged; no invoice, GL or recovery value was edited and no migrate ran.
+
+## Saved Zero and Audited Updates: 2026-10-27
+
+This section supersedes the source-history zero gate described below. The existing
+`recoverable_standard_rated_expenses` is an AED Currency amount: the installed field
+metadata says Currency/default 0, the UAE controller disallows a nonzero standard
+recovery amount for reverse-charge purchases, and the standard UAE VAT report sums
+this field as recoverable VAT. It is neither a percentage nor a checkbox.
+
+The report now reads its saved value directly. Zero means zero recovery, partial
+amounts remain partial, and missing/null amounts still raise a missing-value issue.
+No Version/source-history query or custom recovery verification/percentage is a
+prerequisite. Recorded VAT does not grant recovery. Reverse-charge recovery uses
+its separate saved standard percentage, retaining existing GL matching safeguards.
+
+Submitted Purchase Invoices expose Actions > Update VAT Recovery to Accounts
+Managers/System Managers with document write permission. Enter an AED amount and
+a mandatory reason. A supported Property Setter enables allow-on-submit solely
+for the existing recovery field; no database column or core file is changed.
+The server checks role/document permissions, submitted status, fresh timestamp,
+currency precision, VAT sign/limit, AED Company and non-reverse-charge treatment.
+It validates a detached candidate with the full invoice controller/hooks and
+rejects any recalculated posting amounts. This avoids persisting historical
+display-flag recalculations. The actual document then uses normal doc.save with
+update-after-submit checks and Version enabled, plus a reason comment. No ignored
+permission, validation, version or update-after-submit flags are used.
+
+Verified on paid ACC-PINV-2026-00293-1: saved recovery remains 0.00, report recovery
+is 0.00 without the unconfirmed-zero warning, and recorded VAT remains 77.88.
+The actual save/audit/report path was tested at 77.88, 20 and 0 within a database
+savepoint; all changes and test audit records were rolled back. Full recovery gave
+Box 9 base 1,557.50 and VAT 77.88; partial recovery gave 20.00. GL, paid status,
+outstanding balance and final accounting/history snapshots were unchanged. Saving
+77.88 permanently requires an authorised user's confirmation; none was inferred
+from this request. No cancellation, amendment, bulk grant or migrate was performed.
+
 ## Standard Purchase Recovery Amount: 2026-10-27
 
 The live Purchase Invoice field `recoverable_standard_rated_expenses` is Currency,

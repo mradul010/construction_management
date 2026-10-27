@@ -88,7 +88,7 @@ doctype_js = {
     "Material Request": "public/js/design_reference_filters.js",
     "Stock Entry": "public/js/design_reference_filters.js",
     "Purchase Receipt": "public/js/design_reference_filters.js",
-    "Purchase Invoice": "public/js/design_reference_filters.js",
+    "Purchase Invoice": ["public/js/design_reference_filters.js", "public/js/purchase_vat_recovery.js"],
     "RA Bill": "public/js/design_reference_filters.js",
     "SC Work Order": "public/js/design_reference_filters.js",
     "SC Bill": "public/js/design_reference_filters.js",
@@ -271,6 +271,7 @@ doc_events = {
 		],
 	},
 	"Purchase Invoice": {
+		"before_update_after_submit": "construction_management.construction_management.report.uae_vat_201_return.purchase_recovery.validate_update",
 		"validate": [
 			"construction_management.construction_management.utils.accounting.apply_construction_accounts_to_purchase_invoice",
 			"construction_management.construction_management.doctype.retention_payable.retention_payable.validate_purchase_invoice_references",

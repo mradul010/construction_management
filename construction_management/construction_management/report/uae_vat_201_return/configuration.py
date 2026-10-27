@@ -35,6 +35,8 @@ def setup():
 	})
 	hide_legacy_sales_emirate_fields()
 	hide_legacy_purchase_recovery_fields()
+	from construction_management.construction_management.report.uae_vat_201_return.purchase_recovery import setup as setup_recovery
+	setup_recovery()
 	from frappe.permissions import add_permission, update_permission_property
 	for role in ("Accounts Manager", "System Manager", "Accounts User", "Auditor"):
 		add_permission("UAE VAT Settings", role, 0)

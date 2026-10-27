@@ -26,6 +26,9 @@ class TestAutomaticVAT201(unittest.TestCase):
 	def purchase(self, **changes):
 		return dict(self.source, voucher_type="Purchase Invoice", **changes)
 
+	def decided_purchase(self, **changes):
+		return self.purchase(zero_recovery_decision="TEST-ONLY-MANAGER-DECISION", **changes)
+
 	def test_saved_emirate_does_not_depend_on_field_fetch_or_verification(self):
 		with patch.object(frappe, "get_meta", side_effect=AssertionError("Emirate must not depend on fetch metadata")):
 			rule, error = automatic.source_rule(self.source, "AED")
@@ -62,7 +65,7 @@ class TestAutomaticVAT201(unittest.TestCase):
 			self.assertIn("amount is missing", error)
 		rule, error = automatic.source_rule(self.purchase(recovery_source_amount=0), "AED")
 		self.assertIsNone(rule)
-		self.assertIn("default zero", error)
+		self.assertIn("configuration is incomplete", error)
 
 	def test_saved_recoverable_vat_amount_is_not_an_expense_base(self):
 		event = self.calculate(self.purchase(recovery_source_amount=20))
@@ -70,7 +73,7 @@ class TestAutomaticVAT201(unittest.TestCase):
 
 	def test_saved_recovery_amount_including_explicit_zero(self):
 		for amount in (0, 20, 49.99):
-			event = self.calculate(self.purchase(recovery_source_amount=amount, recovery_source_reference="TEST source Version" if amount == 0 else None))
+			event = self.calculate(self.decided_purchase(recovery_source_amount=amount))
 			self.assertEqual(event["vat_amount"], amount)
 			self.assertEqual(event["amount"], 1000 if amount else 0)
 
@@ -90,32 +93,84 @@ class TestAutomaticVAT201(unittest.TestCase):
 			self.assertIsNotNone(automatic.source_rule(self.purchase(recovery_source_amount=value), "AED")[1])
 		self.assertIn("allocation", automatic.source_rule(self.purchase(recovery_source_amount=20, vat_rows_count=2), "AED")[1])
 
-	def test_zero_recovery_history_is_read_only_and_scoped_to_permitted_invoices(self):
-		invoice = frappe._dict(name="PERMITTED-PI", recoverable_standard_rated_expenses=0, reverse_charge="N")
-		version = frappe._dict(name="VERSION-ZERO", docname=invoice.name, data={"changed": [["recoverable_standard_rated_expenses", 20, 0]]})
-		with patch.object(frappe, "get_all", return_value=[version]) as reader:
-			references = engine.recovery_source_references([invoice])
-		self.assertIn((invoice.name, "recoverable_standard_rated_expenses"), references)
-		self.assertEqual(reader.call_args.kwargs["filters"]["docname"], ["in", [invoice.name]])
-		self.assertEqual(reader.call_args.args[0], "Version")
+	def test_saved_recovery_needs_no_history_or_custom_fields(self):
+		for amount in (0, 20, 49.99):
+			with patch.object(frappe, "get_all", side_effect=AssertionError("History is not a recovery prerequisite")):
+					event = self.calculate(self.decided_purchase(recovery_source_amount=amount))
+			self.assertEqual(event["vat_amount"], amount)
 
-	def test_default_zero_is_not_made_explicit_by_unrelated_or_stale_history(self):
-		invoice = frappe._dict(name="PI", recoverable_standard_rated_expenses=0, reverse_charge="N")
-		field = "recoverable_standard_rated_expenses"
-		for changes in ([], [["remarks", "old", "new"]], [[field, None, 0]], [[field, 0, 20]]):
-			version = frappe._dict(name="VERSION", docname=invoice.name, data={"changed": changes})
-			with patch.object(frappe, "get_all", return_value=[version]):
-				self.assertFalse(engine.recovery_source_references([invoice]))
-		versions = [frappe._dict(name="LATEST", docname=invoice.name, data={"changed": [[field, 0, 20]]}),
-			frappe._dict(name="OLD", docname=invoice.name, data={"changed": [[field, 20, 0]]})]
-		with patch.object(frappe, "get_all", return_value=versions):
-			self.assertFalse(engine.recovery_source_references([invoice]))
+	def test_source_amounts_are_independent_of_zero_partial_full_and_return_claims(self):
+		for sign in (1, -1):
+			for base, vat in ((1557.50, 77.88), (323, 16.15)):
+				for recovery in (0, engine.money(vat / 2), vat):
+					source = self.decided_purchase(base=base*sign, raw_vat=vat*sign, recovery_source_amount=recovery*sign)
+					original = dict(source)
+					event = self.calculate(source)
+					self.assertEqual(source, original)
+					self.assertEqual((event["base"], event["raw_vat"]), (base*sign, vat*sign))
+					self.assertEqual((event["invoice_taxable_amount"], event["recorded_vat_amount"]), (base*sign, vat*sign))
+					self.assertEqual(event["recoverable_vat_amount"], recovery*sign)
+					self.assertEqual(event["vat_amount"], recovery*sign)
+					self.assertEqual(event["amount"], base*sign if recovery else 0)
+					self.assertEqual(engine.aggregate([event])["9"]["vat_amount"], recovery*sign)
 
-	def test_positive_recovery_needs_no_history_scan(self):
-		invoice = frappe._dict(name="PI", recoverable_standard_rated_expenses=20, reverse_charge="N")
-		with patch.object(frappe, "get_all") as reader:
-			self.assertFalse(engine.recovery_source_references([invoice]))
-		reader.assert_not_called()
+	def test_zero_recovery_details_explain_saved_basis_not_automatic_evidence(self):
+		source = self.decided_purchase(base=1557.5, raw_vat=77.88, recovery_source_amount=0)
+		output = self.run_build(self.result([source]))
+		row = output["details"][0]
+		self.assertEqual((row["invoice_taxable_amount"], row["recorded_vat_amount"], row["recoverable_vat_amount"]), (1557.5, 77.88, 0))
+		self.assertIn("Saved Recoverable Standard Rated Expenses (AED)", row["display_remarks"])
+		self.assertIn("Recoverable VAT: AED 0.00", row["display_remarks"])
+		self.assertNotIn("Automatic source evidence", row["treatment"])
+		self.assertFalse(output["reviews"])
+
+	def test_excel_has_eight_columns_with_source_amounts_and_recovery_in_remarks(self):
+		import io
+		from openpyxl import load_workbook
+		from construction_management.construction_management.report.uae_vat_201_return.uae_vat_201_return import workbook_bytes
+		output = self.run_build(self.result([self.decided_purchase(base=1557.5, raw_vat=77.88, recovery_source_amount=0)]))
+		sheet = load_workbook(io.BytesIO(workbook_bytes(output))).active
+		rows = list(sheet.values)
+		index = next(i for i, row in enumerate(rows) if row[0] == "Transaction Details")
+		headings, values = rows[index+1], rows[index+2]
+		row = dict(zip(headings, values))
+		self.assertEqual(list(headings[:8]), ["Date", "Voucher Number", "Party", "Taxable Amount", "VAT Amount", "VAT Treatment", "VAT Box", "Remarks"])
+		self.assertTrue(all(value is None for value in headings[8:]))
+		self.assertEqual(row["Taxable Amount"], 1557.5)
+		self.assertEqual(row["VAT Amount"], 77.88)
+		self.assertIn("Recoverable VAT: AED 0.00", row["Remarks"])
+
+	def test_default_zero_is_pending_without_suppressing_source_amounts(self):
+		for base, vat in ((1557.5, 77.88), (323, 16.15)):
+			output = self.run_build(self.result([self.purchase(base=base, raw_vat=vat, recovery_source_amount=0)]))
+			self.assertFalse(output["events"])
+			row = output["details"][0]
+			self.assertEqual((row["base"], row["raw_vat"]), (base, vat))
+			self.assertIn("configuration is incomplete", row["display_remarks"])
+			self.assertEqual(output["status"], automatic.PRELIMINARY)
+
+	def test_purchase_details_and_summary_keep_source_and_claims_separate(self):
+		sources = [self.decided_purchase(voucher_no="FULL", source_row="FULL-TAX", base=1557.5, raw_vat=77.88, recovery_source_amount=77.88),
+			self.decided_purchase(voucher_no="PARTIAL", source_row="PARTIAL-TAX", base=323, raw_vat=16.15, recovery_source_amount=8),
+			self.decided_purchase(voucher_no="ZERO", source_row="ZERO-TAX", base=100, raw_vat=5, recovery_source_amount=0),
+			self.purchase(voucher_no="UNTAXED", source_row="UNTAXED-ITEM", base=200, raw_vat=0, tax_account=None)]
+		output = self.run_build(self.result(sources))
+		boxes = {b["box"]: b for b in output["boxes"]}
+		self.assertFalse(output["reviews"])
+		self.assertEqual(boxes["9"]["vat_amount"], 85.88)
+		self.assertEqual(boxes["13"]["amount"], 85.88)
+		self.assertEqual(engine.money(sum(engine.number(row.get("recorded_vat_amount", row["raw_vat"])) for row in output["details"])), 99.03)
+		self.assertEqual(boxes["9"]["amount"], 1880.5)
+		partial = next(row for row in output["details"] if row["voucher_no"] == "PARTIAL")
+		self.assertIn("Recoverable VAT: AED 8.00", partial["display_remarks"])
+
+	def test_reverse_charge_zero_and_full_use_native_percentage_without_reducing_output(self):
+		for percent, claim in ((0, 0), (100, 49.99)):
+			source = self.purchase(reverse_charge="Y", reverse_recovery_percent=percent,
+				gl_evidence=[dict(debit=49.99, credit=0), dict(debit=0, credit=49.99)])
+			output = self.run_build(self.result([source]))
+			self.assertFalse(output["reviews"])
+			self.assertEqual([e["vat_amount"] for e in output["events"]], [49.99, claim])
 
 	def test_returns_preserve_saved_signs(self):
 		for source in (self.sales(base=-1000, raw_vat=-49.99), self.purchase(base=-1000, raw_vat=-49.99, recovery_source_amount=-20)):
