@@ -107,6 +107,45 @@ def fields_existing(doctype, fields):
 	return [f for f in fields if f in ("name","parent","parenttype","idx") or meta.has_field(f)]
 
 
+def recovery_source_references(docs):
+	"""Read recovery changes only for permitted parents; never infer intent from default zero."""
+	fields = ("recoverable_standard_rated_expenses", "recoverable_reverse_charge")
+	parents = {d.name: d for d in docs if d.get(fields[0]) == 0 or d.get("reverse_charge") == "Y"}
+	if not parents:
+		return {}
+	# Frappe's form loader also reads Version after checking access to its parent.
+	versions = frappe.get_all("Version", filters={"ref_doctype": "Purchase Invoice", "docname": ["in", list(parents)]},
+		fields=["name", "docname", "data"], order_by="creation desc, name desc", limit_page_length=0)
+	references, seen = {}, set()
+	for version in versions:
+		try:
+			data = frappe.parse_json(version.data)
+		except (ValueError, TypeError):
+			continue
+		if not isinstance(data, dict):
+			continue
+		changes = data.get("changed") or []
+		if not isinstance(changes, list):
+			continue
+		for change in changes:
+			if not isinstance(change, (list, tuple)) or len(change) != 3 or change[0] not in fields:
+				continue
+			field, old, new = change
+			key = (version.docname, field)
+			if key in seen:
+				continue
+			seen.add(key)
+			current = parents[version.docname].get(field)
+			if old in (None, "") or new in (None, "") or current in (None, ""):
+				continue
+			try:
+				if number(old) != number(new) and number(new) == number(current):
+					references[key] = "Saved " + field + " decision in source Version " + version.name
+			except (ArithmeticError, ValueError, TypeError):
+				continue
+	return references
+
+
 def source_data(f, rules, candidate_accounts):
 	"""Read each parent/child table in bulk, constrained by parent permissions."""
 	sources, headers, warnings = [], {}, []
@@ -120,7 +159,7 @@ def source_data(f, rules, candidate_accounts):
 			or_filters.append(["name", "in", dated])
 		doc_filters = {"company": f.company, "docstatus": 1}
 		docs = frappe.get_list(dt, filters=doc_filters, or_filters=or_filters,
-			fields=fields_existing(dt, ["name","posting_date",party,"base_net_total","currency","conversion_rate","is_return","return_against","reverse_charge", "vat_emirate", "project", "bill_no", "bill_date", "tax_id", "remarks", "ra_bill", "recoverable_standard_rated_expenses", "recoverable_reverse_charge", "custom_vat201_supply_emirate", "custom_vat201_supply_verified", "custom_vat201_evidence_reference", "custom_vat201_recovery_verified", "custom_vat201_recovery_percent"]), limit_page_length=0)
+			fields=fields_existing(dt, ["name","posting_date",party,"base_net_total","currency","conversion_rate","is_return","return_against","reverse_charge", "vat_emirate", "project", "bill_no", "bill_date", "tax_id", "remarks", "ra_bill", "recoverable_standard_rated_expenses", "recoverable_reverse_charge", "custom_vat201_evidence_reference"]), limit_page_length=0)
 		if not docs:
 			continue
 		posted_gl = frappe.get_list("GL Entry", filters={"company":f.company,"voucher_type":dt,"voucher_no":["in",[d.name for d in docs]],"docstatus":1,"is_cancelled":0}, fields=["name","voucher_no","account","debit","credit"],limit_page_length=0)
@@ -134,6 +173,7 @@ def source_data(f, rules, candidate_accounts):
 		if not docs:
 			continue
 		names = [d.name for d in docs]
+		recovery_references = recovery_source_references(docs) if dt == "Purchase Invoice" else {}
 		taxes = frappe.get_all(tax_dt, filters={"parent": ["in", names], "parenttype": dt}, fields=fields_existing(tax_dt,["name","parent","idx","row_id","account_head","charge_type","rate","base_tax_amount_after_discount_amount","base_total","add_deduct_tax","category"]), order_by="idx asc", limit_page_length=0)
 		items = frappe.get_all(item_dt, filters={"parent": ["in", names], "parenttype":dt}, fields=fields_existing(item_dt,["name","parent","base_net_amount","income_account","expense_account","is_zero_rated","is_exempt","description","project","item_code"]), limit_page_length=0)
 		by_tax, by_item = defaultdict(list), defaultdict(list)
@@ -147,9 +187,10 @@ def source_data(f, rules, candidate_accounts):
 				source_emirate=doc.get("vat_emirate"), bill_no=doc.get("bill_no"), bill_date=doc.get("bill_date"),
 				source_tax_id=doc.get("tax_id"), remarks=doc.get("remarks"), ra_bill=doc.get("ra_bill"),
 				recovery_source_amount=doc.get("recoverable_standard_rated_expenses"),
-				verified_supply_emirate=doc.get("custom_vat201_supply_emirate"), supply_verified=doc.get("custom_vat201_supply_verified"),
-				verification_reference=doc.get("custom_vat201_evidence_reference"), recovery_verified=doc.get("custom_vat201_recovery_verified"),
-				verified_recovery_percent=doc.get("custom_vat201_recovery_percent"),
+				recovery_source_reference=recovery_references.get((doc.name, "recoverable_standard_rated_expenses")),
+				reverse_recovery_percent=doc.get("recoverable_reverse_charge"),
+				reverse_recovery_reference=recovery_references.get((doc.name, "recoverable_reverse_charge")),
+				verification_reference=doc.get("custom_vat201_evidence_reference"),
 				item_evidence=[dict(i) for i in by_item[doc.name]])
 			vat_taxes = [t for t in by_tax[doc.name] if t.account_head in candidate_accounts and number(t.base_tax_amount_after_discount_amount)]
 			evidence["vat_rows_count"] = len(vat_taxes)

@@ -24,20 +24,17 @@ def setup():
 		"UAE VAT Settings": [dict(fieldname=n, fieldtype=t, label=l, options=o, module="Construction Management") for n,t,l,o in fields],
 		"UAE VAT Account": [dict(fieldname="custom_vat201_side", fieldtype="Select", label="VAT Ledger Side", options="\nOutput\nInput\nBoth", in_list_view=1, module="Construction Management")],
 	})
-	# Optional source verification, not another per-transaction approval register.
-	emirates = "\nAbu Dhabi\nDubai\nSharjah\nAjman\nUmm Al Quwain\nRas Al Khaimah\nFujairah"
+	# Keep optional evidence references; the standard invoice fields hold the decisions.
 	create_custom_fields({
 		"Sales Invoice": [
-			dict(fieldname="custom_vat201_supply_verified",label="Supply Location Verified",fieldtype="Check",insert_after="vat_emirate",module="Construction Management"),
-			dict(fieldname="custom_vat201_supply_emirate",label="Verified Supply Emirate",fieldtype="Select",options=emirates,insert_after="custom_vat201_supply_verified",module="Construction Management"),
-			dict(fieldname="custom_vat201_evidence_reference",label="VAT Source Evidence Reference",fieldtype="Data",insert_after="custom_vat201_supply_emirate",module="Construction Management"),
+			dict(fieldname="custom_vat201_evidence_reference",label="VAT Source Evidence Reference",fieldtype="Data",insert_after="vat_emirate",module="Construction Management"),
 		],
 		"Purchase Invoice": [
-			dict(fieldname="custom_vat201_recovery_verified",label="VAT Recovery Verified",fieldtype="Check",insert_after="recoverable_standard_rated_expenses",module="Construction Management"),
-			dict(fieldname="custom_vat201_recovery_percent",label="Documented VAT Recovery %",fieldtype="Percent",insert_after="custom_vat201_recovery_verified",module="Construction Management"),
-			dict(fieldname="custom_vat201_evidence_reference",label="VAT Source Evidence Reference",fieldtype="Data",insert_after="custom_vat201_recovery_percent",module="Construction Management"),
+			dict(fieldname="custom_vat201_evidence_reference",label="VAT Source Evidence Reference",fieldtype="Data",insert_after="recoverable_standard_rated_expenses",module="Construction Management"),
 		],
 	})
+	hide_legacy_sales_emirate_fields()
+	hide_legacy_purchase_recovery_fields()
 	from frappe.permissions import add_permission, update_permission_property
 	for role in ("Accounts Manager", "System Manager", "Accounts User", "Auditor"):
 		add_permission("UAE VAT Settings", role, 0)
@@ -49,6 +46,30 @@ def setup():
 			for action in ("read", "write"):
 				update_permission_property("UAE VAT Settings", role, 1, action, 1)
 	frappe.reload_doc("construction_management", "report", "uae_vat_201_return")
+
+
+def hide_legacy_sales_emirate_fields():
+	"""Hide obsolete controls, retaining their definitions, columns and saved values."""
+	names = frappe.get_all("Custom Field", filters={"dt": "Sales Invoice", "fieldname": ["in", [
+		"custom_vat201_supply_verified", "custom_vat201_supply_emirate",
+	]]}, pluck="name")
+	for name in names:
+		frappe.db.set_value("Custom Field", name, "hidden", 1, update_modified=False)
+	if names:
+		frappe.clear_cache(doctype="Sales Invoice")
+	return names
+
+
+def hide_legacy_purchase_recovery_fields():
+	"""Retain historical values but hide the redundant recovery controls."""
+	names = frappe.get_all("Custom Field", filters={"dt": "Purchase Invoice", "fieldname": ["in", [
+		"custom_vat201_recovery_verified", "custom_vat201_recovery_percent",
+	]]}, pluck="name")
+	for name in names:
+		frappe.db.set_value("Custom Field", name, "hidden", 1, update_modified=False)
+	if names:
+		frappe.clear_cache(doctype="Purchase Invoice")
+	return names
 
 
 def validate_settings(doc, method=None):

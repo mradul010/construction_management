@@ -21,42 +21,101 @@ class TestAutomaticVAT201(unittest.TestCase):
 		return event
 
 	def sales(self, **changes):
-		return dict(self.source, supply_verified=1, verified_supply_emirate="Dubai", verification_reference="TEST supply evidence", **changes)
+		return dict(dict(self.source, source_emirate="Dubai"), **changes)
 
 	def purchase(self, **changes):
 		return dict(self.source, voucher_type="Purchase Invoice", **changes)
 
-	def test_company_emirate_fetch_is_not_source_evidence(self):
-		with patch.object(frappe, "get_meta", return_value=frappe._dict(get_field=lambda _: frappe._dict(fetch_from="company_address.emirate"))):
+	def test_saved_emirate_does_not_depend_on_field_fetch_or_verification(self):
+		with patch.object(frappe, "get_meta", side_effect=AssertionError("Emirate must not depend on fetch metadata")):
 			rule, error = automatic.source_rule(self.source, "AED")
-		self.assertIsNone(rule)
-		self.assertIn("company-address", error)
+		self.assertIsNone(error)
+		self.assertEqual(rule.box, "1f")
 
-	def test_verified_sales_uses_exact_saved_vat_and_correct_emirate(self):
+	def test_saved_sales_emirate_uses_exact_saved_vat(self):
 		event = self.calculate(self.sales())
 		self.assertEqual((event["box"], event["vat_amount"]), ("1b", 49.99))
 		self.assertNotEqual(event["vat_amount"], 1000 * .05)
 
-	def test_standard_source_emirate_without_company_fetch(self):
-		with patch.object(frappe, "get_meta", return_value=frappe._dict(get_field=lambda _: frappe._dict(fetch_from=None))):
-			event = self.calculate(self.source)
-		self.assertEqual(event["box"], "1f")
+	def test_all_valid_saved_emirates(self):
+		for index, emirate in enumerate(engine.get_emirates()):
+			event = self.calculate(self.sales(source_emirate=emirate))
+			self.assertEqual(event["box"], "1" + chr(97 + index))
+
+	def test_missing_or_invalid_emirate_warns_only_when_required(self):
+		for emirate in (None, "", "Not an Emirate"):
+			rule, error = automatic.source_rule(self.sales(source_emirate=emirate), "AED")
+			self.assertIsNone(rule)
+			self.assertEqual(error, "VAT Emirate is missing or invalid")
+			for hint, box in (("Zero Rated", "4"), ("Exempt", "5")):
+				event = self.calculate(self.sales(source_emirate=emirate, raw_vat=0, tax_account=None, treatment_hint=hint))
+				self.assertEqual(event["box"], box)
+
+	def test_requested_ras_al_khaimah_invoice_values(self):
+		event = self.calculate(self.sales(voucher_no="ACC-SINV-2026-00050-2", source_emirate="Ras Al Khaimah", base=952.38, raw_vat=47.62))
+		self.assertEqual((event["box"], event["amount"], event["vat_amount"]), ("1f", 952.38, 47.62))
 
 	def test_missing_recovery_is_not_zero_entitlement(self):
-		for amount in (None, 0):
+		for amount in (None, ""):
 			rule, error = automatic.source_rule(self.purchase(recovery_source_amount=amount), "AED")
 			self.assertIsNone(rule)
-			self.assertIn("not established", error)
+			self.assertIn("amount is missing", error)
+		rule, error = automatic.source_rule(self.purchase(recovery_source_amount=0), "AED")
+		self.assertIsNone(rule)
+		self.assertIn("default zero", error)
 
 	def test_saved_recoverable_vat_amount_is_not_an_expense_base(self):
 		event = self.calculate(self.purchase(recovery_source_amount=20))
 		self.assertEqual((event["box"], event["vat_amount"], event["amount"]), ("9", 20, 1000))
 
-	def test_documented_recovery_including_explicit_zero(self):
-		for percent in (0, 40, 100):
-			event = self.calculate(self.purchase(recovery_verified=1, verified_recovery_percent=percent, verification_reference="TEST entitlement"))
-			self.assertEqual(event["vat_amount"], engine.money(engine.number(49.99) * engine.number(percent) / 100))
-			self.assertEqual(event["amount"], 1000 if percent else 0)
+	def test_saved_recovery_amount_including_explicit_zero(self):
+		for amount in (0, 20, 49.99):
+			event = self.calculate(self.purchase(recovery_source_amount=amount, recovery_source_reference="TEST source Version" if amount == 0 else None))
+			self.assertEqual(event["vat_amount"], amount)
+			self.assertEqual(event["amount"], 1000 if amount else 0)
+
+	def test_requested_purchase_full_recovery_is_an_amount_not_a_checkbox(self):
+		for amount in (1, 20, 77.88):
+			source = self.purchase(voucher_no="ACC-PINV-2026-00293-1", base=1557.50, raw_vat=77.88, recovery_source_amount=amount)
+			event = self.calculate(source)
+			self.assertEqual((event["box"], event["amount"], event["vat_amount"]), ("9", 1557.50, amount))
+			result = self.result([source])
+			result["reconciliation"] = []
+			output = self.run_build(result)
+			self.assertFalse(output["reviews"])
+			self.assertEqual(output["events"][0]["vat_amount"], amount)
+
+	def test_invalid_or_excessive_recovery_is_not_claimed(self):
+		for value in ("not a number", "NaN", "Infinity", 50, -1):
+			self.assertIsNotNone(automatic.source_rule(self.purchase(recovery_source_amount=value), "AED")[1])
+		self.assertIn("allocation", automatic.source_rule(self.purchase(recovery_source_amount=20, vat_rows_count=2), "AED")[1])
+
+	def test_zero_recovery_history_is_read_only_and_scoped_to_permitted_invoices(self):
+		invoice = frappe._dict(name="PERMITTED-PI", recoverable_standard_rated_expenses=0, reverse_charge="N")
+		version = frappe._dict(name="VERSION-ZERO", docname=invoice.name, data={"changed": [["recoverable_standard_rated_expenses", 20, 0]]})
+		with patch.object(frappe, "get_all", return_value=[version]) as reader:
+			references = engine.recovery_source_references([invoice])
+		self.assertIn((invoice.name, "recoverable_standard_rated_expenses"), references)
+		self.assertEqual(reader.call_args.kwargs["filters"]["docname"], ["in", [invoice.name]])
+		self.assertEqual(reader.call_args.args[0], "Version")
+
+	def test_default_zero_is_not_made_explicit_by_unrelated_or_stale_history(self):
+		invoice = frappe._dict(name="PI", recoverable_standard_rated_expenses=0, reverse_charge="N")
+		field = "recoverable_standard_rated_expenses"
+		for changes in ([], [["remarks", "old", "new"]], [[field, None, 0]], [[field, 0, 20]]):
+			version = frappe._dict(name="VERSION", docname=invoice.name, data={"changed": changes})
+			with patch.object(frappe, "get_all", return_value=[version]):
+				self.assertFalse(engine.recovery_source_references([invoice]))
+		versions = [frappe._dict(name="LATEST", docname=invoice.name, data={"changed": [[field, 0, 20]]}),
+			frappe._dict(name="OLD", docname=invoice.name, data={"changed": [[field, 20, 0]]})]
+		with patch.object(frappe, "get_all", return_value=versions):
+			self.assertFalse(engine.recovery_source_references([invoice]))
+
+	def test_positive_recovery_needs_no_history_scan(self):
+		invoice = frappe._dict(name="PI", recoverable_standard_rated_expenses=20, reverse_charge="N")
+		with patch.object(frappe, "get_all") as reader:
+			self.assertFalse(engine.recovery_source_references([invoice]))
+		reader.assert_not_called()
 
 	def test_returns_preserve_saved_signs(self):
 		for source in (self.sales(base=-1000, raw_vat=-49.99), self.purchase(base=-1000, raw_vat=-49.99, recovery_source_amount=-20)):
@@ -83,8 +142,7 @@ class TestAutomaticVAT201(unittest.TestCase):
 
 	def test_documented_reverse_charge_has_two_distinct_events_not_two_scans(self):
 		for sign in (1, -1):
-			source = self.purchase(base=1000*sign, raw_vat=49.99*sign, reverse_charge="Y", recovery_verified=1,
-				verified_recovery_percent=40, verification_reference="TEST reverse charge evidence",
+			source = self.purchase(base=1000*sign, raw_vat=49.99*sign, reverse_charge="Y", reverse_recovery_percent=40,
 				gl_evidence=[dict(debit=49.99, credit=0), dict(debit=0, credit=49.99)], invoice_tax_difference=49.99*sign)
 			result = self.result([source])
 			result["reconciliation"] = []
@@ -94,7 +152,7 @@ class TestAutomaticVAT201(unittest.TestCase):
 			self.assertEqual([e["vat_amount"] for e in output["events"]], [49.99*sign, 20*sign])
 
 	def test_reverse_charge_requires_actual_matching_gl_not_a_default(self):
-		source = self.purchase(reverse_charge="Y", recovery_verified=1, verified_recovery_percent=100,
+		source = self.purchase(reverse_charge="Y", reverse_recovery_percent=100,
 			verification_reference="TEST", gl_evidence=[dict(debit=49.99, credit=0)])
 		self.assertIn("GL evidence", automatic.source_rule(source, "AED")[1])
 
@@ -129,6 +187,20 @@ class TestAutomaticVAT201(unittest.TestCase):
 		result["events"] = [self.calculate(self.sales())]
 		output = self.run_build(result)
 		self.assertEqual(output["events"], result["events"])
+
+	def test_saved_emirate_is_authoritative_for_retained_standard_rated_history(self):
+		for emirate in ("Ras Al Khaimah", None, "Not an Emirate"):
+			event = self.calculate(self.sales())
+			event["source_emirate"] = emirate
+			result = self.result([])
+			result["events"] = [event]
+			output = self.run_build(result)
+			if emirate == "Ras Al Khaimah":
+				self.assertEqual(output["events"][0]["box"], "1f")
+				self.assertFalse(output["reviews"])
+				continue
+			self.assertFalse(output["events"])
+			self.assertEqual(output["reviews"][0]["issue"], "VAT Emirate is missing or invalid")
 
 	def test_previous_rejection_or_stale_verification_is_not_silently_bypassed(self):
 		for status in ("Rejected", "Needs Review"):

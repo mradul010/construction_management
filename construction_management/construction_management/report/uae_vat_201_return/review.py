@@ -98,7 +98,9 @@ def suggest(source, mappings, rules=()):
 			reasons.append("Source item explicitly marked " + source["treatment_hint"] + "; confirm supporting treatment and tax point")
 		elif source.get("tax_account") and source.get("source_emirate") in get_emirates() and flt(source.get("tax_rate")) == 5:
 			box = "1" + chr(97 + get_emirates().index(source["source_emirate"]))
-			reasons.append("Suggested from saved invoice VAT Emirate; ERPNext can fetch this from company_address.emirate, so verify supply-specific Emirate and tax point")
+			reasons.append("Emirate box uses the saved invoice VAT Emirate")
+		elif source.get("tax_account") and flt(source.get("tax_rate")) == 5:
+			reasons.append("VAT Emirate is missing or invalid; select a valid UAE Emirate on the source invoice")
 		else:
 			reasons.append("No sufficient standard-rated/zero/exempt supply evidence")
 	else:
@@ -109,8 +111,13 @@ def suggest(source, mappings, rules=()):
 				reasons.append("Reverse charge also needs a separate Box 3 output classification; default recovery percentage is not approval")
 			if not source.get("source_tax_id"):
 				reasons.append("Supplier TRN not recorded on invoice; verify original tax invoice")
-			if not flt(source.get("recovery_source_amount")):
-				reasons.append("Source recovery amount is zero/default, not evidence of either 0% or 100% entitlement")
+			if source.get("reverse_charge") != "Y" and source.get("recovery_source_amount") in (None, ""):
+				reasons.append("Recoverable Standard Rated Expenses (AED) is missing")
+			elif source.get("reverse_charge") != "Y" and not flt(source.get("recovery_source_amount")):
+				if source.get("recovery_source_reference"):
+					reasons.append("Source history records an explicit zero recoverable VAT amount")
+				else:
+					reasons.append("Recoverable Standard Rated Expenses (AED) is default zero without an explicit recovery decision in source history")
 		else:
 			reasons.append("Untaxed purchase item: missing VAT does not prove zero-rated/exempt treatment or entitlement")
 	if source.get("base") is None:
@@ -118,7 +125,7 @@ def suggest(source, mappings, rules=()):
 	if source.get("is_return"):
 		reasons.append("Return preserves signed source tax; verify original treatment: " + (source.get("return_against") or "original voucher not linked"))
 		original = [r for r in rules if r.get("approved") and r.voucher_type == dt and r.voucher_no == source.get("return_against")]
-		if len({r.box for r in original}) == 1:
+		if len({r.box for r in original}) == 1 and not (dt in ("Sales Invoice", "POS Invoice") and source.get("tax_account") and flt(source.get("tax_rate")) == 5):
 			box = original[0].box
 			reasons.append("Suggested box inherited from approved original voucher; confirm matching tax line")
 	return box, "; ".join(reasons)

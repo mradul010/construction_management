@@ -1,6 +1,70 @@
 # UAE VAT 201 Return
 
-## Current Simple Report: 2026-10-21
+## Standard Purchase Recovery Amount: 2026-10-27
+
+The live Purchase Invoice field `recoverable_standard_rated_expenses` is Currency,
+labelled Recoverable Standard Rated Expenses (AED), with default zero. ERPNext's
+standard UAE report sums this field as recoverable VAT, not as a checkbox,
+percentage or expense base. The custom report now uses that saved AED amount
+directly for ordinary Box 9 recovery; it never infers full recovery from recorded
+VAT. Full recovery of AED 77.88 requires a saved recoverable amount of 77.88;
+values 20 and 1 mean AED 20 and AED 1 respectively. Return amounts retain their
+signs, and invalid/excessive amounts or unresolved multiple-row allocations are
+not automatically claimed.
+
+The custom verification checkbox and custom recovery percentage are no longer
+created, queried or required by the report. Existing redundant controls are hidden
+without deleting their definitions, columns or historical values. Purchase recovery
+uses no new mandatory verification field.
+
+Blank/null recovery is reported as missing. A saved zero alone is ambiguous because
+the standard field defaults to zero. A matching latest change from a nonzero amount
+to zero in the invoice's existing Version history establishes explicit zero recovery;
+that source produces zero recoverable VAT, not an unconfirmed-recovery warning.
+Default zero without that source evidence remains unconfirmed. Creation-time intent
+cannot be reconstructed where neither a field change nor valid retained reviewed
+evidence exists. Audit reads are bulk-scoped to already permitted submitted invoices;
+no history or eligibility is fabricated. Reverse-charge purchases continue to use
+the separate standard recoverable_reverse_charge percentage and matching input/output
+GL evidence; default 100% still requires source evidence rather than VAT alone.
+
+Verified actual submitted invoice ACC-PINV-2026-00293-1: taxable amount AED 1,557.50,
+recorded VAT AED 77.88, saved recoverable amount 0.00 with no explicit-zero source
+change. Its eligibility was not altered. Replacing only its source amount in memory
+with 77.88 produced Box 9 taxable amount 1,557.50 and recoverable VAT 77.88, without
+the custom verification warning; partial amounts 20 and 1 also passed through normal
+report generation. All 308 first-period invoice tax/GL checks still match. Accounting
+documents, GL and classification history were hashed before/after and remained
+unchanged. No invoice cancellation/amendment, bulk eligibility update, core edit or
+migrate was performed. Earlier implementation sections below are historical where
+they describe the superseded custom recovery controls.
+
+## Saved Sales VAT Emirate: 2026-10-27
+
+For standard-rated sales, the report now uses saved Sales Invoice `vat_emirate`
+as its sole Emirate source, including returns and retained standard-rated history.
+Every valid UAE Emirate maps to its corresponding Box 1a-1g regardless of whether
+the value was fetched from the company address. No supply-verification checkbox
+or separate verified-supply Emirate is required or queried. Missing/invalid values
+produce "VAT Emirate is missing or invalid" only when Emirate classification is
+required; explicit zero/exempt treatments remain independent of that field.
+
+The two obsolete controls are hidden through an idempotent metadata-only helper.
+Setup no longer creates them. Their field definitions, columns and historical data
+are retained. No migrate, invoice amendment/cancellation or accounting update was
+performed. Purchase recovery, journal review, saved tax amounts, currency handling,
+return signs and submitted-document filtering remain unchanged.
+
+Local verification: all 13 first-period sales now contribute Output VAT AED
+55,062.68, matching GL with difference 0.00. All 308 invoice-to-GL checks still
+match. Remaining issues concern 295 purchase tax rows and 19 journal GL rows, not
+sales Emirate verification. The return remains preliminary for those other issues.
+The requested `ACC-SINV-2026-00050-2` is absent locally; its supplied values are
+covered by an isolated test. Actual submitted invoice `ACC-SINV-2026-00050` has
+Ras Al Khaimah, taxable amount AED 952.38 and VAT AED 47.62, and reports in Box 1f.
+The sections below retain earlier implementation and investigation history.
+
+## Simple Report History: 2026-10-21
 
 The report now uses automatic source evidence rather than a classification user
 workflow. This section supersedes the review-screen instructions retained below.

@@ -17,15 +17,25 @@ class TestVAT201Review(unittest.TestCase):
 		box, reason = review.suggest(self.source, {"VAT":"Both"})
 		self.assertEqual(box,"9")
 		self.assertIn("explicit review",reason)
-		self.assertIn("zero/default",reason)
+		self.assertIn("Expenses (AED) is missing",reason)
+		self.assertIn("default zero",review.suggest(dict(self.source,recovery_source_amount=0), {"VAT":"Both"})[1])
 		self.assertNotIn("recovery_percent",self.source)
 
 	def test_sales_emirate_is_only_a_suggestion_and_not_company_fallback(self):
 		source = dict(self.source,voucher_type="Sales Invoice",source_emirate="Dubai")
 		self.assertEqual(review.suggest(source,{"VAT":"Both"})[0],"1b")
-		self.assertIn("company_address",review.suggest(source,{"VAT":"Both"})[1])
+		self.assertIn("saved invoice VAT Emirate",review.suggest(source,{"VAT":"Both"})[1])
 		source["source_emirate"] = None
 		self.assertIsNone(review.suggest(source,{"VAT":"Both"})[0])
+
+	def test_sales_return_uses_its_saved_emirate_not_the_original_box(self):
+		source = dict(self.source, voucher_type="Sales Invoice", source_emirate="Ras Al Khaimah", is_return=1, return_against="ORIGINAL")
+		original = frappe._dict(approved=1, voucher_type="Sales Invoice", voucher_no="ORIGINAL", box="1b")
+		self.assertEqual(review.suggest(source, {"VAT": "Both"}, [original])[0], "1f")
+		source["source_emirate"] = None
+		box, reason = review.suggest(source, {"VAT": "Both"}, [original])
+		self.assertIsNone(box)
+		self.assertIn("VAT Emirate is missing or invalid", reason)
 
 	def test_zero_tax_without_flags_has_no_box(self):
 		source = dict(self.source,raw_vat=0,tax_account=None,voucher_type="Sales Invoice")

@@ -1,4 +1,6 @@
 """Automatic source-based VAT preparation, without a classification workflow."""
+from decimal import InvalidOperation
+
 import frappe
 from frappe.utils import flt
 
@@ -6,6 +8,13 @@ from construction_management.construction_management.report.uae_vat_201_return i
 
 
 PRELIMINARY = "PRELIMINARY - VERIFICATION REQUIRED"
+
+
+def sales_emirate_box(source):
+	emirate = source.get("source_emirate")
+	if emirate not in engine.get_emirates():
+		return None, "VAT Emirate is missing or invalid"
+	return "1" + chr(97 + engine.get_emirates().index(emirate)), None
 
 
 def source_rule(source, base_currency):
@@ -20,39 +29,28 @@ def source_rule(source, base_currency):
 			box = "4" if source["treatment_hint"] == "Zero Rated" else "5"
 			evidence = "Explicit saved source-item tax treatment: " + source["source_row"]
 		elif source.get("tax_account") and flt(source.get("tax_rate")) == 5:
-			emirate = source.get("verified_supply_emirate")
-			if not (source.get("supply_verified") and evidence):
-				# A field populated from company address is not transaction-specific evidence.
-				meta = frappe.get_meta(dt).get_field("vat_emirate")
-				if meta and not meta.fetch_from:
-					emirate = source.get("source_emirate")
-					evidence = "Saved transaction VAT Emirate: " + source["voucher_no"]
-				else:
-					return None, "Sales Emirate cannot be verified: saved VAT Emirate is company-address-derived"
-			if emirate not in engine.get_emirates():
-				return None, "Transaction-specific supply Emirate is missing or invalid"
-			box = "1" + chr(97 + engine.get_emirates().index(emirate))
+			box, error = sales_emirate_box(source)
+			if error:
+				return None, error
+			evidence = "Saved transaction VAT Emirate: " + source["voucher_no"]
 		else:
 			return None, "Sales tax treatment is not supported by saved tax rows or explicit item flags"
 	elif dt == "Purchase Invoice":
 		if not source.get("tax_account") and not source.get("raw_vat"):
 			return None, None  # No recorded input VAT; do not invent zero/exempt treatment.
-		if source.get("recovery_verified") and evidence:
-			recovery = flt(source.get("verified_recovery_percent"))
-			if not 0 <= recovery <= 100:
-				return None, "Documented recovery percentage is outside 0 to 100"
-		else:
-			# ERPNext's standard field records the recoverable VAT amount, not an expense base.
-			amount = engine.number(source.get("recovery_source_amount"))
-			vat = engine.number(source.get("raw_vat"))
-			if not amount or not vat or amount * vat < 0 or abs(amount) > abs(vat) or source.get("vat_rows_count") != 1:
-				return None, "Purchase VAT recovery entitlement is not established by saved recovery information"
-			recovery = amount / vat * 100
-			evidence = "Saved recoverable_standard_rated_expenses on " + source["voucher_no"]
-		box = "9"
 		if source.get("reverse_charge") == "Y":
-			if not source.get("recovery_verified") or not source.get("verification_reference"):
-				return None, "Reverse-charge VAT requires documented recovery; default percentages are not proof"
+			percent = source.get("reverse_recovery_percent")
+			if percent in (None, ""):
+				return None, "Reverse-charge recovery percentage is missing"
+			try:
+				recovery = engine.number(percent)
+			except (InvalidOperation, ValueError, TypeError):
+				return None, "Reverse-charge recovery percentage is invalid"
+			if not recovery.is_finite() or not 0 <= recovery <= 100:
+				return None, "Reverse-charge recovery percentage is outside 0 to 100"
+			if recovery == 100 and not (source.get("reverse_recovery_reference") or evidence):
+				return None, "Reverse-charge recovery remains at the default 100%; confirm the source recovery decision"
+			evidence = source.get("reverse_recovery_reference") or evidence or "Saved recoverable_reverse_charge on " + source["voucher_no"]
 			vat = abs(engine.number(source.get("raw_vat")))
 			gl_rows = source.get("gl_evidence", [])
 			debits = sum((engine.number(g["debit"]) for g in gl_rows), engine.number(0))
@@ -60,6 +58,25 @@ def source_rule(source, base_currency):
 			if not vat or source.get("vat_rows_count") != 1 or engine.money(debits-vat) or engine.money(credits-vat):
 				return None, "Reverse-charge input and output GL evidence does not match the saved tax row"
 			box = "3"
+		else:
+			# This standard Currency field contains recoverable VAT in AED, not a % or flag.
+			value = source.get("recovery_source_amount")
+			if value in (None, ""):
+				return None, "Purchase VAT recoverable amount is missing"
+			try:
+				amount = engine.number(value)
+			except (InvalidOperation, ValueError, TypeError):
+				return None, "Purchase VAT recoverable amount is invalid"
+			vat = engine.number(source.get("raw_vat"))
+			if not amount.is_finite() or not vat.is_finite() or not vat or amount * vat < 0 or abs(amount) > abs(vat):
+				return None, "Purchase VAT recoverable amount must have the saved VAT sign and cannot exceed recorded VAT"
+			if amount == 0 and not source.get("recovery_source_reference"):
+				return None, "Purchase VAT recovery is unconfirmed: saved amount is default zero with no explicit recovery decision in source history"
+			if source.get("vat_rows_count") != 1:
+				return None, "Purchase VAT recovery amount needs allocation across multiple VAT rows"
+			recovery = amount / vat * 100
+			evidence = source.get("recovery_source_reference") or "Saved recoverable_standard_rated_expenses on " + source["voucher_no"]
+			box = "9"
 	else:
 		return None, "VAT journal purpose and tax treatment cannot be established from sufficient linked evidence"
 	if base_currency != "AED":
@@ -78,8 +95,18 @@ def build(filters=None):
 	result = engine.build(filters)
 	settings = engine.settings_for(result["filters"].company)
 	mappings = engine.account_mappings(settings.get("uae_vat_accounts", []))
-	events = list(result["events"])
+	events = []
 	issues, details = [], []
+	# Saved invoice Emirate also governs any retained historical standard-rated event.
+	for event in result["events"]:
+		event = dict(event)
+		if event["voucher_type"] in ("Sales Invoice", "POS Invoice") and event["box"] in engine.OUTPUT[:7]:
+			box, error = sales_emirate_box(event)
+			if error:
+				issues.append(dict(event, issue=error, recommended_action=action_for(event), treatment="Needs Attention", vat_box=None))
+				continue
+			event.update(box=box, emirate=event["source_emirate"], classification=engine.LABELS[box])
+		events.append(event)
 	seen = set()
 	for source in result["reviews"]:
 		key = tuple(source[k] for k in ("voucher_type", "voucher_no", "source_row"))
@@ -146,7 +173,7 @@ def build(filters=None):
 
 def action_for(source):
 	if source["voucher_type"] in ("Sales Invoice","POS Invoice"):
-		return "Verify the supply-specific Emirate/tax point and record evidence at the source; do not use company address alone"
+		return "Check the saved VAT Emirate on the source invoice and select a valid UAE Emirate when Emirate classification is required; review any other source issue shown"
 	if source["voucher_type"]=="Purchase Invoice":
-		return "Verify original tax invoice and recovery eligibility; maintain the valid source recovery amount or documented recovery verification"
+		return "Check Recoverable Standard Rated Expenses (AED): enter the eligible VAT amount, not a checkbox or percentage; default zero alone does not prove an explicit zero-recovery decision. Use authorized source-document procedures; do not amend paid invoices just for this report"
 	return "Check original journal links, advance tax invoice/payment evidence and purpose; exclude settlements only with supporting evidence"
