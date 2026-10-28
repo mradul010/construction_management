@@ -63,11 +63,22 @@ test("formatter preserves numeric values and distinguishes pending from nil", ()
 		report.formatter(0, {}, col, data, () => "AED 0.00").includes('data-field="vat_amount"')
 	);
 	assert.equal(data.vat_amount, 0);
-	data._incomplete = true;
+	data.completeness = {vat_amount: {provisional: true, reasons: ["Purchase journal recovery unresolved"]}};
 	assert.ok(
-		report.formatter(0, {}, col, data, () => "AED 0.00").includes("Pending Verification")
+		report.formatter(0, {}, col, data, () => "AED 0.00").includes("Provisional known subtotal")
 	);
+	assert.ok(report.formatter(0, {}, col, data, () => "AED 0.00").includes("AED 0.00"));
+	assert.ok(!report.formatter(0, {}, {fieldname: "adjustment", fieldtype: "Currency"}, data, () => "AED 0.00").includes("Provisional"));
 	assert.ok(report.formatter(-50, {}, col, data, () => "AED -50.00").includes("text-danger"));
+});
+
+test("native row numbers and fixed layout preserve other datatable options", () => {
+	const {report} = setup();
+	const options = report.get_datatable_options({cellHeight: 33, inlineFilters: true});
+	assert.equal(options.serialNoColumn, true);
+	assert.equal(options.layout, "fixed");
+	assert.equal(options.cellHeight, 33);
+	assert.equal(options.inlineFilters, true);
 });
 
 test("first configured period is selected without recursive refresh or rewriting explicit dates", async () => {
@@ -176,8 +187,8 @@ test("transaction columns show source taxable and recorded VAT independently of 
 				amount: 0,
 				vat_amount: 0,
 				adjustment: 0,
-				box: "9",
-				treatment: "Saved Recoverable Standard Rated Expenses (AED): 0.0; zero recovery",
+				box: null,
+				treatment: "No input VAT claimed",
 			},
 			{
 				voucher_type: "Purchase Invoice",
@@ -190,8 +201,8 @@ test("transaction columns show source taxable and recorded VAT independently of 
 				amount: 0,
 				vat_amount: 0,
 				adjustment: 0,
-				box: "9",
-				treatment: "Saved Recoverable Standard Rated Expenses (AED): 0.0; zero recovery",
+				box: null,
+				treatment: "No input VAT claimed",
 			},
 		],
 	});
@@ -239,9 +250,9 @@ test("transaction columns show source taxable and recorded VAT independently of 
 			["AED 323", "AED 16.15"],
 		]
 	);
-	assert.equal(rows[0][6], "9");
+	assert.equal(rows[0][6], "");
 	assert.equal(rows[0].length, 8);
-	assert.ok(html.includes("zero recovery"));
+	assert.ok(html.includes("No input VAT claimed"));
 });
 
 test("unknown source base is not replaced with a reviewed claim allocation", async () => {

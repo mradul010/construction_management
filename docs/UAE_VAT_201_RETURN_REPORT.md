@@ -1,5 +1,352 @@
 # UAE VAT 201 Return
 
+## Complete Local Audit: 2026-10-28
+
+This is the current implementation/evidence summary; older dated sections below
+are retained as historical notes where they differ. The implementation is complete
+as a preparation report, not a completed or submitted tax return. Qatra.local is
+available and was checked directly; no production deployment was performed.
+
+### Basis and Source Policy
+
+Official references checked: [FTA VAT Returns Guide (2021)](https://tax.gov.ae/DataFolder/Files/Pdf/VAT%20Returns%20User%20GuideEnglishV40%2015%2008%202021%20SEP2021.pdf)
+and [FTA filing guidance](https://tax.gov.ae/en/content/filing.vat.returns.and.making.payments.aspx).
+Standard-rated outputs use the Emirate boxes; zero/exempt supplies remain separate;
+imports and their corrections use 6/7, reverse-charge recovery uses 10, and ordinary
+eligible inputs use 9. Specific adjustments are separate from ordinary credit notes.
+12/13 sum the relevant VAT and adjustment amounts; 14 subtracts recoverable inputs
+from output liability. Recorded VAT is not itself proof of recovery entitlement.
+
+The software policies are explicitly separate: saved Sales Invoice `vat_emirate`
+is accepted without the obsolete custom supply-verification fields; this does not
+independently prove the underlying statutory place-of-supply facts. The installed
+UAE `recoverable_standard_rated_expenses` is a manual AED Currency amount, not a
+percentage/checkbox. Saved zero means no input claim, not incomplete recovery.
+Recorded source amounts remain visible; partial and negative return amounts are
+preserved. Reverse charge uses its own percentage/GL evidence. Neither custom
+recovery fields, Version history nor a custom recovery-update action is required.
+No hidden historical field data or database columns were deleted.
+
+### Pipeline and Presentation
+
+The report uses one final `automatic.build()` result for screen, print and Excel.
+`engine.py` extracts permission-filtered submitted/active evidence; `journal.py`
+matches structured generator bases/taxes/GL, `automatic.py` derives supported
+treatments, `reconciliation.py` audits final claims against recorded accounting,
+and `completeness.py` propagates only relevant box/component dependencies.
+Formatting never changes eligibility or totals. Cancelled/amended originals and
+POS records without their own active GL do not duplicate submitted accounting.
+Unallocated/mixed taxable-base allocations remain explicit rather than inferred
+from VAT divided by a rate. Existing valid reviewed classifications remain usable.
+
+Preparation statuses are Draft, Requires Review and Ready for Review. The screen
+has a prominent Company/TRN/period header, grouped actionable review items and a
+recorded-versus-claimed ledger table. Native grid row numbers remain enabled.
+Transaction tables retain exactly Date, Voucher Number, Party, Taxable Amount,
+VAT Amount, VAT Treatment, VAT Box and Remarks. Source amounts are numeric and
+right-aligned; dates use the user format, with concise saved-recovery notes.
+
+Excel contains eight sheets: VAT 201 Preparation, Transactions, Review,
+Completeness, Reconciliation, Source Ledger Audit, Invoice GL Checks, and Taxpayer
+and Notes. Transactions has exactly eight columns, typed dates, numeric AED cells,
+voucher hyperlinks, usable widths/filtering and frozen identifiers. Provisional
+summary cells have comments/colour, not replacement strings. The PDF has three
+preparation pages and an intentional fourth review appendix, visually inspected
+after rendering; there is no orphaned continuation of warning text. It is labelled
+preparation only, without an FTA submission/approval claim.
+
+### Current Recalculation
+
+Company QATRA BUILDING CONTG LLC; period 2026-05-01 through 2026-07-31:
+
+| Measure | AED | Meaning |
+| --- | ---: | --- |
+| Box 1f taxable base | 1,101,253.46 | Unchanged known subtotal, provisional allocation |
+| Box 1f VAT / Box 12 known due-tax subtotal | 55,062.68 | Unchanged; not all unallocated outputs included |
+| Box 13 known recoverable input claim | 0.00 | Provisional, not an assumption of zero journal entitlement |
+| Box 14 known net subtotal | 55,062.68 | Provisional, not final payable VAT |
+| All adjustment components | 0.00 | No actual unresolved adjustment source |
+| Recorded output VAT in GL | 104,378.45 | Includes the correctly positive advance credits |
+| Output VAT awaiting allocation | 49,315.77 | Two advances, excluded from official box subtotals |
+| Recorded input VAT in GL | 37,112.75 | Invoice VAT plus matched petty-cash VAT |
+| Recorded invoice VAT excluded by saved zero recovery | 36,515.54 | Legitimate saved-data claim convention, not missing source VAT |
+| Journal VAT with unresolved recovery | 597.21 | No automatic recovery grant |
+| Raw VAT-control debit minus credit | -67,265.70 | Accounting sign, not payable/refundable VAT |
+
+The prior Box 1f result is unchanged. Reconciliation changed because it now uses
+the final resolved VAT roles, not intermediate classification: output ledger VAT
+includes 49,315.77 of advances and input ledger VAT includes 597.21 of petty-cash
+tax. No journal tax posting remains role-unallocated in this inspected scope, but
+return allocation/entitlement remains unresolved. The 315 voucher/account audit
+records and 308 invoice/account checks all have source-to-GL difference zero.
+The register separately retains source/base/GL row IDs, posting/tax dates,
+recorded/claimed VAT, known exclusions, overlap warnings and raw accounting signs.
+
+### Exact Accounts Review Items
+
+The current review count is **22 source rows**, not a hardcoded 19:
+
+- 17 journal input-VAT rows across ACC-JV-2026-00003, 00004-1, 00006, 00007-1 and
+  00008: original petty-cash tax evidence and eligible recovery remain required.
+- ACC-JV-2026-00001 and 00002: authoritative transaction/linked-document Emirate
+  and original advance-tax-invoice/adjustment overlap evidence are still required.
+  Their positive base/VAT amounts remain visible; QTI cheque text is not a link.
+- ACC-PINV-2026-00344, 00345 and 00346: linked supplier addresses are in India,
+  with no recorded VAT or established reverse-charge treatment. Review original
+  supplies and any import/customs evidence. These are potential obligation issues,
+  not missing recovery decisions; no reverse-charge tax or recovery is fabricated.
+
+1a-1g and 8/12/14 remain provisional for output allocation. 9/11/13/14 remain
+provisional for journal recovery. The foreign untaxed purchases additionally affect
+possible 3/6/10 and their dependent totals. 2/4/5/7 remain complete numeric zeros
+for the inspected scope; adjustments remain complete zero independently. Signatory
+and Arabic legal-name fields remain unprovided, printed as Not Configured.
+
+### Maintained Filing Calendar
+
+The saved first period remains May-July, cycle quarter 2, due **2026-08-31**.
+The nominal 28-day date is August 28. [FAHR Circular 11/2026](https://www.fahr.gov.ae/wp-content/uploads/2026/08/Circular-No.-11-of-2026-Regarding-The-Holiday-of-the-Prophet-Mohammads-Birthday-1448-AH.pdf)
+confirms that day as a federal holiday; the [official federal workweek](https://u.ae/en/information-and-services/jobs/working-in-uae-government-sector/working-hours-in-the-public-sector)
+has Saturday/Sunday weekends. Applying the FTA next-business-day rule gives August
+31. This evidenced interval is maintained in `filing_calendar_evidence.json`, not
+guessed from lunar dates or transaction posting dates. The initial nominal-date
+mismatch warning was resolved by checking this evidence. Other unsupported date
+exceptions/provisional future dates still require calendar confirmation. Frequency,
+cycle/quarter, registration boundary and overlapping period checks are read-only.
+No Company/UAE VAT Settings/filing-period records were changed.
+
+### Verification and Limits
+
+113 Python tests and eight JavaScript tests cover the calculation/recovery/sign,
+scope, grouping, duplication, return, currency/precision, calendar, completeness,
+permissions and export paths. Native report execution, both requested saved-zero
+invoices, both advances, petty-cash source pairs, real empty January, all numeric
+screen/XLSX components and four-page PDF rendering passed. Exotic/reversal/partial
+cases use isolated fixtures, not fabricated accounting documents. Full source,
+accounting, Company/settings and classification snapshots were unchanged. Browser
+Desk visual interaction was not authenticated/tested; print visuals were inspected.
+No core edit, migrate, bulk source update or FTA submission was performed.
+
+## Box/Component Completeness: 2026-10-27
+
+This supersedes earlier summary/export notes that replace known numbers with
+Pending Verification. The root cause was global preliminary status being reused
+by the grid, summary cards, XLSX and print formatter to mask zeros/net totals;
+every unresolved journal was also treated as an unresolved adjustment.
+
+`completeness.py` now tracks source dependencies separately for Amount, VAT Amount
+and Adjustment. Known box/card values remain numeric even when provisional.
+Screen warnings and cell tooltips explain the affected components; XLSX has the
+same numeric box totals plus a separate Box Component Completeness register and
+the same summary cards. PDF/print uses the same numeric values with a provisional
+marker. The eight transaction-detail columns and accounting calculations remain
+unchanged. Unknown source bases remain unknown; an empty known subtotal marked
+provisional is never an assertion of confirmed no activity or zero entitlement.
+
+For the first configured period, 2026-05-01 through 2026-07-31:
+
+| Box / component | Known subtotal | Completeness / reason |
+| --- | --- | --- |
+| 1f Amount / VAT | AED 1,101,253.46 / 55,062.68 | Provisional: two advances still lack Emirate allocation |
+| Other 1a-1g Amount / VAT | AED 0.00 | Provisional: either advance could belong to that Emirate |
+| 8 Amount / VAT | AED 1,101,253.46 / 55,062.68 | Provisional: depends on output allocations |
+| 9 / 11 Amount and VAT | AED 0.00 / 0.00 | Provisional: 17 matched journal purchase-VAT rows lack recovery entitlement |
+| 12 Amount | AED 55,062.68 | Provisional: depends on output VAT plus output adjustments |
+| 13 Amount | AED 0.00 | Provisional: depends on eligible input VAT plus input adjustments |
+| 14 Amount | AED 55,062.68 | Provisional known net subtotal, not final liability |
+| 2, 3, 4, 5, 6, 7, 10 | AED 0.00 | Complete no-activity components for this inspected scope |
+| All Adjustment components | AED 0.00 | Complete: no actual unresolved adjustment source |
+
+The two advances remain separately identified in details and warnings: taxable
+AED 986,315.40 and positive output VAT AED 49,315.77, excluded from official box
+subtotals until allocation/overlap evidence supports inclusion. The 17 purchase
+journal rows retain recorded VAT AED 597.21 and their matched source bases; none
+is silently granted full recovery or treated as a confirmed zero decision.
+Actual missing Emirate and recovery evidence is still required. No company,
+Customer address or remarks assign an Emirate, and no source is counted twice.
+
+Confirmed Purchase Invoice zero recovery remains zero with no source warning,
+blank VAT Box and visible source base/VAT. Reconciliation separately explains AED
+36,515.54 of first-period recorded invoice VAT excluded by saved zero recovery;
+it does not force claims to match the ledger or mark unrelated boxes incomplete.
+Needs Attention exports use positive output-role VAT for normal advance credits
+and expose the original negative debit-minus-credit GL movement separately.
+Reversal signs remain negative rather than using absolute values.
+
+Dependencies propagate through 8/11 component sums, 12/13 VAT-plus-adjustment sums,
+and 14's output-minus-input total. Only an actual unresolved adjustment affects
+Adjustment components. Genuinely unclassified tax postings retain their possible
+category scope; inaccessible/unconfigured source scope cannot claim confirmed
+no activity. Filing/header warnings and ledger differences are not themselves a
+reason to mask numeric box figures.
+
+Verification: 102 Python and seven JavaScript tests; native report execution;
+numeric screen/XLSX component agreement; print-template rendering; real empty
+January with complete numeric zeros; saved-zero invoices; all 19 unresolved rows;
+partial recovery, returns, reverse charge and currency fixtures; and all 308
+invoice/account GL checks. Source/accounting/classification snapshots remain
+unchanged. No core edit, business-document update, new mandatory verification
+field or migrate was performed. Browser visual testing is not claimed.
+
+## Customer-Advance Output VAT: 2026-10-27
+
+The journal resolver now distinguishes customer advances from petty-cash input VAT.
+The prior resolver only recognized expense accounts and otherwise left both base
+and VAT using debit-minus-credit signs, making normal advance credits appear
+negative and leaving their purpose unresolved.
+
+A matched configured company customer-advance account, saved Customer party,
+generator rate/tax rows and the same customer's balancing gross receivable establish
+the advance pattern. Neither an income account nor `is_advance = Yes` is required.
+The installed configuration maps both `default_customer_advance_account` and
+`default_advance_received_account` to Customer Advances - QBC. Existing generation,
+currency, project/cost-center, precision and unique-row reconciliation are reused.
+
+Output base and recorded VAT use credit-minus-debit: ordinary output credits are
+positive, while debit reversals are negative. Input VAT retains debit-minus-credit
+signs. Accounting debit/credit and raw tax evidence are retained unchanged; no
+absolute-value conversion is applied to reporting signs. Role-incompatible input/
+output classifications are rejected. Gross receivables only validate the pattern;
+they never replace the source advance base.
+
+Read-only Qatra results (also verified in the eight-column workbook):
+
+| Journal | Taxable base AED | Recorded output VAT AED |
+| --- | ---: | ---: |
+| ACC-JV-2026-00002 | +455,672.60 | +22,783.63 |
+| ACC-JV-2026-00001 | +530,642.80 | +26,532.14 |
+| Total | +986,315.40 | +49,315.77 |
+
+Both have the precise remaining issue: reporting VAT Emirate is missing or invalid
+on the transaction or an authoritative linked document. No Journal Entry Emirate
+field exists locally, and neither journal has a verified submitted Sales Invoice
+or later-adjustment link. Company/Customer addresses, project names and QTI cheque
+text are not used as Emirate or invoice-link authority. The actual base/VAT and
+Customer remain visible; VAT Box stays blank until the required source evidence
+exists. These amounts are not silently added to Emirate box totals.
+
+Duplicate checks follow structured journal-to-invoice references, submitted Sales
+Invoice Advance allocations back to the journal, and submitted journal references
+for later adjustments, with parent permissions and company/submission scope.
+Linked cases require explicit VAT-overlap reconciliation before automatic inclusion;
+no equality-of-amount, remarks or cheque-number matching claims to prove a link.
+No links found in permitted records does not prove that an external advance tax
+invoice is absent. Existing verified control-only treatments remain separate;
+ordinary VAT credits without the advance pattern are not classified as advances.
+
+88 Python and seven JavaScript tests passed. Both journals and the petty-cash
+example were verified read-only; output reversal and VAT settlement use isolated
+fixtures, not created business documents. Tests also cover output box/reversal
+totals and linked duplicate safeguards. All 308 invoice/GL comparisons and full
+source/accounting/classification snapshots remain unchanged. The eight columns
+are unchanged. No new field, journal/GL update, core edit or migrate was performed.
+
+## Saved Journal VAT Rows: 2026-10-27
+
+The generator belongs to `qatra_custom/journal_entry.py` and its Journal Entry
+client script. It calculates VAT from each configured base row, splits inclusive
+amounts using saved gross/last-net state, and appends a marked tax row on the same
+side with the same project/cost center. The installed generator saves no direct
+base-row link and no recovery decision. Neither generator was changed.
+
+The old report used a generated-remark suffix plus exact amount matching to infer
+one base. It ignored project/cost-center identity and inclusive/currency state,
+and only stored the inference in `derived_base`; the visible canonical `base`
+remained unknown. The report now reconciles saved configured bases, generated tax
+rows and active GL in separate allocation stages. Explicit base/GL row links are
+preferred where present; otherwise account, project, cost center, sign, saved rate
+and amounts must establish a unique exhaustive allocation. Remarks are not a key.
+Grouped tax rows/merged GL are supported when uniquely reconcilable. A saved base
+or generated tax row cannot be consumed twice. Ambiguous/oversized allocations
+remain explicit issues rather than guessed matches. VAT-to-GL totals must match
+exactly; generator rounding allows one company-currency minor unit per generated
+tax target, preserving saved VAT such as 46.82 rather than recalculating it.
+
+Source taxable base is the signed saved expense amount, never the journal header
+total or VAT divided by a rate. Inclusive rows require the saved split state;
+foreign-account rows require saved exchange rates and reconciliation with company
+amounts. An inconsistent historical currency split is flagged, not repaired.
+No current exchange rate or current Account tax rate replaces historical inputs.
+No Supplier is required: Party remains blank without a saved party.
+
+Read-only `ACC-JV-2026-00007-1` verification:
+
+| Base row | Generated tax row | Taxable AED | Recorded VAT AED |
+| --- | --- | ---: | ---: |
+| 7s7i3iiaq2 | 3s9aj8uo4r | 1,042.37 | 52.12 |
+| 7s7i3ba3vm | 3s9adk0pvt | 96.00 | 4.80 |
+| 7s7i1dke2r | 3s9a6ebt00 | 936.50 | 46.82 |
+| 7s7iemk8cj | 3s9ae7c389 | 300.00 | 15.00 |
+| Total | Four unique active GL rows | 2,374.87 | 118.74 |
+
+These are recorded purchase-VAT amounts, not automatic input claims. Account root
+type establishes expense evidence, but shared VAT account mapping Both does not
+establish entitlement. No installed journal recovery field or approved decision
+establishes eligibility for these four pairs. Their VAT Box remains blank and the
+only specific remaining issue is recovery entitlement; the taxable base no longer
+shows Pending Verification. Existing valid reviewed recovery percentages continue
+to use the normal calculation engine, including partial/zero recovery and signs.
+Invoice-referenced journals cannot generate duplicate expense input claims;
+unconfigured VAT settlements/transfers do not become purchases from debit direction.
+Saved control-only classifications retain their existing separate treatment.
+
+The eight visible detail/export columns are unchanged. The recoverable-input
+summary is pending when identified journal purchase VAT has unresolved eligibility;
+the included Box 9/Box 13 subtotal is still zero, not an assertion of zero journal
+entitlement. Recorded invoice totals and all 308 invoice/GL checks remain unchanged.
+81 Python and seven JavaScript tests passed, including explicit links, ambiguity,
+grouping, rounding, inclusive/credit/foreign amounts, transfers, invoice duplication,
+existing reviewed recovery and eight-column Excel values. Full source/accounting/
+classification snapshots were unchanged. No journal, GL, recovery decision, core
+file or generator was edited; no migrate ran. Browser visual testing is unverified.
+
+## Final Saved-Data Purchase Behaviour: 2026-10-27
+
+This is the current behaviour. All earlier dated implementation notes below are
+historical where they conflict with this section.
+
+The installed UAE field `recoverable_standard_rated_expenses` is a saved **AED
+Currency amount**, not a percentage or checkbox. The report reads that amount:
+zero means zero recovery, signed nonzero/partial amounts retain their eligible
+claim, and recorded VAT does not automatically grant recovery. No explicit-zero
+decision, audit comment, Version history or custom recovery field is required.
+Missing/invalid values and genuine tax/GL discrepancies retain their safeguards.
+Reverse charge retains its separate saved percentage and output/input treatment.
+
+The custom **Update VAT Recovery** script, server endpoint, submit-update hook,
+metadata setup and associated action tests have been removed. The report has no
+invoice-writing action. Historical custom fields, saved values and audit comments
+are not deleted; no invoice data or existing metadata was updated during this fix.
+Legacy custom recovery controls remain hidden without being used in calculations.
+
+Exactly eight detail/export columns remain: Date, Voucher Number, Party,
+Taxable Amount, VAT Amount, VAT Treatment, VAT Box, Remarks. Source taxable base
+and recorded VAT remain visible in AED irrespective of recovery. A saved-zero
+purchase is labelled **No input VAT claimed**, has a blank VAT Box and contributes
+no event to Box 9 or its drilldown. Remarks states the saved zero recovery basis;
+there is no incomplete/unconfirmed recovery warning.
+
+Read-only local verification:
+
+| Invoice | Taxable AED | Recorded VAT AED | Saved recovery / claim AED | VAT Box |
+| --- | ---: | ---: | ---: | --- |
+| ACC-PINV-2026-00293-1 | 1,557.50 | 77.88 | 0.00 / 0.00 | Blank |
+| ACC-PINV-2026-00210-1 | 323.00 | 16.15 | 0.00 / 0.00 | Blank |
+
+For 2026-05-01 through 2026-07-31, recorded sales VAT remains AED 55,062.68 and
+recorded purchase VAT AED 36,515.54. Saved eligible Box 9 base/VAT and Box 13 are
+zero. At that stage the Recoverable Purchase VAT card was numeric zero; the newer
+journal section above supersedes this when journal recovery is unresolved. All 308
+invoice/account VAT-to-GL checks match. The 19 unresolved journal source rows
+still make adjustments and final liability pending; no final nil liability is
+asserted. Source/accounting snapshots are unchanged. Seventy-one Python tests and
+seven JavaScript tests passed, covering zero/partial/full recovery, returns,
+reverse charge, source columns, claims and eight-column Excel output. No migrate,
+core edit, invoice cancellation/amendment or business-data update was performed.
+Authenticated browser visual verification was not performed.
+
+## Historical Implementation Notes
+
 ## Simplified Purchase Details and Recovery: 2026-10-27
 
 This section supersedes the earlier extra-column layout and acceptance of every

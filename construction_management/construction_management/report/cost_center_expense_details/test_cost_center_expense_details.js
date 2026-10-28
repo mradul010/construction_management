@@ -4,6 +4,20 @@ const fs = require("node:fs");
 const vm = require("node:vm");
 
 test("Project Name links retain Project IDs, escape names and preserve other formatting", () => {
+	const observers = [];
+	class ResizeObserverMock {
+		constructor(callback) {
+			this.callback = callback;
+			this.disconnected = false;
+			observers.push(this);
+		}
+		observe(target) {
+			this.target = target;
+		}
+		disconnect() {
+			this.disconnected = true;
+		}
+	}
 	const frappe = {
 		query_reports: {},
 		defaults: { get_user_default() {} },
@@ -14,7 +28,8 @@ test("Project Name links retain Project IDs, escape names and preserve other for
 		},
 	};
 	vm.runInNewContext(fs.readFileSync(`${__dirname}/cost_center_expense_details.js`, "utf8"), {
-		frappe, __: s => s, erpnext: { utils: { add_dimensions() {} } },
+		frappe, __: s => s, ResizeObserver: ResizeObserverMock,
+		erpnext: { utils: { add_dimensions() {} } },
 	});
 	const report = frappe.query_reports["Cost Center Expense Details"];
 	const format = (value, fieldname, data) => report.formatter(value, {}, { fieldname }, data, () => "default");
@@ -25,24 +40,56 @@ test("Project Name links retain Project IDs, escape names and preserve other for
 	assert.equal(format(null, "project_name", {}), "default");
 	assert.equal(format(6000, "net_cost", {}), "default");
 	assert.equal(report.filters.find(f => f.fieldname === "project").options, "Project");
-	const options = report.get_datatable_options({ showTotalRow: true, cellHeight: 33, layout: "fluid" });
-	assert.equal(options.layout, "fixed");
-	assert.equal(options.cellHeight, 64);
-	assert.equal(options.showTotalRow, true);
-	const styles = [];
+	assert.equal(report.get_datatable_options, undefined);
+
+	const sequenceColumn = { id: "_rowIndex", colIndex: 0, width: 30 };
+	const parentElement = {};
+	const wrapper = { parentElement };
+	const calls = [];
 	report.after_datatable_render({
-		datamanager: { getColumns: () => [
-			{ id: "project_name", colIndex: 1 }, { id: "cost_center", colIndex: 2 },
-			{ id: "voucher_no", colIndex: 8 }, { id: "remarks", colIndex: 9 },
-			{ id: "debit", colIndex: 4 },
-		] },
-		style: { setStyle: (selector, rules) => styles.push({ selector, rules }) },
+		wrapper,
+		setDimensions() {
+			calls.push("setDimensions");
+			sequenceColumn.width = 30;
+		},
+		getColumns: () => [sequenceColumn],
+		datamanager: {
+			updateColumn: (index, changes) => {
+				calls.push(["updateColumn", index, changes.width]);
+				Object.assign(sequenceColumn, changes);
+			},
+		},
+		columnmanager: {
+			setColumnHeaderWidth: index => calls.push(["setColumnHeaderWidth", index]),
+			setColumnWidth: index => calls.push(["setColumnWidth", index]),
+		},
+		style: {
+			setStickyColumnStyle: () => calls.push("setStickyColumnStyle"),
+			setBodyStyle: () => calls.push("setBodyStyle"),
+		},
 	});
-	assert.equal(styles.length, 5);
-	assert.equal(styles[0].rules.whiteSpace, "normal");
-	assert.equal(styles[0].rules.lineHeight, "20px");
-	assert.equal(styles[0].rules.boxSizing, "border-box");
-	assert.equal(styles[3].rules.overflow, "auto");
-	assert.ok(styles[0].selector.includes(":not(.dt-row-header):not(.dt-row-filter)"));
-	assert.equal(styles[4].rules.fontWeight, "bold");
+	assert.equal(sequenceColumn.width, 40);
+	assert.deepEqual(calls, [
+		"setDimensions",
+		["updateColumn", 0, 40],
+		["setColumnHeaderWidth", 0],
+		["setColumnWidth", 0],
+		"setStickyColumnStyle",
+		"setBodyStyle",
+	]);
+	assert.equal(observers[0].target, parentElement);
+
+	observers[0].callback();
+	assert.equal(sequenceColumn.width, 40);
+	assert.equal(calls.filter(call => call === "setDimensions").length, 2);
+
+	report.after_datatable_render({
+		wrapper,
+		setDimensions() {},
+		getColumns: () => [sequenceColumn],
+		datamanager: { updateColumn() {} },
+		columnmanager: { setColumnHeaderWidth() {}, setColumnWidth() {} },
+		style: { setStickyColumnStyle() {}, setBodyStyle() {} },
+	});
+	assert.equal(observers[0].disconnected, true);
 });

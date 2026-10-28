@@ -15,6 +15,8 @@ class TestAutomaticVAT201(unittest.TestCase):
 	def calculate(self, source):
 		rule, error = automatic.source_rule(source, "AED")
 		self.assertIsNone(error)
+		if rule is None and automatic.is_zero_claim(source):
+			return automatic.zero_claim_detail(source)
 		self.assertFalse(rule.get("approved_by"))
 		event, error = engine.apply_rule(source, rule, "AED", source_verified=True)
 		self.assertIsNone(error)
@@ -27,7 +29,7 @@ class TestAutomaticVAT201(unittest.TestCase):
 		return dict(self.source, voucher_type="Purchase Invoice", **changes)
 
 	def decided_purchase(self, **changes):
-		return self.purchase(zero_recovery_decision="TEST-ONLY-MANAGER-DECISION", **changes)
+		return self.purchase(**changes)
 
 	def test_saved_emirate_does_not_depend_on_field_fetch_or_verification(self):
 		with patch.object(frappe, "get_meta", side_effect=AssertionError("Emirate must not depend on fetch metadata")):
@@ -65,7 +67,7 @@ class TestAutomaticVAT201(unittest.TestCase):
 			self.assertIn("amount is missing", error)
 		rule, error = automatic.source_rule(self.purchase(recovery_source_amount=0), "AED")
 		self.assertIsNone(rule)
-		self.assertIn("configuration is incomplete", error)
+		self.assertIsNone(error)
 
 	def test_saved_recoverable_vat_amount_is_not_an_expense_base(self):
 		event = self.calculate(self.purchase(recovery_source_amount=20))
@@ -119,7 +121,7 @@ class TestAutomaticVAT201(unittest.TestCase):
 		output = self.run_build(self.result([source]))
 		row = output["details"][0]
 		self.assertEqual((row["invoice_taxable_amount"], row["recorded_vat_amount"], row["recoverable_vat_amount"]), (1557.5, 77.88, 0))
-		self.assertIn("Saved Recoverable Standard Rated Expenses (AED)", row["display_remarks"])
+		self.assertIn("saved invoice recovery amount", row["display_remarks"])
 		self.assertIn("Recoverable VAT: AED 0.00", row["display_remarks"])
 		self.assertNotIn("Automatic source evidence", row["treatment"])
 		self.assertFalse(output["reviews"])
@@ -129,10 +131,9 @@ class TestAutomaticVAT201(unittest.TestCase):
 		from openpyxl import load_workbook
 		from construction_management.construction_management.report.uae_vat_201_return.uae_vat_201_return import workbook_bytes
 		output = self.run_build(self.result([self.decided_purchase(base=1557.5, raw_vat=77.88, recovery_source_amount=0)]))
-		sheet = load_workbook(io.BytesIO(workbook_bytes(output))).active
+		sheet = load_workbook(io.BytesIO(workbook_bytes(output)))["Transactions"]
 		rows = list(sheet.values)
-		index = next(i for i, row in enumerate(rows) if row[0] == "Transaction Details")
-		headings, values = rows[index+1], rows[index+2]
+		headings, values = rows[0], rows[1]
 		row = dict(zip(headings, values))
 		self.assertEqual(list(headings[:8]), ["Date", "Voucher Number", "Party", "Taxable Amount", "VAT Amount", "VAT Treatment", "VAT Box", "Remarks"])
 		self.assertTrue(all(value is None for value in headings[8:]))
@@ -140,14 +141,35 @@ class TestAutomaticVAT201(unittest.TestCase):
 		self.assertEqual(row["VAT Amount"], 77.88)
 		self.assertIn("Recoverable VAT: AED 0.00", row["Remarks"])
 
-	def test_default_zero_is_pending_without_suppressing_source_amounts(self):
+	def test_saved_zero_is_not_pending_and_has_no_box_without_suppressing_source_amounts(self):
 		for base, vat in ((1557.5, 77.88), (323, 16.15)):
 			output = self.run_build(self.result([self.purchase(base=base, raw_vat=vat, recovery_source_amount=0)]))
 			self.assertFalse(output["events"])
 			row = output["details"][0]
 			self.assertEqual((row["base"], row["raw_vat"]), (base, vat))
-			self.assertIn("configuration is incomplete", row["display_remarks"])
-			self.assertEqual(output["status"], automatic.PRELIMINARY)
+			self.assertEqual(row["treatment"], "No input VAT claimed")
+			self.assertIsNone(row["vat_box"])
+			self.assertIsNone(row["box"])
+			self.assertFalse(output["reviews"])
+			self.assertNotIn("configuration", row["display_remarks"])
+
+	def test_retained_zero_claim_is_not_included_in_box_nine(self):
+		source = self.purchase(recovery_source_amount=0)
+		result = self.result([])
+		result["events"] = [dict(source, box="9", amount=1000, vat_amount=49.99)]
+		output = self.run_build(result)
+		self.assertFalse(output["events"])
+		self.assertFalse(output["reviews"])
+		self.assertIsNone(output["details"][0]["vat_box"])
+
+	def test_retained_ordinary_claim_uses_saved_amount_not_legacy_percentage(self):
+		source = self.purchase(recovery_source_amount=20)
+		result = self.result([])
+		result["events"] = [dict(source, box="9", amount=1000, vat_amount=49.99, adjustment=0)]
+		output = self.run_build(result)
+		self.assertFalse(output["reviews"])
+		self.assertEqual(output["events"][0]["vat_amount"], 20)
+		self.assertIn("saved invoice recovery amount", output["details"][0]["display_remarks"])
 
 	def test_purchase_details_and_summary_keep_source_and_claims_separate(self):
 		sources = [self.decided_purchase(voucher_no="FULL", source_row="FULL-TAX", base=1557.5, raw_vat=77.88, recovery_source_amount=77.88),
@@ -227,7 +249,7 @@ class TestAutomaticVAT201(unittest.TestCase):
 		self.assertEqual(len(result["events"]), 1)
 		self.assertFalse(result["reviews"])
 		self.assertEqual(result["reconciliation"][0]["difference"], 0)
-		self.assertEqual(result["status"], "Prepared - Not Filed")
+		self.assertEqual(result["status"], "Ready for Review")
 
 	def test_conflicting_legacy_decisions_do_not_double_count(self):
 		source = self.sales(review="Duplicated source event classification")
