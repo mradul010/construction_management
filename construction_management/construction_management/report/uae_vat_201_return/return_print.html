@@ -3,7 +3,7 @@
 {% macro table(keys) %}
 <table><thead><tr><th>Box</th><th>Description</th><th>Amount (AED)</th><th>VAT Amount (AED)</th><th>Adjustment (AED)</th></tr></thead><tbody>
 {% for b in result.boxes if b.box in keys %}
-<tr><td>{{ b.box }}</td><td>{{ b.description }}</td>{% for field in ['amount','vat_amount','adjustment'] %}<td class="num">{{ 'Pending Verification' if result.status == 'PRELIMINARY - VERIFICATION REQUIRED' and not b[field] else frappe.utils.fmt_money(b[field], precision=precision) }}</td>{% endfor %}</tr>
+<tr{% if b.box in ['8','11'] %} style="font-weight:bold;background:#f1f3f4"{% endif %}><td>{{ b.box }}</td><td>{{ b.description }}</td>{% for field in ['amount','vat_amount','adjustment'] %}<td class="num">{{ frappe.utils.fmt_money(b[field], precision=precision) }}{% if b.get('completeness', {}).get(field, {}).get('provisional') %}*{% endif %}</td>{% endfor %}</tr>
 {% endfor %}</tbody></table>
 {% endmacro %}
 <html><head><meta charset="utf-8"><style>
@@ -11,6 +11,7 @@ body {font-family: Arial, sans-serif; font-size: 10pt; color: #222;}
 h1 {font-size: 19pt; margin: 0 0 8px;} h2 {font-size: 12pt; background: #e8ebed; padding: 8px; margin: 14px 0 0;}
 table {width: 100%; border-collapse: collapse; table-layout: fixed; margin-bottom: 12px;}
 td,th {padding: 7px; border: 1px solid #999; word-wrap: break-word; vertical-align: top;} th {background: #f1f3f4; text-align: left;}
+.review th:nth-child(1) {width: 35%;} .review th:nth-child(2) {width: 65%;}
 th:nth-child(1) {width: 7%;} th:nth-child(2) {width: 39%;} .num {text-align: right; white-space: nowrap; font-size: 9pt;}
 .page {page-break-after: always;} .page:last-child {page-break-after: auto;}
 .meta td {width: 50%;} .status {border: 2px solid #777; padding: 8px; margin: 8px 0;} .note {font-size: 9pt; color: #444;}
@@ -34,13 +35,26 @@ th:nth-child(1) {width: 7%;} th:nth-child(2) {width: 39%;} .num {text-align: rig
 <p class="note">ERP-generated preparation report. Not submitted to the FTA.</p></div>
 <div class="page"><h1>UAE VAT 201 RETURN</h1><p>{{ h.company }} | {{ h.from_date }} – {{ h.to_date }} | {{ result.status }}</p>
 <h2>Net VAT Due</h2>
-<table><thead><tr><th>Box</th><th>Description</th><th>Amount (AED)</th></tr></thead><tbody>{% for b in result.boxes if b.box in ['12','13','14'] %}<tr><td>{{ b.box }}</td><td>{{ b.description }}</td><td class="num">{{ 'Pending Verification' if result.status == 'PRELIMINARY - VERIFICATION REQUIRED' else frappe.utils.fmt_money(b.amount,precision=precision) }}</td></tr>{% endfor %}</tbody></table>
+<table><thead><tr><th>Box</th><th>Description</th><th>Amount (AED)</th></tr></thead><tbody>{% for b in result.boxes if b.box in ['12','13','14'] %}<tr><td>{{ b.box }}</td><td>{{ b.description }}</td><td class="num">{{ frappe.utils.fmt_money(b.amount,precision=precision) }}{% if b.get('completeness', {}).get('amount', {}).get('provisional') %}*{% endif %}</td></tr>{% endfor %}</tbody></table>
+<p class="note">* Provisional known subtotal; only affected components are incomplete. See source warnings below.</p>
 <h2>Profit Margin Scheme</h2><p>Did you apply the profit margin scheme in respect of any supplies made during the tax period?<br>{{ text(h.profit_margin_scheme) }}</p>
 <h2>Authorised Signatory</h2><table class="meta">
 <tr><td>Name in English<br>{{ text(h.signatory_english) }}</td><td>Name in Arabic<br>{{ text(h.signatory_arabic) }}</td></tr>
 <tr><td>Mobile Country Code<br>{{ text(h.mobile_code) }}</td><td>Mobile Number<br>{{ text(h.mobile) }}</td></tr>
 <tr><td>Date of Submission (as recorded)<br>{{ text(h.submission_date) }}</td><td>Email Address<br>{{ text(h.email) }}</td></tr></table>
 <h2>Tax Reconciliation</h2><table><thead><tr><td>Description</td><td>Report (AED)</td><td>Ledger (AED)</td><td>Difference (AED)</td></tr></thead><tbody>{% for r in result.reconciliation %}<tr><td>{{ r.description }}</td>{% for field in ['report_amount','ledger_amount','difference'] %}<td class="num">{{ frappe.utils.fmt_money(r[field],precision=precision) if r[field] is not none else 'Not Available' }}</td>{% endfor %}</tr>{% endfor %}</tbody></table>
-<p class="note">{{ result.reviews|length }} source rows need attention. {{ result.warnings|join(' | ') }}</p>
+<p class="note">{{ result.reviews|length }} source rows require accounts review. The following review appendix identifies the remaining evidence and filing-calendar issues. Recorded VAT does not establish recoverability.</p>
+</div>
+<div class="page"><h1>VAT 201 REVIEW NOTES</h1><p>{{ h.company }} | TRN {{ text(h.trn) }} | {{ h.from_date }} – {{ h.to_date }} | {{ result.status }}</p>
+<h2>Source Evidence Required</h2>
+<table class="review"><thead><tr><th>Sources</th><th>Evidence Required</th></tr></thead><tbody>
+{% for item in result.get('review_summary', []) %}<tr><td><strong>{{ item.count }} source rows</strong><br>{{ item.vouchers|join(', ') }}</td><td>{{ item.issue }}<br><br>{{ item.action }}</td></tr>{% endfor %}
+</tbody></table>
+<h2>Filing Calendar Review</h2>
+{% for issue in result.get('calendar_issues', []) %}<p class="note">{{ issue }}</p>{% else %}<p class="note">No maintained-period mismatch identified. This report does not file or validate submission with the FTA.</p>{% endfor %}
+{% if h.get('calendar_basis') %}<p class="note"><strong>Checked due date: {{ h.get('expected_due_date') }}.</strong> {{ h.calendar_basis|e }}</p>{% endif %}
+<h2>Reconciliation Basis</h2>
+{% for row in result.reconciliation if row.description in ['Output VAT','Input VAT'] %}<p class="note"><strong>{{ row.description }}:</strong> {{ row.explanation }}</p>{% endfor %}
+<p class="note">Known subtotals exclude unresolved sources. Output VAT credits are positive and debit reversals negative; input VAT uses the opposite accounting direction. Raw GL debit-minus-credit movements are shown separately. Voucher/account references, source-to-GL checks and recovery exclusions are retained in the workbook.</p>
 <p class="note">Prepared {{ frappe.utils.now_datetime() }}. This document is not FTA-certified and does not confirm submission.</p>
 </div></body></html>

@@ -89,7 +89,7 @@ doctype_js = {
     "Material Request": "public/js/design_reference_filters.js",
     "Stock Entry": "public/js/design_reference_filters.js",
     "Purchase Receipt": "public/js/design_reference_filters.js",
-    "Purchase Invoice": "public/js/design_reference_filters.js",
+    "Purchase Invoice": ["public/js/design_reference_filters.js"],
     "RA Bill": "public/js/design_reference_filters.js",
     "SC Work Order": "public/js/design_reference_filters.js",
     "SC Bill": "public/js/design_reference_filters.js",

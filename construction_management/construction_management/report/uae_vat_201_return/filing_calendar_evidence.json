@@ -1,0 +1,15 @@
+{
+  "closed_intervals": [
+    {
+      "from_date": "2026-08-28",
+      "to_date": "2026-08-30",
+      "next_working_day": "2026-08-31",
+      "basis": "FAHR Circular 11/2026 public holiday followed by the federal Saturday/Sunday weekend",
+      "sources": [
+        "https://www.fahr.gov.ae/wp-content/uploads/2026/08/Circular-No.-11-of-2026-Regarding-The-Holiday-of-the-Prophet-Mohammads-Birthday-1448-AH.pdf",
+        "https://u.ae/en/information-and-services/jobs/working-in-uae-government-sector/working-hours-in-the-public-sector",
+        "https://tax.gov.ae/-/media/Files/EN/PDF/Guides/VAT-Returns-User-Guide.pdf"
+      ]
+    }
+  ]
+}

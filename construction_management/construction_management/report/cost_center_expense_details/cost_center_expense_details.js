@@ -1,23 +1,33 @@
 (() => {
 	const parent = "Cost Center Transaction Analysis";
+	const rowIndexMinWidth = 40;
+
+	const refreshDatatableLayout = (datatable) => {
+		datatable.setDimensions();
+
+		const rowIndex = datatable.getColumns().find((column) => column.id === "_rowIndex");
+		if (!rowIndex || rowIndex.width >= rowIndexMinWidth) return;
+
+		datatable.datamanager.updateColumn(rowIndex.colIndex, { width: rowIndexMinWidth });
+		datatable.columnmanager.setColumnHeaderWidth(rowIndex.colIndex);
+		datatable.columnmanager.setColumnWidth(rowIndex.colIndex);
+		datatable.style.setStickyColumnStyle();
+		datatable.style.setBodyStyle();
+	};
+
 	const field = (fieldname, label, fieldtype, options, extra = {}) => ({ fieldname, label: __(label), fieldtype, options, ...extra });
 	frappe.query_reports["Cost Center Expense Details"] = {
-		get_datatable_options(options) {
-			return { ...options, layout: "fixed", cellHeight: 64 };
-		},
 		after_datatable_render(datatable) {
-			// Instance-scoped rules preserve DataTable's virtual row and scroll geometry.
-			for (const column of datatable.datamanager.getColumns()) {
-				if (!["project_name", "cost_center", "voucher_no", "remarks"].includes(column.id)) continue;
-				datatable.style.setStyle(
-					`.dt-row:not(.dt-row-header):not(.dt-row-filter) .dt-cell--col-${column.colIndex} .dt-cell__content`,
-					{
-						whiteSpace: "normal", overflowWrap: "anywhere", overflow: "auto",
-						textOverflow: "clip", lineHeight: "20px", boxSizing: "border-box"
-					}
-				);
-			}
-			datatable.style.setStyle(".dt-row-totalRow .dt-cell__content", { fontWeight: "bold" });
+			refreshDatatableLayout(datatable);
+
+			const wrapper = datatable.wrapper;
+			wrapper.costCenterExpenseResizeObserver?.disconnect();
+			if (typeof ResizeObserver === "undefined") return;
+
+			wrapper.costCenterExpenseResizeObserver = new ResizeObserver(() => {
+				refreshDatatableLayout(datatable);
+			});
+			wrapper.costCenterExpenseResizeObserver.observe(wrapper.parentElement || wrapper);
 		},
 		formatter(value, row, column, data, default_formatter) {
 			if (column.fieldname === "project_name" && data?.project) {

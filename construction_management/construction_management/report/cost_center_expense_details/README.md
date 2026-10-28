@@ -23,6 +23,11 @@ Standard report roles, GL permissions and GL match conditions apply. Voucher
 numbers are Dynamic Links; opening documents uses normal document permissions.
 Standard report totals and numeric Excel export are used. Currency comes from
 the company (AED for Qatra), without currency conversion or balancing adjustments.
+The report keeps Frappe's native Query Report DataTable row sizing and inline
+filter layout. Its sequence-number column is kept at a 40px minimum when native
+sizing would make it narrower, and native DataTable dimensions are recalculated
+after rendering, refresh, and container resizing so the header, filters, body,
+and totals stay aligned.
 
 ## Runtime verification
 

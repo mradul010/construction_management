@@ -5,7 +5,7 @@
 	const money = (value, currency = "AED") =>
 		value == null
 			? __("Pending Verification")
-			: frappe.format(value, { fieldtype: "Currency", options: currency });
+			: frappe.format(value, { fieldtype: "Currency", options: currency, precision: 2 });
 	const voucher = (row) =>
 		frappe.utils.get_form_link(row.voucher_type, row.voucher_no, true, esc(row.voucher_no));
 
@@ -71,9 +71,11 @@
 					"Remarks",
 			  ];
 		const body = rows
-			.map((row) => {
+			.map((row, index) => {
 				const currency = row.currency || "AED";
-				const vat = row.vat_amount ?? row.raw_vat;
+				const taxable =
+					"invoice_taxable_amount" in row ? row.invoice_taxable_amount : row.base;
+				const vat = "recorded_vat_amount" in row ? row.recorded_vat_amount : row.raw_vat;
 				const values = attention
 					? [
 							voucher(row),
@@ -82,15 +84,15 @@
 							esc(row.recommended_action),
 					  ]
 					: [
-							esc(row.posting_date),
+							`<span class="text-muted mr-2">${index + 1}.</span>${esc(frappe.datetime?.str_to_user ? frappe.datetime.str_to_user(row.posting_date) : row.posting_date)}`,
 							voucher(row),
 							esc(row.party),
-							money(row.amount ?? row.base, currency),
+							money(taxable, currency),
 							money(vat, currency),
 							esc(row.treatment),
-							esc(row.vat_box),
+							esc(row.vat_box ?? row.box),
 							esc(
-								row.issue || row.remarks || row.reason || row.supporting_reference
+								row.display_remarks || row.issue || row.remarks || row.reason || row.supporting_reference
 							),
 					  ];
 				return `<tr>${values
@@ -136,6 +138,10 @@
 					)}</button></li>`
 			)
 			.join("")}</ul><div class="vat201-tab-content mt-3"></div>`;
+		const review = message.review_summary || [];
+		if (review.length) panel.insertAdjacentHTML("afterbegin", `<div class="alert alert-warning"><strong>${__("Requires Review")}</strong><ul class="mb-0">${review.map(item => `<li>${esc(item.count)} ${__("source rows")}: ${esc(item.issue)} ${esc(item.action || "")}</li>`).join("")}</ul></div>`);
+		const reconciliation = message.reconciliation || [];
+		if (reconciliation.length) panel.insertAdjacentHTML("beforeend", `<h4 class="mt-4">${__("Ledger Reconciliation")}</h4><div class="table-responsive"><table class="table table-bordered"><thead><tr>${["Description","Known Return VAT","Recorded Ledger VAT","Difference","Explanation"].map(label=>`<th>${esc(__(label))}</th>`).join("")}</tr></thead><tbody>${reconciliation.map(row=>`<tr><td>${esc(row.description)}</td>${["report_amount","ledger_amount","difference"].map(field=>`<td class="text-right" style="white-space:nowrap">${row[field] == null ? "" : money(row[field])}</td>`).join("")}<td>${esc(row.explanation)}</td></tr>`).join("")}</tbody></table></div>`);
 		const rows = message.details || [];
 		const groups = [
 			rows.filter((r) => ["Sales Invoice", "POS Invoice"].includes(r.voucher_type)),
@@ -242,15 +248,16 @@
 				on_change: date_changed,
 			},
 		],
+		get_datatable_options(options) {
+			return {...options, serialNoColumn: true, layout: "fixed"};
+		},
 		formatter(value, row, column, data, default_formatter) {
 			let formatted = default_formatter(value, row, column, data);
-			if (
-				data?._box &&
-				data._incomplete &&
-				column.fieldtype === "Currency" &&
-				(value === 0 || ["12", "13", "14"].includes(data.box))
-			)
-				return `<span class="text-warning">${__("Pending Verification")}</span>`;
+			const state = data?.completeness?.[column.fieldname];
+			if (data?._box && state?.provisional && column.fieldtype === "Currency")
+				formatted = `<span class="text-warning" title="${esc(
+					__("Provisional known subtotal") + ": " + (state.reasons || []).join("; ")
+				)}">${formatted}</span>`;
 			if (value < 0 && column.fieldtype === "Currency")
 				formatted = `<span class="text-danger">${formatted}</span>`;
 			if (

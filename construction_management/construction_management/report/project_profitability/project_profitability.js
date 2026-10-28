@@ -91,6 +91,13 @@
 				reqd: 1,
 			},
 			{
+				fieldname: "show_percentage_analysis",
+				label: __("Show Percentage Analysis"),
+				fieldtype: "Check",
+				default: 1,
+				depends_on: "eval:doc.view_type != 'Timesheet Profitability'",
+			},
+			{
 				fieldname: "metric",
 				label: __("Metric"),
 				fieldtype: "Select",
@@ -128,6 +135,10 @@
 			let formatted = default_formatter(value, row, column, data);
 			if (frappe.query_report.get_filter_value("view_type") === "Timesheet Profitability")
 				return formatted;
+			if (column.fieldtype === "Percent" && value == null) return "";
+			if (data?._project_summary || data?._grand_total) formatted = `<strong>${formatted}</strong>`;
+			if (column.description)
+				formatted = `<span title="${frappe.utils.escape_html(column.description)}">${formatted}</span>`;
 			if (
 				!data ||
 				column.fieldtype !== "Currency" ||
@@ -153,6 +164,9 @@
 				context.metric = frappe.query_report.get_filter_value("metric");
 			return `<a href="/app/query-report/General%20Ledger" class="project-profitability-ledger"
 				data-context="${frappe.utils.escape_html(JSON.stringify(context))}">${formatted}</a>`;
+		},
+		get_datatable_options(options) {
+			return { ...options, layout: "fixed" };
 		},
 		after_datatable_render(datatable) {
 			const wrapper = datatable.wrapper;

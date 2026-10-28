@@ -20,8 +20,9 @@ def fingerprint(source):
 
 
 def enrich_journals(sources):
+	from construction_management.construction_management.report.uae_vat_201_return.journal import match_journal, link_advance_evidence
 	cache = {}
-	project_catalog = {}
+	account_catalog = {}
 	for source in sources:
 		if source["voucher_type"] not in ("Journal Entry", "Payment Entry"):
 			continue
@@ -36,38 +37,39 @@ def enrich_journals(sources):
 		source["journal_evidence"] = cache[key]
 		doc = cache[key]["document"]
 		source["remarks"] = doc.get("remark") or doc.get("remarks") or doc.get("user_remark")
-		projects = {r.get("project") for r in doc.get("accounts", []) if r.get("project")}
-		source["project"] = next(iter(projects)) if len(projects) == 1 else None
 		source["journal_category"] = "Unresolved"
-		# Match the saved generator inputs, not an invented taxable base from VAT / 5%.
-		tax_rows = [r for r in doc.get("accounts", []) if r.get("custom_is_tax_row") and
-			r.get("account") == source["tax_account"] and flt(r.get("debit")) == flt(source.get("debit")) and
-			flt(r.get("credit")) == flt(source.get("credit"))]
-		bases = []
-		if len(tax_rows) == 1:
-			for row in doc.get("accounts", []):
-				if row.get("custom_is_tax_row") or row.get("custom_vat_account") != source["tax_account"]:
-					continue
-				if not (tax_rows[0].get("user_remark") or "").endswith(" on " + row["account"]):
-					continue
-				amount = abs(flt(row.get("debit")) - flt(row.get("credit")))
-				vat = abs(flt(source.get("debit")) - flt(source.get("credit")))
-				precision = frappe.get_precision("GL Entry", "debit", currency=source.get("currency"))
-				if flt(amount * flt(row.get("custom_vat_rate")) / 100, precision) == flt(vat, precision):
-					bases.append(row)
-		if len(bases) == 1:
-			source["derived_base"] = abs(flt(bases[0].get("debit")) - flt(bases[0].get("credit")))
-			source["base_row_reference"] = bases[0]["name"]
-			source["project"] = bases[0].get("project")
-			source["remarks"] = "; ".join(str(v) for v in (source.get("remarks"), bases[0].get("user_remark")) if v)
-		if source.get("project"):
-			if doc["company"] not in project_catalog:
-				project_catalog[doc["company"]] = frappe.get_list("Project", filters={"company":doc["company"]}, fields=["name","project_name"],limit_page_length=0)
-			linked = project_catalog[doc["company"]]
-			text = " ".join(str(r.get("user_remark") or "") for r in doc.get("accounts", []))
-			named = {p.name for p in linked if p.project_name and p.project_name.casefold() in text.casefold()}
-			if named and source["project"] not in named:
-				source["project_conflict"] = "Structured Project differs from project named in journal remarks: " + ", ".join(sorted(named))
+	for (doctype, _name), evidence in cache.items():
+		if doctype != "Journal Entry":
+			continue
+		doc = evidence["document"]
+		company = doc["company"]
+		if company not in account_catalog:
+			account_catalog[company] = set(frappe.get_list("Account", filters={"company":company,"root_type":"Expense"}, pluck="name",limit_page_length=0))
+		matching = [source for source in sources if source["voucher_type"] == doctype and source["voucher_no"] == doc["name"]]
+		company_doc = frappe.get_cached_doc("Company", company)
+		advance_accounts = {company_doc.get(field) for field in ("default_customer_advance_account", "default_advance_received_account") if company_doc.get(field)}
+		match_journal(doc, matching, account_catalog[company], company_doc.default_currency, advance_accounts)
+	companies = {e["document"]["company"] for e in cache.values()}
+	for company in companies:
+		advances = [s for s in sources if s.get("journal_category") == "Customer-advance output VAT" and
+			s.get("journal_evidence", {}).get("document", {}).get("company") == company]
+		if not advances:
+			continue
+		can_check_invoices = frappe.has_permission("Sales Invoice", "read")
+		invoices = frappe.get_list("Sales Invoice", filters={"company":company,"docstatus":1},
+			fields=["name","company","customer","vat_emirate"], limit_page_length=0) if can_check_invoices else []
+		parents = [invoice.name for invoice in invoices]
+		names = list({source["voucher_no"] for source in advances})
+		allocations = frappe.get_all("Sales Invoice Advance", filters={"parent":["in",parents],"parenttype":"Sales Invoice",
+			"reference_type":"Journal Entry","reference_name":["in",names]},
+			fields=["parent","reference_type","reference_name","allocated_amount"],limit_page_length=0) if parents else []
+		journals = frappe.get_list("Journal Entry", filters={"company":company,"docstatus":1}, pluck="name",limit_page_length=0)
+		adjustments = frappe.get_all("Journal Entry Account", filters={"parent":["in",journals],"parenttype":"Journal Entry",
+			"reference_type":"Journal Entry","reference_name":["in",names]}, fields=["parent","reference_name"],limit_page_length=0) if journals else []
+		link_advance_evidence(advances, invoices, allocations, adjustments)
+		if not can_check_invoices:
+			for source in advances:
+				source["journal_duplicate_risk"] = "Sales Invoice access is required to check customer-advance VAT overlap; source scope is incomplete"
 
 
 def suggest(source, mappings, rules=()):
@@ -98,7 +100,9 @@ def suggest(source, mappings, rules=()):
 			reasons.append("Source item explicitly marked " + source["treatment_hint"] + "; confirm supporting treatment and tax point")
 		elif source.get("tax_account") and source.get("source_emirate") in get_emirates() and flt(source.get("tax_rate")) == 5:
 			box = "1" + chr(97 + get_emirates().index(source["source_emirate"]))
-			reasons.append("Suggested from saved invoice VAT Emirate; ERPNext can fetch this from company_address.emirate, so verify supply-specific Emirate and tax point")
+			reasons.append("Emirate box uses the saved invoice VAT Emirate")
+		elif source.get("tax_account") and flt(source.get("tax_rate")) == 5:
+			reasons.append("VAT Emirate is missing or invalid; select a valid UAE Emirate on the source invoice")
 		else:
 			reasons.append("No sufficient standard-rated/zero/exempt supply evidence")
 	else:
@@ -106,11 +110,13 @@ def suggest(source, mappings, rules=()):
 			box = "10" if source.get("reverse_charge") == "Y" else "9"
 			reasons.append("Potential input VAT from submitted purchase tax row; recoverability and tax point require explicit review")
 			if source.get("reverse_charge") == "Y":
-				reasons.append("Reverse charge also needs a separate Box 3 output classification; default recovery percentage is not approval")
+				reasons.append("Reverse charge uses the saved standard recovery percentage and requires matching Box 3 output/GL evidence")
 			if not source.get("source_tax_id"):
 				reasons.append("Supplier TRN not recorded on invoice; verify original tax invoice")
-			if not flt(source.get("recovery_source_amount")):
-				reasons.append("Source recovery amount is zero/default, not evidence of either 0% or 100% entitlement")
+			if source.get("reverse_charge") != "Y" and source.get("recovery_source_amount") in (None, ""):
+				reasons.append("Recoverable Standard Rated Expenses (AED) is missing")
+			elif source.get("reverse_charge") != "Y" and not flt(source.get("recovery_source_amount")):
+				reasons.append("Saved recoverable VAT amount is zero; no input VAT is claimed")
 		else:
 			reasons.append("Untaxed purchase item: missing VAT does not prove zero-rated/exempt treatment or entitlement")
 	if source.get("base") is None:
@@ -118,7 +124,7 @@ def suggest(source, mappings, rules=()):
 	if source.get("is_return"):
 		reasons.append("Return preserves signed source tax; verify original treatment: " + (source.get("return_against") or "original voucher not linked"))
 		original = [r for r in rules if r.get("approved") and r.voucher_type == dt and r.voucher_no == source.get("return_against")]
-		if len({r.box for r in original}) == 1:
+		if len({r.box for r in original}) == 1 and not (dt in ("Sales Invoice", "POS Invoice") and source.get("tax_account") and flt(source.get("tax_rate")) == 5):
 			box = original[0].box
 			reasons.append("Suggested box inherited from approved original voucher; confirm matching tax line")
 	return box, "; ".join(reasons)

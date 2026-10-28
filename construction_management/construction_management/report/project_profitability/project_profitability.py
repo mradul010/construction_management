@@ -42,6 +42,7 @@ def normalize(filters):
 	if filters.view_type not in ("Summary", "Detailed Accounts", "Cost Center Breakdown", "Timesheet Profitability"):
 		frappe.throw(_("Invalid view type"))
 	filters.include_default_book_entries = cint(filters.get("include_default_book_entries", 1))
+	filters.show_percentage_analysis = cint(filters.get("show_percentage_analysis", filters.view_type == "Cost Center Breakdown"))
 	return filters
 
 
@@ -154,8 +155,46 @@ def totals(entries, classes, currency):
 	result["expenses"] = money(sum(result[k] for k in AMOUNTS[1:]), currency)
 	result["gross_profit"] = None if unclassified else money(result["income"] - result["direct_expenses"], currency)
 	result["net_profit"] = money(result["income"] - result["expenses"], currency)
-	result["margin"] = flt(result["net_profit"] / result["income"] * 100, 2) if result["income"] else 0
+	result["margin"] = percentage(result["net_profit"], result["income"])
 	return result
+
+
+def percentage(numerator, denominator):
+	return numerator / denominator * 100 if numerator is not None and denominator else None
+
+
+def percentage_analysis(row, project_totals=None):
+	if project_totals is not None:
+		for field, numerator, denominator in (
+			("income_contribution", "income", "income"),
+			("expense_contribution", "expenses", "expenses"),
+			("direct_expense_contribution", "direct_expenses", "direct_expenses"),
+			("expense_project_income", "expenses", "income"),
+		):
+			row[field] = percentage(row[numerator], project_totals[denominator])
+	else:
+		row["direct_expense_income"] = percentage(row["direct_expenses"], row["income"])
+		row["gross_margin"] = percentage(row["gross_profit"], row["income"])
+
+
+def percent_column(key, label, description):
+	return dict(fieldname=key, label=_(label), fieldtype="Percent", precision=2, width=240, description=_(description))
+
+
+def get_xlsx_styles(metadata):
+	from frappe.utils.xlsxutils import XLSXStyleBuilder
+
+	builder = XLSXStyleBuilder(metadata)
+	summary_style = builder.register_style({"bold": True, "bg_color": "#EEF1F4"})
+	# Frappe Percent values are already in percentage points, not Excel fractions.
+	percent_style = builder.register_style({"num_format": '0.00"%"', "align": "right"})
+	for index, column in metadata.column_map.items():
+		if column.get("fieldtype") == "Percent":
+			builder.style_column(index, percent_style)
+	for index, row in metadata.row_map.items():
+		if isinstance(row, dict) and (row.get("_project_summary") or row.get("_grand_total")):
+			builder.style_row(index, summary_style)
+	return builder.result
 
 
 def currency_column(key, label):
@@ -177,11 +216,20 @@ def execute(filters=None):
 	columns = [{"fieldname": "project", "label": _("Project"), "fieldtype": "Link", "options": "Project", "width": 140, "hidden": 1},
 		{"fieldname": "project_name", "label": _("Project Name"), "fieldtype": "Data", "width": 230}]
 	if filters.view_type != "Summary":
-		columns += [{"fieldname": "label", "label": _("Account / Cost Center"), "fieldtype": "Data", "width": 320}]
+		columns += [{"fieldname": "label", "label": _("Cost Center") if filters.view_type == "Cost Center Breakdown" else _("Account / Cost Center"), "fieldtype": "Data", "width": 320}]
 	for key, label in (("income", "Total Income"), ("direct_expenses", "Direct Expenses"), ("gross_profit", "Gross Profit/Loss"),
 		("indirect_expenses", "Indirect Expenses"), ("unclassified_expenses", "Unclassified Expenses"), ("expenses", "Total Expenses"), ("net_profit", "Net Profit/Loss")):
 		columns.append(currency_column(key, label))
-	columns += [{"fieldname": "margin", "label": _("Net Profit Margin %"), "fieldtype": "Percent", "width": 140}]
+	columns += [percent_column("margin", "Net Profit Margin %", "Row Net Profit / Row Income * 100. Blank when row income is zero; cost-only centers are not independent profit centers.")]
+	if filters.show_percentage_analysis:
+		columns += [percent_column(*spec) for spec in (
+			("income_contribution", "Income Contribution %", "Cost Center Income / filtered Project Income * 100."),
+			("expense_contribution", "Expense Contribution %", "Cost Center Total Expenses / filtered Project Total Expenses * 100."),
+			("direct_expense_contribution", "Direct Expense Contribution %", "Cost Center Direct Expenses / filtered Project Direct Expenses * 100."),
+			("expense_project_income", "Expense / Project Income %", "Cost Center Total Expenses / filtered Project Income * 100. Not a profit margin."),
+			("direct_expense_income", "Direct Expense / Income %", "Project or Grand Total Direct Expenses / Income * 100."),
+			("gross_margin", "Gross Profit Margin %", "Project or Grand Total Gross Profit / Income * 100; unavailable for unclassified expenses."),
+		)]
 	columns += [currency_column(p.key, p.label) for p in periods] + [currency_column("total", "Total")]
 	columns += [{"fieldname": "currency", "label": _("Currency"), "fieldtype": "Link", "options": "Currency", "hidden": 1}]
 	groups = defaultdict(list)
@@ -202,7 +250,10 @@ def execute(filters=None):
 		subset = groups.get(project.name)
 		if not subset:
 			continue
-		rows.append(make_row(project, subset, indent=0, is_group=filters.view_type != "Summary"))
+		project_row = make_row(project, subset, indent=0, is_group=filters.view_type != "Summary", _project_summary=True)
+		if filters.show_percentage_analysis:
+			percentage_analysis(project_row)
+		rows.append(project_row)
 		if filters.view_type == "Detailed Accounts":
 			for key in AMOUNTS:
 				section = [e for e in subset if classes[e.account] == key]
@@ -219,11 +270,15 @@ def execute(filters=None):
 		elif filters.view_type == "Cost Center Breakdown":
 			for center in sorted({e.cost_center or "" for e in subset}):
 				section = [e for e in subset if (e.cost_center or "") == center]
-				rows.append(make_row(project, section, label=center or _("No Cost Center"), cost_center=center, _exact_center=True, indent=1))
-				for account in sorted({e.account for e in section}):
-					rows.append(make_row(project, [e for e in section if e.account == account], label=account, account=account, cost_center=center, _exact_center=True, indent=2))
+				row = make_row(project, section, label=center or _("No Cost Center"), cost_center=center, _exact_center=True, indent=1)
+				if filters.show_percentage_analysis:
+					percentage_analysis(row, project_row)
+				rows.append(row)
 	if rows:
-		rows.append(make_row(None, mapped, _grand_total=True))
+		grand_total = make_row(None, mapped, _grand_total=True)
+		if filters.show_percentage_analysis:
+			percentage_analysis(grand_total)
+		rows.append(grand_total)
 	message = []
 	if not mapped:
 		message.append(_("No accounting transactions found for the selected company, project and period."))
