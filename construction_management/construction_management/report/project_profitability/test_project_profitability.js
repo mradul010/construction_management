@@ -122,3 +122,21 @@ test("mouse selection is blocked and clicking routes to standard GL", async () =
 	assert.equal(frappe.route_options.project[0], "PROJ-0016");
 	assert.deepEqual(calls[1], ["query-report", "General Ledger"]);
 });
+
+test("percentage analysis defaults on, blanks undefined margins and keeps native scrolling", () => {
+	const { report, filters } = setup();
+	filters.view_type = "Cost Center Breakdown";
+	assert.equal(report.filters.find((f) => f.fieldname === "show_percentage_analysis").default, 1);
+	assert.equal(report.formatter(null, {}, { fieldtype: "Percent" }, { project: "P" }, () => "0%"), "");
+	const column = { fieldtype: "Percent", fieldname: "expense_contribution", description: "Center expenses / Project expenses" };
+	const data = { project: "P", expense_contribution: -2.08 };
+	const value = report.formatter(-2.08, {}, column, data, () => "-2.08%");
+	assert.ok(value.includes("title="));
+	assert.ok(value.includes("-2.08%"));
+	assert.ok(!value.includes("<a "));
+	assert.equal(data.expense_contribution, -2.08);
+	assert.ok(report.formatter("Project", {}, { fieldtype: "Data" }, { _project_summary: true }, () => "Project").includes("<strong>"));
+	const options = report.get_datatable_options({ checkboxColumn: true, layout: "fluid" });
+	assert.equal(options.layout, "fixed");
+	assert.equal(options.checkboxColumn, true);
+});

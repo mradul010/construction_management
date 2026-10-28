@@ -48,7 +48,7 @@ all expenses have been classified. No account classifications were guessed or
 written to Qatra's existing accounts.
 
 Gross profit = Income - Direct Expenses. Net profit = Income - all Expenses.
-Margin = Net profit / Income * 100; zero income yields a zero margin.
+Margin = Net profit / Income * 100; zero income yields a blank (undefined) margin.
 Grand-total margin is calculated from grand-total Income and Net Profit.
 
 ## Views and Periods
@@ -57,7 +57,10 @@ Summary includes project financial totals and metric-based period columns.
 Detailed Accounts includes Income, Direct, Indirect and Unclassified sections
 as applicable, actual account hierarchy paths, section totals, and project and
 grand totals with Gross and Net Profit columns. Cost Center Breakdown includes
-each center's own postings plus account details. Parent aggregate values are
+one consolidated row per Project ID and actual Cost Center ID, across accounts;
+missing centers use No Cost Center. Account details remain in Detailed Accounts
+and transaction drilldowns, not nested below Cost Center subtotals. Equal values
+are not deduplicated. Parent aggregate values are
 never summed with their children. Rows without accounting activity are omitted.
 Detail and section rows are breakdowns, not additional values to add to project
 totals; the backend produces the sole grand total from source postings.
@@ -117,3 +120,45 @@ three-decimal currencies, signs, margins, report access and empty-scope safety. 
 cover numeric currency links, zero, negative highlighting, exact period context,
 mouse-event interception, saved date ranges and routing. UI interaction was exercised with handler
 tests; no authenticated browser session was used.
+
+## Cost Center Percentages: 2026-10-28
+
+Show Percentage Analysis is checked by default in the UI; direct server requests
+without the filter enable it by default for Cost Center Breakdown. Clearing it
+removes the six added columns, retaining the existing single Net Profit Margin.
+No monthly percentage columns are added. The native DataTable uses fixed column
+widths and horizontal scrolling. Project/grand summary rows are bold on screen
+and shaded/bold in the standard Excel export.
+
+Cost Center rows divide Income, Total Expenses and Direct Expenses by their
+respective parent Project amounts within the active filters/date range. Expense /
+Project Income divides center expenses by parent income, not center income.
+Project/grand rows additionally show Direct Expense / Income and Gross Margin.
+Net Margin remains the existing column. All ratios use aggregated source amounts,
+not averaged percentages. Zero denominators produce blank cells; negative credits
+remain signed. A cost-only center has no own-income margin; no income allocation
+or independent profit-center assumption is made. Column descriptions and cell
+tooltips explain denominators. Percent values retain calculation precision and
+display two decimals using Frappe Percent formatting. Excel stores percentage
+points as numbers with a literal percent-sign format, avoiding 100x scaling.
+
+Verification: 10 Python and four Node tests cover consolidation across accounts,
+stable IDs despite identical Project display names, equal-value postings without
+deduplication, missing Cost Centers, zero denominators, signed reversals, the
+provided 2.08% / 1.26% / 39.47% example, account mode, filter toggling, links,
+fixed-width layout, and native Excel numeric values/formats and summary styling.
+
+Read-only Qatra.local validation used 2026-01-01 through 2026-12-31: 679 mapped
+GL entries produce 57 unique Project/Cost Center rows, with 12 monthly columns.
+Each entry belongs to exactly one center group; financial and monthly totals
+reconcile with raw GL and Summary/Detailed Accounts. Expense contributions sum to
+100% per nonzero Project denominator before display rounding. Block - QBC appears
+once per Project: PROJ-0016 expense 14,774.92 (2.02% of project expenses), PROJ-0015
+21,939.20 (1.68%). These live annual figures differ from the supplied export's
+19,497.94; its exact filter range was not provided. The supplied figures are
+verified separately as a calculation fixture, not forced into live output.
+All numeric monetary/percentage Excel cells match the screen result, and GL
+snapshots before/after are identical. The generated sample is
+`/tmp/qatra-project-profitability-cost-centers.xlsx`. Interactive browser sorting,
+scrolling and visual alignment were not directly exercised; JavaScript handler
+and layout tests passed. No core/accounting edits or migrate are required.
