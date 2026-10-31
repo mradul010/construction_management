@@ -123,7 +123,7 @@ test("first configured period is selected without recursive refresh or rewriting
 	assert.equal(values.from_date, "2026-05-01");
 	assert.equal(values.to_date, "2026-07-31");
 	assert.equal(values.filing_period, "2026-05-01 to 2026-07-31");
-	assert.deepEqual(buttons, ["Excel", "CSV", "PDF"]);
+	assert.deepEqual(buttons, ["View Details", "Excel", "PDF", "Detailed Audit (Excel)", "Detailed Audit (CSV)"]);
 	assert.equal(instance._no_refresh, true);
 	values.filing_period = "";
 	values.from_date = "2026-08-05";

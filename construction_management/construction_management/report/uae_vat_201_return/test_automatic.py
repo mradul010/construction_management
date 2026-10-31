@@ -131,7 +131,7 @@ class TestAutomaticVAT201(unittest.TestCase):
 		from openpyxl import load_workbook
 		from construction_management.construction_management.report.uae_vat_201_return.uae_vat_201_return import workbook_bytes
 		output = self.run_build(self.result([self.decided_purchase(base=1557.5, raw_vat=77.88, recovery_source_amount=0)]))
-		sheet = load_workbook(io.BytesIO(workbook_bytes(output)))["Transactions"]
+		sheet = load_workbook(io.BytesIO(workbook_bytes(output, detailed=True)))["Transactions"]
 		rows = list(sheet.values)
 		headings, values = rows[0], rows[1]
 		row = dict(zip(headings, values))

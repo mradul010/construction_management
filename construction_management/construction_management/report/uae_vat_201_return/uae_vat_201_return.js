@@ -104,16 +104,16 @@
 			body || `<tr><td colspan="${headings.length}">${__("No transactions")}</td></tr>`
 		}</tbody></table></div>`;
 	}
-	async function details(report, wrapper) {
+	async function details(report) {
 		const filters = report.get_filter_values();
 		const snapshot = JSON.stringify(filters);
 		const { message } = report.raw_data?.vat201_context ? { message: report.raw_data.vat201_context } : await frappe.call({
 			method: endpoint + "report_context",
 			args: { filters },
 		});
-		if (snapshot !== JSON.stringify(report.get_filter_values()) || !wrapper.isConnected)
+		if (snapshot !== JSON.stringify(report.get_filter_values()))
 			return;
-		report._vat_details?.remove();
+		report._vat_details_dialog?.hide();
 		const panel = document.createElement("section");
 		panel.className = "vat201-transaction-details mt-4";
 		const tabs = ["Sales", "Purchases", "Journal Entries"];
@@ -129,6 +129,7 @@
 					)}</button></li>`
 			)
 			.join("")}</ul><div class="vat201-tab-content mt-3"></div>`;
+		if (message.warnings?.length) panel.insertAdjacentHTML("afterbegin", `<details><summary>${__("Source and completeness notes")}</summary><ul>${message.warnings.map(note=>`<li>${esc(note)}</li>`).join("")}</ul></details>`);
 		const reconciliation = message.reconciliation || [];
 		for (const [title, values, currency] of [["Ledger Balances",message.ledger_summary,message.ledger_summary?.currency], ["Recorded Tax and Return Bridge",message.tax_measures,"AED"]]) {
 			if (values) panel.insertAdjacentHTML("beforeend", `<details class="mt-3"><summary>${__(title)}</summary><div class="table-responsive"><table class="table table-bordered"><tbody>${Object.entries(values).filter(([key]) => key !== "currency").map(([key,value])=>`<tr><td>${esc(__(message.measure_labels?.[key] || key.replaceAll("_"," ")))}</td><td class="text-right">${money(value,currency)}</td></tr>`).join("")}</tbody></table></div></details>`);
@@ -158,18 +159,24 @@
 			const button = event.target.closest("[data-tab]");
 			if (button) select(Number(button.dataset.tab));
 		});
-		wrapper.insertAdjacentElement("afterend", panel);
-		report._vat_details = panel;
+		const dialog = new frappe.ui.Dialog({ title: __("VAT 201 Supporting Details"), size: "extra-large",
+			fields: [{ fieldname: "supporting", fieldtype: "HTML" }] });
+		dialog.fields_dict.supporting.$wrapper[0].appendChild(panel);
+		report._vat_details_dialog = dialog;
 		select(0);
+		dialog.show();
 	}
 
 	frappe.query_reports["UAE VAT 201 Return"] = {
+		html_format: "<div>{%= report.raw_data.vat201_context.form_print_html %}</div>",
 		async onload(report) {
 			report.ignore_prepared_report = true;
-			for (const [type, label] of [
+			report.page.add_inner_button(__("View Details"), () => details(report));
+			for (const [type, label, detailed = 0] of [
 				["xlsx", "Excel"],
-				["csv", "CSV"],
 				["pdf", "PDF"],
+				["xlsx", "Detailed Audit (Excel)", 1],
+				["csv", "Detailed Audit (CSV)", 1],
 			]) {
 				report.page.add_inner_button(
 					__(label),
@@ -177,6 +184,7 @@
 						const params = new URLSearchParams({
 							filters: JSON.stringify(report.get_filter_values()),
 							file_type: type,
+							detailed,
 						});
 						window.open(
 							`/api/method/${endpoint}download?${params}`,
@@ -263,8 +271,17 @@
 			return formatted;
 		},
 		after_datatable_render(datatable) {
-			const wrapper = datatable.wrapper;
 			const report = frappe.query_report;
+			const native_wrapper = datatable.wrapper;
+			const form_wrapper = report.$report_message?.[0];
+			const wrapper = form_wrapper?.querySelector(".qatra-vat201-form") || native_wrapper;
+			if (wrapper !== native_wrapper) {
+				native_wrapper.querySelectorAll(":scope > .qatra-vat201-form").forEach(node => node.remove());
+				native_wrapper.querySelector(".datatable")?.style.setProperty("display", "none");
+				native_wrapper.appendChild(wrapper);
+				report.$report_message.hide();
+				report.$summary?.children().addClass("qatra-vat201-return-card").css({ "flex": "1 1 220px", "min-width": "0", "border-radius": "4px" });
+			}
 			if (wrapper.vat201_handler)
 				for (const type of ["click", "mousedown", "dblclick"])
 					wrapper.removeEventListener(type, wrapper.vat201_handler, true);
@@ -292,9 +309,7 @@
 			};
 			for (const type of ["click", "mousedown", "dblclick"])
 				wrapper.addEventListener(type, wrapper.vat201_handler, true);
-			report._vat_details?.remove();
-			if (wrapper.isConnected)
-				details(report, wrapper).catch(() => report._vat_details?.remove());
+			report._vat_details_dialog?.hide();
 		},
 	};
 })();
