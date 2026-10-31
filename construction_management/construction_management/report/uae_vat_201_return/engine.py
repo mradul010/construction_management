@@ -197,8 +197,8 @@ def apply_rule(source, rule, base_currency, *, source_verified=False):
 	if source.get("invoice_tax_difference") and not source.get("reverse_charge") == "Y":
 		return None, "Source invoice VAT does not reconcile with active GL postings"
 	if rule.get("source_fingerprint"):
-		from construction_management.construction_management.report.uae_vat_201_return.review import fingerprint
-		if rule.source_fingerprint != fingerprint(source):
+		from construction_management.construction_management.report.uae_vat_201_return.review import fingerprint, decision_fingerprint
+		if rule.source_fingerprint not in (fingerprint(source), decision_fingerprint(source)):
 			return None, "Source evidence changed since review; approval must be renewed"
 	if box=="Outside VAT":
 		return dict(source,box=box,amount=0,vat_amount=0,adjustment=0,tax_date=str(rule.tax_date),reason=rule.reason,supporting_reference=rule.supporting_reference,classification="Outside VAT scope",company=source.get("company")),None
@@ -246,6 +246,10 @@ def apply_rule(source, rule, base_currency, *, source_verified=False):
 	source_base = base
 	if box in INPUT:
 		vat *= number(rule.recovery_percent) / 100
+		if box == "9" and source["voucher_type"] == "Purchase Invoice" and source.get("recovery_source_amount") not in (None,"",0,"0"):
+			saved = number(source["recovery_source_amount"])
+			if not saved.is_finite() or (saved and source.get("vat_rows_count") == 1 and money(saved) != money(vat)):
+				return None, "Approved recovery conflicts with the nonzero saved AED recovery amount; reconcile the source amount and review allocation"
 		if not flt(rule.recovery_percent):
 			base = Decimal(0)
 	event = dict(source, box=box, amount=money(base),vat_amount=0 if rule.get("is_adjustment") else money(vat),
@@ -253,6 +257,8 @@ def apply_rule(source, rule, base_currency, *, source_verified=False):
 		invoice_taxable_amount=money(raw_base_aed) if raw_base_aed is not None else None,
 		recorded_vat_amount=money(number(source["raw_vat"])*rate*(-1 if "debit" in source and box in OUTPUT else 1)),
 		recoverable_vat_amount=money(vat) if box in INPUT else None,
+		recovery_percent=float(number(rule.get("recovery_percent"))) if box in INPUT else None,
+		approved_by=rule.get("approved_by"), approval_time=rule.get("approval_time"),
 		recovery_basis=("Reviewed recovery percentage: " + str(flt(rule.recovery_percent)) + "%") if box in INPUT else None,
 		tax_date=str(rule.tax_date),emirate=get_emirates()[ord(box[-1])-97] if box in OUTPUT[:7] else None,
 		classification=LABELS[box],reason=rule.reason,supporting_reference=rule.supporting_reference,company=source.get("company"),currency="AED",source_currency=source.get("currency"),base_currency=base_currency,aed_exchange_rate=float(rate),source_taxable_amount=money(source_base))
@@ -364,7 +370,7 @@ def build(filters, settings_override=None):
 	by_source = defaultdict(list)
 	for rule in rules:
 		by_source[(rule.voucher_type,rule.voucher_no,rule.source_row)].append(rule)
-	events, reviews, excluded = [], [], []
+	events, reviews, excluded, timing_events = [], [], [], []
 	seen = set()
 	for source in sources:
 		source["company"] = f.company
@@ -378,8 +384,7 @@ def build(filters, settings_override=None):
 				reviews.append(dict(source,review="VAT classification, tax date and supporting evidence require review"))
 			continue
 		for rule in matched:
-			if rule.box!="Outside VAT" and not f.from_date <= getdate(rule.tax_date) <= f.to_date:
-				continue
+			outside_period = rule.box!="Outside VAT" and not f.from_date <= getdate(rule.tax_date) <= f.to_date
 			side = "Input" if rule.box in INPUT else "Output"
 			unique = key+("GL" if source["voucher_type"] in ("Journal Entry","Payment Entry") else side,)
 			if unique in seen:
@@ -405,7 +410,7 @@ def build(filters, settings_override=None):
 				reviews.append(dict(source,review=error))
 			elif not rule.is_adjustment or f.include_adjustments:
 				event.update(classification_status="Approved", classification_id=rule.name, origin=rule.get("origin") or "Manual", journal_treatment=rule.get("journal_treatment"))
-				events.append(event)
+				(timing_events if outside_period else events).append(event)
 	boxes = aggregate(events)
 	# Reconciliation uses posting dates; tax-date differences remain visible.
 	ledger_totals = {"Output":Decimal(0),"Input":Decimal(0),"Unallocated":Decimal(0)}
@@ -475,4 +480,8 @@ def build(filters, settings_override=None):
 	return dict(header=header,filters=f,boxes=list(boxes.values()),events=events,reviews=reviews,excluded=excluded,reconciliation=reconciliation,
 		warnings=list(dict.fromkeys(warnings)),status=status,transaction_count=len(sources),
 		invoice_checks=invoice_checks, observed=observed, control_movement=control, scope_incomplete=scope_incomplete,
-		ledger_entries=[dict(g) for g in ledger], source_headers=headers, sources=sources)
+		ledger_entries=[dict(g) for g in ledger], source_headers=headers, sources=sources, timing_events=timing_events,
+		opening_entries=[dict(g) for g in frappe.get_list("GL Entry", filters={"company":f.company,
+			"account":["in",sorted(set(mappings) & accessible_accounts)],"docstatus":1,"is_cancelled":0,
+			"posting_date":["<",f.from_date]}, fields=["name","account","debit","credit","posting_date","voucher_type","voucher_no"],
+			limit_page_length=0)] if mappings else [])

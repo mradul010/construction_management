@@ -1,5 +1,167 @@
 # UAE VAT 201 Return
 
+## Recorded Ledger Reconciliation: 2026-10-31
+
+This section supersedes the saved-zero-as-confirmed-exclusion policy in earlier
+notes. The report remains owned by `construction_management`; no parallel engine
+was created in `qatra_custom`. Confirmed local site is `Qatra.local`, Frappe
+16.31.0 / ERPNext 16.32.1, with HRMS, Print Designer and both custom apps installed.
+
+### Root Causes and Correction
+
+The old first summary card showed Sales Invoice VAT only (55,062.68), despite the
+audit already containing advance output VAT (49,315.77). Recorded accounting roles
+were therefore more complete than the main summary. A default invoice recovery
+amount of zero was also treated as a confirmed exclusion, concealing the absence
+of an approved recovery decision. There were no missing period voucher amounts.
+
+`engine.py` retains permission-aware submitted/uncancelled source reads and now
+provides separate opening GL evidence and validated out-of-period tax-date events.
+`reconciliation.py` partitions recorded VAT into return claims, pending decisions,
+approved exclusions, supported timing differences and unexplained residuals.
+Raw debit/credit stays separate from normalized output/input signs. Purchase
+credit notes reduce input VAT; they do not become output merely because of credit.
+Each source/tax/GL identity is counted once. Reconciliation residuals and scope
+limitations remain visible; return claims are never forced to equal closing GL.
+
+The same final backend result supplies summary cards, eight-column transaction
+details, reconciliation, Excel/CSV and PDF. New ledger/bridge/category/decision
+sheets supplement the existing workbook sheets. The PDF now has five intentional
+pages: three preparation pages, review notes, and the recorded/return bridge.
+Known statutory payable remains explicitly provisional when evidence is missing.
+
+### Recovery Semantics and Audited Review
+
+Installed UAE metadata defines `recoverable_standard_rated_expenses` as a manual
+Currency amount in AED with default 0, not a checkbox or percentage. Native UAE
+report queries sum this maintained amount and filter positive values; regional
+validation disallows nonzero ordinary recovery for reverse-charge purchases.
+No installed controller automatically fills this amount. Custom verification
+checkbox/percentage fields are hidden historical controls, not entitlement proof;
+they remain untouched and are not used as approval prerequisites.
+
+A saved proposal, including zero or a copied amendment value, does not itself
+approve entitlement in this preparation report. Only existing valid approved
+`VAT 201 Classification` decisions grant recovery. States distinguish pending,
+verified full, partial and non-recoverable (explicit approved 0% with reason),
+and no recorded VAT. Signed claims derive from posted VAT and the approved
+percentage. A nonzero saved AED recovery proposal inconsistent with a single-row
+approved allocation is flagged, not silently replaced. A default zero can be
+explicitly superseded by a reasoned register decision without changing the invoice.
+Actual source taxable base and VAT remain visible even while claims are pending.
+Verified zero rows have no visible claim box; their source tax remains recorded.
+
+Managers with report/source read and UAE VAT Settings write permission can use
+Review VAT in transaction/attention rows. It reuses `review_source` / `decide`,
+not a new invoice-update endpoint. Approval requires box, reviewed tax date,
+reason/evidence and explicit input-recovery review. The existing register stamps
+reviewer/time; native UAE VAT Settings `track_changes=1` preserves audit versions.
+New fingerprints bind recovery proposals, source identity, amounts and evidence;
+stale dialogs cannot approve changed sources. Existing valid legacy fingerprints
+remain accepted. Amended voucher/row IDs cannot inherit another source's approval.
+Concurrent settings saves retain normal timestamp protection; existing records
+must be selected instead of appending duplicate decisions. No ignored permissions,
+direct SQL updates, manual commits or automatic approvals were added.
+
+The existing return-state validation now uses the final preparation pipeline
+instead of the intermediate engine. Unresolved recovery/allocation, scope and
+residual problems block approval/filing state changes. No filing integration is
+added, and previously filed records are not rewritten.
+
+This explicit approval requirement is an application control, not a claim that
+the FTA mandates these custom fields or UI. Statutory eligibility/tax-period
+conditions remain subject to accountant evidence under the
+[FTA VAT Returns User Guide](https://tax.gov.ae/DataFolder/Files/Pdf/VAT%20Returns%20User%20GuideEnglishV40%2015%2008%202021%20SEP2021.pdf).
+
+### Verified May-July Control Totals
+
+Read-only comparison against standard ERPNext General Ledger, same Company,
+VAT 5% - QBC, inclusive 2026-05-01 through 2026-07-31:
+
+| Measure | AED |
+| --- | ---: |
+| Opening debit / credit | 535.57 / 0.00 |
+| Period debit / credit | 37,274.40 / 104,540.10 |
+| Period net credit movement | 67,265.70 |
+| Closing debit / credit | 0.00 / 66,730.13 |
+| Recorded output VAT | 104,378.45 |
+| Recorded net input VAT | 37,112.75 |
+| Output allocated to boxes | 55,062.68 |
+| Output awaiting allocation | 49,315.77 |
+| Approved input claim | 0.00 |
+| Input awaiting verification | 37,112.75 |
+| Confirmed non-recoverable input | 0.00 |
+| Source/GL and unexplained bridge residuals | 0.00 |
+| Known statutory net subtotal, provisional | 55,062.68 |
+
+All 315 current voucher/account rows match standard GL individually. PI raw debit
+36,677.19 less return credits 161.65 yields 36,515.54 net input. Journal VAT adds
+597.21 input and 49,315.77 output; SI output remains 55,062.68. Closing balance
+includes opening and is not the statutory payable. 67,265.70 is only the conditional
+return net if all recorded inputs are approved and output treatment is resolved
+without further differences; it is not automatically used as final payable.
+
+The supplied GL workbook also has 315 vouchers and identical control totals, but
+seven exported identities are absent from the current scope and seven current
+identities are absent from that snapshot:
+
+| Export-only voucher | VAT | Current-only voucher with same amount |
+| --- | ---: | --- |
+| ACC-SINV-2026-00050-2 | 47.62 output | ACC-SINV-2026-00050 |
+| ACC-PINV-2026-00046-1 | 18.10 input | ACC-PINV-2026-00046 |
+| ACC-PINV-2026-00072-1 | 148.24 input | ACC-PINV-2026-00072 |
+| ACC-PINV-2026-00335-1 | 4.20 input | ACC-PINV-2026-00335 |
+| ACC-PINV-2026-00447 | 291.60 input | ACC-PINV-2026-00087 |
+| ACC-JV-2026-00004-2 | 28.52 input | ACC-JV-2026-00004-1 |
+| ACC-JV-2026-00008-1 | 66.55 input | ACC-JV-2026-00008 |
+
+This is a snapshot identity difference, not established amendment/rename lineage:
+equal amounts alone do not prove a relationship. No identities were rewritten or
+amounts deduplicated to force agreement. The full difference register is
+`/tmp/qatra-vat201-export-voucher-differences.json`.
+
+### Exact Decisions Still Needed
+
+There are 317 review source rows: 295 purchase tax rows, 17 purchase-journal rows,
+two advance rows and three untaxed foreign-supplier item rows. No decisions were
+approved during implementation.
+
+- Ordinary purchase invoices: 36,515.54 net recorded VAT needs recovery approval,
+  including ACC-PINV-2026-00293-1 (base 1,557.50 / VAT 77.88) and
+  ACC-PINV-2026-00210-1 (323.00 / 16.15). Saved values remain 0; no claim is granted.
+  The Review and Recovery Decisions workbook sheets contain every source ID.
+- Expense journals: ACC-JV-2026-00003 359.92; 00004-1 28.52; 00006 23.48;
+  00007-1 118.74; 00008 66.55. Generator bases/tax rows reconcile, but recovery
+  entitlement for the 17 individual GL sources is not approved.
+- Advances ACC-JV-2026-00001 26,532.14 and 00002 22,783.63: authoritative reporting
+  Emirate and original advance tax invoice / later-invoice overlap evidence.
+  Structured invoice links are not established by the QTI text references.
+- ACC-PINV-2026-00344, 00345, 00346: original supply/import and potential
+  reverse-charge obligation; a foreign address does not establish treatment.
+
+### Files, Checks and Local Commands
+
+Changed report modules: `automatic.py`, `engine.py`, `reconciliation.py`,
+`review.py`, `configuration.py`, `uae_vat_201_return.py`, its JavaScript,
+`return_print.html`, `test_automatic.py`, `test_completeness.py`, `test_review.py`,
+`test_uae_vat_201_return.js`, and new `test_recorded_bridge.py`, plus this document.
+No new schema, fixtures, patches or custom verification fields are required.
+
+125 Python tests and eight Node tests passed, including existing return/journal/
+reverse-charge/currency/overlap checks and new pending-versus-approved zero,
+full/partial recovery, proposal conflicts, raw signs, opening separation, timing,
+duplicate-source, stale-dialog and permission tests. Live native-GL voucher checks,
+numeric workbook parity, source/base/GL tracing and five-page PDF generation passed.
+Full before/after snapshots of invoices, JVs, GL and classification/settings data
+were unchanged. No authenticated browser interaction or production deployment is
+claimed; approval persistence is covered using isolated fixtures, not mutation of
+real accounting or eligibility decisions.
+
+Local review artifacts: `/tmp/qatra-vat201-recorded-reconciliation.xlsx` and
+`/tmp/qatra-vat201-recorded-reconciliation.pdf`. Report files need no asset build
+or migration. Reload the browser after `bench --site Qatra.local clear-cache`.
+Neither restart nor production deployment is required for local report verification.
+
 ## Complete Local Audit: 2026-10-28
 
 This is the current implementation/evidence summary; older dated sections below

@@ -108,32 +108,24 @@ def source_rule(source, base_currency):
 		is_adjustment=0), None
 
 
-def build(filters=None):
+def build(filters=None, settings_override=None):
 	# The existing reader enforces source permissions, dates, signs and active GL.
 	# Existing valid verified decisions remain usable; no review rows are written.
-	result = engine.build(filters)
-	settings = engine.settings_for(result["filters"].company)
+	result = engine.build(filters, settings_override=settings_override)
+	settings = settings_override if settings_override is not None else engine.settings_for(result["filters"].company)
 	mappings = engine.account_mappings(settings.get("uae_vat_accounts", []))
 	events = []
 	issues, details = [], []
 	# Saved invoice Emirate also governs any retained historical standard-rated event.
 	for event in result["events"]:
 		event = dict(event)
-		if is_zero_claim(event):
-			details.append(zero_claim_detail(event))
-			continue
 		if event["voucher_type"] == "Purchase Invoice" and event["box"] == "9" and not event.get("adjustment"):
-			rule, error = source_rule(event, result["header"]["base_currency"])
-			if rule:
-				rule.tax_date = event.get("tax_date") or rule.tax_date
-				calculated, error = engine.apply_rule(event, rule, result["header"]["base_currency"], source_verified=True)
-				if not error:
-					event = calculated
-			if error or not rule:
-				issues.append(dict(event, issue=error or "Saved purchase recovery is unavailable", recommended_action=action_for(event), treatment="Needs Attention", vat_box=None))
-				continue
-			event["recovery_basis"] = "Saved Recoverable Standard Rated Expenses (AED): " + str(engine.money(event["recovery_source_amount"]))
+			# engine events have passed approval, fingerprint and recovery checks.
+			# Do not overwrite an approved allocation with a default invoice zero.
 			event["treatment"] = "Standard-rated purchase"
+		if event.get("recoverable_vat_amount") == 0 and event.get("box") in engine.INPUT:
+			details.append(dict(event, vat_box="", treatment="Verified non-recoverable VAT", recovery_status="Verified non-recoverable"))
+			continue
 		if event["voucher_type"] in ("Sales Invoice", "POS Invoice") and event["box"] in engine.OUTPUT[:7]:
 			box, error = sales_emirate_box(event)
 			if error:
@@ -153,6 +145,8 @@ def build(filters=None):
 			events = [e for e in events if tuple(e[k] for k in ("voucher_type", "voucher_no", "source_row")) != key]
 		else:
 			rule, problem = source_rule(source, result["header"]["base_currency"])
+			if source["voucher_type"] == "Purchase Invoice" and source.get("raw_vat") and not problem:
+				rule, problem = None, "Input VAT recovery is pending accountant approval; the saved recovery amount alone is not an approved decision"
 		if rule:
 			side = "Input" if rule.box in engine.INPUT else "Output"
 			if source.get("tax_account") and mappings.get(source["tax_account"]) not in (side,"Both"):
@@ -204,8 +198,19 @@ def build(filters=None):
 		details.append(dict(event, vat_box=event["box"], treatment=event.get("treatment") or event.get("recovery_basis") or "Preserved verified source treatment"))
 	for excluded in result.get("excluded", []):
 		details.append(dict(excluded, vat_box=None, treatment="Documented non-return movement"))
+	for event in result.get("timing_events", []):
+		details.append(dict(event, vat_box="", treatment="Approved tax-date timing difference - outside this return period",
+			remarks="Approved tax/reporting date: " + str(event.get("tax_date")) + "; not included in this period's claim"))
 	details.extend(issues)
 	for row in details:
+		if row.get("recoverable_vat_amount") is not None:
+			full = engine.number(row.get("recorded_vat_amount"))
+			claim = engine.number(row["recoverable_vat_amount"])
+			row["recovery_status"] = "Verified non-recoverable" if not claim else "Verified fully recoverable" if claim == full else "Verified partially recoverable"
+		elif row.get("journal_vat_role") == "Input" or row["voucher_type"] == "Purchase Invoice" and row.get("raw_vat"):
+			row["recovery_status"] = "Pending verification"
+		elif row["voucher_type"] == "Purchase Invoice":
+			row["recovery_status"] = "No recorded VAT"
 		row["display_remarks"] = detail_remarks(row)
 	boxes = engine.aggregate(events)
 	for rec in result["reconciliation"]:

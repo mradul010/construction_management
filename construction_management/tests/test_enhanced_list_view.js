@@ -7,8 +7,8 @@ const { spawnSync } = require("node:child_process");
 
 const app = path.resolve(__dirname, "..");
 const bench = path.resolve(app, "../../..");
-const script = path.join(app, "public/js/enhanced_list_view/enhanced_list_view.js");
-const css = path.join(app, "public/css/enhanced_list_view/enhanced_list_view.css");
+const script = process.env.LIST_RESIZE_SCRIPT || path.join(app, "public/js/enhanced_list_view/enhanced_list_view.js");
+const css = process.env.LIST_RESIZE_CSS || path.join(app, "public/css/enhanced_list_view/enhanced_list_view.css");
 const jquery = path.resolve(app, "../../frappe/node_modules/jquery/dist/jquery.js");
 const native_source = fs.readFileSync(
 	path.resolve(app, "../../frappe/frappe/public/js/frappe/list/list_view.js"),
@@ -61,7 +61,7 @@ class ListView {
 }
 const native={header:ListView.prototype.get_header_html,columns:ListView.prototype.setup_columns,menu:ListView.prototype.get_menu_items};
 window.frappe={views:{ListView},is_mobile:()=>false,get_user_settings:(dt,view)=>settings[user]?.[dt]?.[view],model:{is_numeric_field:df=>df?.fieldtype==='Currency'},msgprint:message=>{throw new Error(message)}};
-</script><script src="file://${script}"></script><script>
+</script><script src="file://${script}"></script><script src="file://${script}"></script><script>
 (async()=>{
  await document.fonts.ready;
  const results=[]; const check=(condition,message)=>{if(!condition)throw new Error(message)};
@@ -173,4 +173,19 @@ test("native List View rendering with width-only resize, alignment and persisten
 	} finally {
 		fs.rmSync(dir, { recursive: true, force: true });
 	}
+});
+
+test("Desk hooks load only fingerprinted entries for the single width-only implementation", () => {
+	const hooks = fs.readFileSync(path.join(app, "hooks.py"), "utf8");
+	for (const extension of ["js", "css"]) {
+		const bundle = `construction_list_view.bundle.${extension}`;
+		assert.equal(hooks.split(`"${bundle}"`).length - 1, 1);
+		assert.ok(!hooks.includes(`/assets/construction_management/${extension}/enhanced_list_view/`));
+	}
+	assert.match(fs.readFileSync(path.join(app, "public/js/construction_list_view.bundle.js"), "utf8"), /import "\.\/enhanced_list_view\/enhanced_list_view\.js"/);
+	assert.match(fs.readFileSync(path.join(app, "public/css/construction_list_view.bundle.scss"), "utf8"), /@use "\.\/enhanced_list_view\/enhanced_list_view\.css"/);
+	const implementation = fs.readFileSync(path.join(app, "public/js/enhanced_list_view/enhanced_list_view.js"), "utf8");
+	assert.ok(implementation.includes("__cmelv_widths_only"));
+	for (const token of ["cmelv-drag-handle", "dragover", "drop", '__("Drag")'])
+		assert.ok(!implementation.includes(token));
 });

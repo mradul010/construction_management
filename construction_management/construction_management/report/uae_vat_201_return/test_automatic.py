@@ -29,7 +29,7 @@ class TestAutomaticVAT201(unittest.TestCase):
 		return dict(self.source, voucher_type="Purchase Invoice", **changes)
 
 	def decided_purchase(self, **changes):
-		return self.purchase(**changes)
+		return dict(self.purchase(**changes), _approved_fixture=True)
 
 	def test_saved_emirate_does_not_depend_on_field_fetch_or_verification(self):
 		with patch.object(frappe, "get_meta", side_effect=AssertionError("Emirate must not depend on fetch metadata")):
@@ -81,7 +81,7 @@ class TestAutomaticVAT201(unittest.TestCase):
 
 	def test_requested_purchase_full_recovery_is_an_amount_not_a_checkbox(self):
 		for amount in (1, 20, 77.88):
-			source = self.purchase(voucher_no="ACC-PINV-2026-00293-1", base=1557.50, raw_vat=77.88, recovery_source_amount=amount)
+			source = self.decided_purchase(voucher_no="ACC-PINV-2026-00293-1", base=1557.50, raw_vat=77.88, recovery_source_amount=amount)
 			event = self.calculate(source)
 			self.assertEqual((event["box"], event["amount"], event["vat_amount"]), ("9", 1557.50, amount))
 			result = self.result([source])
@@ -121,7 +121,7 @@ class TestAutomaticVAT201(unittest.TestCase):
 		output = self.run_build(self.result([source]))
 		row = output["details"][0]
 		self.assertEqual((row["invoice_taxable_amount"], row["recorded_vat_amount"], row["recoverable_vat_amount"]), (1557.5, 77.88, 0))
-		self.assertIn("saved invoice recovery amount", row["display_remarks"])
+		self.assertIn("Reviewed recovery percentage", row["display_remarks"])
 		self.assertIn("Recoverable VAT: AED 0.00", row["display_remarks"])
 		self.assertNotIn("Automatic source evidence", row["treatment"])
 		self.assertFalse(output["reviews"])
@@ -141,35 +141,34 @@ class TestAutomaticVAT201(unittest.TestCase):
 		self.assertEqual(row["VAT Amount"], 77.88)
 		self.assertIn("Recoverable VAT: AED 0.00", row["Remarks"])
 
-	def test_saved_zero_is_not_pending_and_has_no_box_without_suppressing_source_amounts(self):
+	def test_default_zero_is_pending_without_suppressing_source_amounts(self):
 		for base, vat in ((1557.5, 77.88), (323, 16.15)):
 			output = self.run_build(self.result([self.purchase(base=base, raw_vat=vat, recovery_source_amount=0)]))
 			self.assertFalse(output["events"])
 			row = output["details"][0]
 			self.assertEqual((row["base"], row["raw_vat"]), (base, vat))
-			self.assertEqual(row["treatment"], "No input VAT claimed")
+			self.assertEqual(row["recovery_status"], "Pending verification")
 			self.assertIsNone(row["vat_box"])
-			self.assertIsNone(row["box"])
-			self.assertFalse(output["reviews"])
-			self.assertNotIn("configuration", row["display_remarks"])
+			self.assertTrue(output["reviews"])
+			self.assertIn("pending accountant approval", row["display_remarks"])
 
 	def test_retained_zero_claim_is_not_included_in_box_nine(self):
 		source = self.purchase(recovery_source_amount=0)
 		result = self.result([])
-		result["events"] = [dict(source, box="9", amount=1000, vat_amount=49.99)]
+		result["events"] = [dict(self.calculate(source), recoverable_vat_amount=0, adjustment=0, box="9")]
 		output = self.run_build(result)
 		self.assertFalse(output["events"])
 		self.assertFalse(output["reviews"])
-		self.assertIsNone(output["details"][0]["vat_box"])
+		self.assertEqual(output["details"][0]["vat_box"], "")
 
-	def test_retained_ordinary_claim_uses_saved_amount_not_legacy_percentage(self):
+	def test_retained_approved_claim_is_preserved(self):
 		source = self.purchase(recovery_source_amount=20)
 		result = self.result([])
-		result["events"] = [dict(source, box="9", amount=1000, vat_amount=49.99, adjustment=0)]
+		result["events"] = [self.calculate(source)]
 		output = self.run_build(result)
 		self.assertFalse(output["reviews"])
 		self.assertEqual(output["events"][0]["vat_amount"], 20)
-		self.assertIn("saved invoice recovery amount", output["details"][0]["display_remarks"])
+		self.assertIn("Recoverable VAT: AED 20.00", output["details"][0]["display_remarks"])
 
 	def test_purchase_details_and_summary_keep_source_and_claims_separate(self):
 		sources = [self.decided_purchase(voucher_no="FULL", source_row="FULL-TAX", base=1557.5, raw_vat=77.88, recovery_source_amount=77.88),
@@ -188,11 +187,11 @@ class TestAutomaticVAT201(unittest.TestCase):
 
 	def test_reverse_charge_zero_and_full_use_native_percentage_without_reducing_output(self):
 		for percent, claim in ((0, 0), (100, 49.99)):
-			source = self.purchase(reverse_charge="Y", reverse_recovery_percent=percent,
+			source = self.decided_purchase(reverse_charge="Y", reverse_recovery_percent=percent,
 				gl_evidence=[dict(debit=49.99, credit=0), dict(debit=0, credit=49.99)])
 			output = self.run_build(self.result([source]))
 			self.assertFalse(output["reviews"])
-			self.assertEqual([e["vat_amount"] for e in output["events"]], [49.99, claim])
+			self.assertEqual([e["vat_amount"] for e in output["events"]], [49.99, claim] if claim else [49.99])
 
 	def test_returns_preserve_saved_signs(self):
 		for source in (self.sales(base=-1000, raw_vat=-49.99), self.purchase(base=-1000, raw_vat=-49.99, recovery_source_amount=-20)):
@@ -219,7 +218,7 @@ class TestAutomaticVAT201(unittest.TestCase):
 
 	def test_documented_reverse_charge_has_two_distinct_events_not_two_scans(self):
 		for sign in (1, -1):
-			source = self.purchase(base=1000*sign, raw_vat=49.99*sign, reverse_charge="Y", reverse_recovery_percent=40,
+			source = self.decided_purchase(base=1000*sign, raw_vat=49.99*sign, reverse_charge="Y", reverse_recovery_percent=40,
 				gl_evidence=[dict(debit=49.99, credit=0), dict(debit=0, credit=49.99)], invoice_tax_difference=49.99*sign)
 			result = self.result([source])
 			result["reconciliation"] = []
@@ -239,6 +238,19 @@ class TestAutomaticVAT201(unittest.TestCase):
 			reconciliation=[dict(description="Output VAT", ledger_amount=49.99), dict(description="Input VAT", ledger_amount=0)])
 
 	def run_build(self, result):
+		# Explicit approval fixtures model engine-validated events, not live decisions.
+		for source in list(result["reviews"]):
+			if not source.get("_approved_fixture"):
+				continue
+			rule, error = automatic.source_rule(source, "AED")
+			self.assertIsNone(error)
+			if rule is None and automatic.is_zero_claim(source):
+				rule = frappe._dict(box="9", tax_date=source["posting_date"], reason="TEST", supporting_reference="TEST", recovery_confirmed=1, recovery_percent=0)
+			for box in (["3","10"] if rule.box == "3" else [rule.box]):
+				event, error = engine.apply_rule(source, frappe._dict(rule, box=box), "AED", source_verified=True)
+				self.assertIsNone(error)
+				result["events"].append(event)
+			result["reviews"].remove(source)
 		with patch.object(engine, "build", return_value=result), patch.object(engine, "settings_for", return_value={"uae_vat_accounts": [frappe._dict(account="VAT", custom_vat201_side="Both")]}):
 			return automatic.build({"company": "TEST"})
 

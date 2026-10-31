@@ -96,7 +96,7 @@ def validate_settings(doc, method=None):
 		if period.status in ("Ready for Approval","Approved","Filed") and (not old_period or old_period.status != period.status):
 			if not manager:
 				frappe.throw(_("Only Accounts Managers may change the VAT return approval state"), frappe.PermissionError)
-			from construction_management.construction_management.report.uae_vat_201_return.engine import build
+			from construction_management.construction_management.report.uae_vat_201_return.automatic import build
 			result = build(dict(company=doc.company,from_date=str(period.from_date),to_date=str(period.to_date)), settings_override=doc)
 			if result["warnings"] or result["reviews"]:
 				frappe.throw(_("VAT return has unresolved classification or reconciliation issues and cannot be approved or filed"))
