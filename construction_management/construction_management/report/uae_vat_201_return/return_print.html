@@ -15,6 +15,8 @@ td,th {padding: 7px; border: 1px solid #999; word-wrap: break-word; vertical-ali
 th:nth-child(1) {width: 7%;} th:nth-child(2) {width: 39%;} .num {text-align: right; white-space: nowrap; font-size: 9pt;}
 .page {page-break-after: always;} .page:last-child {page-break-after: auto;}
 .meta td {width: 50%;} .status {border: 2px solid #777; padding: 8px; margin: 8px 0;} .note {font-size: 9pt; color: #444;}
+.review-page {font-size:9pt;} .review-page td {padding:5px;} .review-page .note {font-size:8pt;} .review-page h2 {margin-top:10px;padding:6px;}
+.bridge th:first-child {width:65%;} .bridge th:nth-child(2) {width:35%;} .bridge td {padding:5px;}
 </style></head><body>
 <div class="page">
 <h1>UAE VAT 201 RETURN</h1><div class="status">{{ result.status }} — ERP-generated preparation report. Not submitted to the FTA.</div>
@@ -45,10 +47,10 @@ th:nth-child(1) {width: 7%;} th:nth-child(2) {width: 39%;} .num {text-align: rig
 <h2>Tax Reconciliation</h2><table><thead><tr><td>Description</td><td>Report (AED)</td><td>Ledger (AED)</td><td>Difference (AED)</td></tr></thead><tbody>{% for r in result.reconciliation %}<tr><td>{{ r.description }}</td>{% for field in ['report_amount','ledger_amount','difference'] %}<td class="num">{{ frappe.utils.fmt_money(r[field],precision=precision) if r[field] is not none else 'Not Available' }}</td>{% endfor %}</tr>{% endfor %}</tbody></table>
 <p class="note">{{ result.reviews|length }} source rows require accounts review. The following review appendix identifies the remaining evidence and filing-calendar issues. Recorded VAT does not establish recoverability.</p>
 </div>
-<div class="page"><h1>VAT 201 REVIEW NOTES</h1><p>{{ h.company }} | TRN {{ text(h.trn) }} | {{ h.from_date }} – {{ h.to_date }} | {{ result.status }}</p>
+<div class="page review-page"><h1>VAT 201 REVIEW NOTES</h1><p>{{ h.company }} | TRN {{ text(h.trn) }} | {{ h.from_date }} – {{ h.to_date }} | {{ result.status }}</p>
 <h2>Source Evidence Required</h2>
 <table class="review"><thead><tr><th>Sources</th><th>Evidence Required</th></tr></thead><tbody>
-{% for item in result.get('review_summary', []) %}<tr><td><strong>{{ item.count }} source rows</strong><br>{{ item.vouchers|join(', ') }}</td><td>{{ item.issue }}<br><br>{{ item.action }}</td></tr>{% endfor %}
+{% for item in result.get('review_summary', []) %}<tr><td><strong>{{ item.count }} source rows</strong><br>{{ item.vouchers[:5]|join(', ') }}{% if item.vouchers|length > 5 %}<br>All voucher references are in the Review workbook sheet.{% endif %}</td><td>{{ item.issue }}<br><br>{{ item.action }}</td></tr>{% endfor %}
 </tbody></table>
 <h2>Filing Calendar Review</h2>
 {% for issue in result.get('calendar_issues', []) %}<p class="note">{{ issue }}</p>{% else %}<p class="note">No maintained-period mismatch identified. This report does not file or validate submission with the FTA.</p>{% endfor %}
@@ -56,5 +58,13 @@ th:nth-child(1) {width: 7%;} th:nth-child(2) {width: 39%;} .num {text-align: rig
 <h2>Reconciliation Basis</h2>
 {% for row in result.reconciliation if row.description in ['Output VAT','Input VAT'] %}<p class="note"><strong>{{ row.description }}:</strong> {{ row.explanation }}</p>{% endfor %}
 <p class="note">Known subtotals exclude unresolved sources. Output VAT credits are positive and debit reversals negative; input VAT uses the opposite accounting direction. Raw GL debit-minus-credit movements are shown separately. Voucher/account references, source-to-GL checks and recovery exclusions are retained in the workbook.</p>
+</div>
+{% if result.get('tax_measures') %}<div class="page"><h1>RECORDED VAT AND RETURN BRIDGE</h1>
+<p>{{ h.company }} | {{ h.from_date }} - {{ h.to_date }} | {{ result.status }}</p>
+<h2>Ledger Balances ({{ result.ledger_summary.currency }})</h2>
+<table class="bridge"><thead><tr><th>Measure</th><th>Amount</th></tr></thead><tbody>{% for key,value in result.ledger_summary.items() if key != 'currency' %}<tr><td>{{ key|replace('_',' ')|title }}</td><td class="num">{{ frappe.utils.fmt_money(value,precision=precision) if value is not none else 'Unavailable' }}</td></tr>{% endfor %}</tbody></table>
+<h2>Recorded Tax and Return Allocation (AED)</h2>
+<table class="bridge"><thead><tr><th>Measure</th><th>Amount</th></tr></thead><tbody>{% for key,value in result.tax_measures.items() %}<tr><td>{{ result.get('measure_labels',{}).get(key,key|replace('_',' ')|title) }}</td><td class="num">{{ frappe.utils.fmt_money(value,precision=precision) if value is not none else 'Unavailable' }}</td></tr>{% endfor %}</tbody></table>
+<p class="note">Recorded output less net input equals period credit movement only to the extent that all control postings have supported tax roles. Closing ledger balance includes opening balances; it is not statutory payable. Pending recovery is not confirmed non-recoverable VAT. Known return subtotals exclude unresolved decisions.</p>
 <p class="note">Prepared {{ frappe.utils.now_datetime() }}. This document is not FTA-certified and does not confirm submission.</p>
-</div></body></html>
+</div>{% endif %}</body></html>

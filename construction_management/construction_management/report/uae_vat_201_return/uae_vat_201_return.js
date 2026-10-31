@@ -8,6 +8,39 @@
 			: frappe.format(value, { fieldtype: "Currency", options: currency, precision: 2 });
 	const voucher = (row) =>
 		frappe.utils.get_form_link(row.voucher_type, row.voucher_no, true, esc(row.voucher_no));
+	const review_endpoint = endpoint.replace(/uae_vat_201_return\.$/, "review.");
+	async function review_decision(report, row) {
+		const args = { filters: report.get_filter_values(), voucher_type: row.voucher_type,
+			voucher_no: row.voucher_no, source_row: row.source_row, classification_id: row.classification_id };
+		const { message } = await frappe.call({ method: review_endpoint + "review_source", args });
+		if (message.records.length > 1 && !row.classification_id) {
+			frappe.msgprint(__("Multiple classifications exist for this source. Review the individual records in UAE VAT Settings."));
+			return;
+		}
+		const record = message.records.find(r => r.name === row.classification_id) || message.records[0] || {};
+		args.classification_id = record.name;
+		args.expected_fingerprint = message.decision_fingerprint;
+		const dialog = new frappe.ui.Dialog({ title: __("Review VAT Treatment") + " - " + row.voucher_no,
+			fields: [
+				{ fieldname: "source", fieldtype: "HTML", options: `<p>${esc(row.source_row)} | ${__("Recorded VAT")}: ${money(row.recorded_vat_amount ?? row.raw_vat)}</p>${row.voucher_type === "Purchase Invoice" ? `<p>${__("Saved recovery amount (AED)")}: ${money(message.source.recovery_source_amount)}</p>` : ""}` },
+				{ fieldname: "box", label: __("VAT Box"), fieldtype: "Select", options: "\n1a\n1b\n1c\n1d\n1e\n1f\n1g\n2\n3\n4\n5\n6\n7\n9\n10\nOutside VAT", reqd: 1 },
+				{ fieldname: "tax_date", label: __("Reviewed Tax Date"), fieldtype: "Date", reqd: 1 },
+				{ fieldname: "recovery_confirmed", label: __("Recovery Decision Reviewed"), fieldtype: "Check" },
+				{ fieldname: "recovery_percent", label: __("Approved Recovery %"), fieldtype: "Percent" },
+				{ fieldname: "journal_treatment", label: __("Journal Treatment"), fieldtype: "Select", options: "\nUnresolved\nVAT settlement\nVAT payment\nVAT reclassification\nVAT correction\nTaxable adjustment\nReverse-charge adjustment" },
+				{ fieldname: "override_base", label: __("Use Reviewed Taxable Base"), fieldtype: "Check" },
+				{ fieldname: "taxable_base_aed", label: __("Reviewed Taxable Base (AED)"), fieldtype: "Currency", options: "AED" },
+				{ fieldname: "aed_exchange_rate", label: __("AED per Company Base Currency"), fieldtype: "Float" },
+				{ fieldname: "reason", label: __("Reason / Emirate Basis"), fieldtype: "Small Text", reqd: 1 },
+				{ fieldname: "supporting_reference", label: __("Supporting Evidence"), fieldtype: "Data", reqd: 1 },
+			], primary_action_label: __("Approve Decision"),
+			async primary_action(values) {
+				await frappe.call({ method: review_endpoint + "decide", args: { ...args, action: "Approve", values } });
+				dialog.hide(); report.refresh();
+			} });
+		dialog.set_values({ ...record, tax_date: record.tax_date || row.posting_date, box: record.box || message.source.suggested_box || "" });
+		dialog.show();
+	}
 
 	async function period(report, reset = false, requested_period = null) {
 		if (report._no_refresh || !report.get_filter_value("company")) return;
@@ -76,12 +109,13 @@
 				const taxable =
 					"invoice_taxable_amount" in row ? row.invoice_taxable_amount : row.base;
 				const vat = "recorded_vat_amount" in row ? row.recorded_vat_amount : row.raw_vat;
+				const review_button = row._can_review ? ` <button type="button" class="btn btn-xs btn-default" data-review-source="${esc(row._review_index)}">${__("Review VAT")}</button>` : "";
 				const values = attention
 					? [
 							voucher(row),
 							esc(row.issue),
 							money(vat, currency),
-							esc(row.recommended_action),
+							esc(row.recommended_action) + review_button,
 					  ]
 					: [
 							`<span class="text-muted mr-2">${index + 1}.</span>${esc(frappe.datetime?.str_to_user ? frappe.datetime.str_to_user(row.posting_date) : row.posting_date)}`,
@@ -93,7 +127,7 @@
 							esc(row.vat_box ?? row.box),
 							esc(
 								row.display_remarks || row.issue || row.remarks || row.reason || row.supporting_reference
-							),
+							) + review_button,
 					  ];
 				return `<tr>${values
 					.map(
@@ -141,8 +175,13 @@
 		const review = message.review_summary || [];
 		if (review.length) panel.insertAdjacentHTML("afterbegin", `<div class="alert alert-warning"><strong>${__("Requires Review")}</strong><ul class="mb-0">${review.map(item => `<li>${esc(item.count)} ${__("source rows")}: ${esc(item.issue)} ${esc(item.action || "")}</li>`).join("")}</ul></div>`);
 		const reconciliation = message.reconciliation || [];
+		for (const [title, values, currency] of [["Ledger Balances",message.ledger_summary,message.ledger_summary?.currency], ["Recorded Tax and Return Bridge",message.tax_measures,"AED"]]) {
+			if (values) panel.insertAdjacentHTML("beforeend", `<h4 class="mt-4">${__(title)}</h4><div class="table-responsive"><table class="table table-bordered"><tbody>${Object.entries(values).filter(([key]) => key !== "currency").map(([key,value])=>`<tr><td>${esc(__(message.measure_labels?.[key] || key.replaceAll("_"," ")))}</td><td class="text-right">${money(value,currency)}</td></tr>`).join("")}</tbody></table></div>`);
+		}
+		if (message.recorded_breakdown?.length) panel.insertAdjacentHTML("beforeend", `<h4>${__("Recorded VAT by Voucher Type")}</h4><div class="table-responsive"><table class="table table-bordered"><thead><tr>${["Voucher Type","Tax Category","Period Debit","Period Credit","Recorded Output","Recorded Net Input"].map(h=>`<th>${esc(__(h))}</th>`).join("")}</tr></thead><tbody>${message.recorded_breakdown.map(row=>`<tr><td>${esc(row.voucher_type)}</td><td>${esc(row.category)}</td>${["raw_debit","raw_credit","recorded_output","recorded_input"].map(k=>`<td class="text-right">${money(row[k])}</td>`).join("")}</tr>`).join("")}</tbody></table></div>`);
 		if (reconciliation.length) panel.insertAdjacentHTML("beforeend", `<h4 class="mt-4">${__("Ledger Reconciliation")}</h4><div class="table-responsive"><table class="table table-bordered"><thead><tr>${["Description","Known Return VAT","Recorded Ledger VAT","Difference","Explanation"].map(label=>`<th>${esc(__(label))}</th>`).join("")}</tr></thead><tbody>${reconciliation.map(row=>`<tr><td>${esc(row.description)}</td>${["report_amount","ledger_amount","difference"].map(field=>`<td class="text-right" style="white-space:nowrap">${row[field] == null ? "" : money(row[field])}</td>`).join("")}<td>${esc(row.explanation)}</td></tr>`).join("")}</tbody></table></div>`);
 		const rows = message.details || [];
+		rows.forEach((row,index) => { row._can_review = message.can_review; row._review_index = index; });
 		const groups = [
 			rows.filter((r) => ["Sales Invoice", "POS Invoice"].includes(r.voucher_type)),
 			rows.filter((r) => r.voucher_type === "Purchase Invoice"),
@@ -164,6 +203,8 @@
 			);
 		};
 		panel.addEventListener("click", (event) => {
+			const review = event.target.closest("[data-review-source]");
+			if (review) { event.preventDefault(); review_decision(report, rows[Number(review.dataset.reviewSource)]); return; }
 			const button = event.target.closest("[data-tab]");
 			if (button) select(Number(button.dataset.tab));
 		});

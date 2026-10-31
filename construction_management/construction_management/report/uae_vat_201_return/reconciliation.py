@@ -26,9 +26,6 @@ def explain(result):
 			row["explanation"] = "Known return subtotal versus recorded output VAT (credit minus debit). Unallocated output and tax-date differences remain separate; see voucher/account references."
 		elif not row.get("explanation"):
 			row["explanation"] = "Raw accounting movement is labelled debit minus credit and does not itself establish VAT-return treatment."
-	if exclusions:
-		result["warnings"].append("Recorded VAT excluded by saved/reviewed recovery decisions: AED " + str(exclusions) +
-			". This is a recovery difference from recorded tax, not missing source VAT; see reconciliation.")
 	return result
 
 
@@ -41,8 +38,8 @@ def apply(result, settings):
 	by_gl = {(row["voucher_type"],row["voucher_no"],row["source_row"]):row for row in sources if "debit" in row}
 	issues = {(row["voucher_type"],row["voucher_no"],row["source_row"]):row for row in result["reviews"]}
 	excluded = {(row["voucher_type"],row["voucher_no"],row["source_row"]):row for row in result.get("excluded", [])}
-	groups = defaultdict(lambda: dict(entries=[], sources=[], events=[], details=[]))
-	for collection, field in ((result["ledger_entries"],"entries"),(sources,"sources"),(result["events"],"events"),(result["details"],"details")):
+	groups = defaultdict(lambda: dict(entries=[], sources=[], events=[], details=[], timing=[]))
+	for collection, field in ((result["ledger_entries"],"entries"),(sources,"sources"),(result["events"],"events"),(result["details"],"details"),(result.get("timing_events",[]),"timing")):
 		for row in collection:
 			account = row.get("tax_account") or row.get("account")
 			if account:
@@ -53,7 +50,7 @@ def apply(result, settings):
 	for (doctype, voucher, account), group in sorted(groups.items()):
 		if account not in mappings:
 			continue
-		rates = {event["aed_exchange_rate"] for event in group["events"] if event.get("aed_exchange_rate")}
+		rates = {event["aed_exchange_rate"] for event in group["events"] + group["timing"] if event.get("aed_exchange_rate")}
 		factor = engine.number(1) if result["header"]["base_currency"] == "AED" else engine.number(next(iter(rates))) if len(rates)==1 else None
 		balances = {side:engine.number(0) for side in totals}
 		debit = sum((engine.number(entry["debit"]) for entry in group["entries"]),engine.number(0))
@@ -81,7 +78,7 @@ def apply(result, settings):
 				for event in group["events"] if (event["box"] in engine.INPUT) == (side == "Input")))
 		unresolved = [issues[(doctype,voucher,source["source_row"])] for source in group["sources"] if (doctype,voucher,source["source_row"]) in issues]
 		posting_dates = sorted({str(row["posting_date"]) for row in group["sources"] if row.get("posting_date")})
-		tax_dates = sorted({str(row["tax_date"]) for row in group["events"] if row.get("tax_date")})
+		tax_dates = sorted({str(row["tax_date"]) for row in group["events"] + group["timing"] if row.get("tax_date")})
 		gl_refs = {entry["name"] for entry in group["entries"]}
 		gl_refs.update(entry["name"] for source in group["sources"] for entry in source.get("gl_evidence", []))
 		differences = {source.get("invoice_tax_difference") for source in group["sources"] if source.get("invoice_tax_difference") is not None}
@@ -116,10 +113,70 @@ def apply(result, settings):
 	reconciliation.append(dict(description="Mapped VAT control account movement (debit - credit)",report_amount=None,
 		ledger_amount=result.get("control_movement"),difference=None,currency="AED"))
 	result.update(audit_rows=rows,reconciliation=reconciliation)
+	bridge(result)
 	result["warnings"] = [warning for warning in result["warnings"] if "differs from the posting-date ledger" not in warning and "Tax-account postings remain unallocated" not in warning]
 	for row in reconciliation[:2]:
-		if row["difference"]:
+		if row["difference"] and any(result.get("tax_measures",{}).get(field) for field in ("pending_output","pending_input","residual_output","residual_input")):
 			result["warnings"].append(row["description"] + " return-to-recorded-ledger difference AED " + str(row["difference"]) + "; see traceable recovery/allocation/timing explanations")
 	if totals["Unallocated"] or not available["Unallocated"]:
 		result["warnings"].append("Some VAT ledger treatment remains unallocated; see the voucher/account reconciliation register")
 	return explain(result)
+
+
+def bridge(result):
+	"""Partition recorded tax once into return, pending, exclusion and timing."""
+	reviews = {(r["voucher_type"], r["voucher_no"], r["source_row"]): r for r in result["reviews"]}
+	breakdown = defaultdict(lambda: defaultdict(lambda: engine.number(0)))
+	for row in result["audit_rows"]:
+		key = (row["voucher_type"], row["voucher_no"], row["vat_account"])
+		pending = {"output": engine.number(0), "input": engine.number(0)}
+		seen = set()
+		for source in result.get("sources", []):
+			identity = (source["voucher_type"], source["voucher_no"], source["source_row"])
+			if identity in seen or identity not in reviews or (identity[0], identity[1], source.get("tax_account")) != key:
+				continue
+			seen.add(identity)
+			side = "output" if source.get("journal_vat_role") == "Output" or identity[0] in ("Sales Invoice", "POS Invoice") else "input" if source.get("journal_vat_role") == "Input" or identity[0] == "Purchase Invoice" else None
+			if side and result["header"]["base_currency"] == "AED":
+				value = source.get("recorded_vat_amount")
+				if value is None:
+					value = engine.number(source.get("raw_vat")) * (-1 if side == "output" and "debit" in source else 1)
+				pending[side] += engine.number(value)
+		for side in ("output", "input"):
+			recorded = row["recorded_" + side]
+			claimed = row["claimed_" + side]
+			nonclaimed = row["known_nonclaimed"] if side == "input" else 0
+			row["pending_" + side] = engine.money(pending[side]) if recorded is not None else None
+			remaining = engine.number(recorded) - engine.number(claimed) - engine.number(nonclaimed) - pending[side] if recorded is not None else None
+			timing = remaining if "timing difference" in row["category"] and not row["issue"] else engine.number(0)
+			row["timing_" + side] = engine.money(timing) if timing is not None else None
+			row["residual_" + side] = engine.money(remaining - timing) if remaining is not None else None
+		row["classification_difference"] = engine.money(engine.number(row["raw_credit"]) - engine.number(row["raw_debit"]) -
+			engine.number(row["recorded_output"]) + engine.number(row["recorded_input"]) + engine.number(row["control_movement"]) + engine.number(row["unallocated_gl"])) if row["raw_currency"] == "AED" else None
+		for field in ("raw_debit", "raw_credit", "recorded_output", "recorded_input", "claimed_output", "claimed_input",
+			"pending_output", "pending_input", "known_nonclaimed", "timing_output", "timing_input", "residual_output", "residual_input", "classification_difference"):
+			if row[field] is not None:
+				breakdown[(row["voucher_type"],row["category"])][field] += engine.number(row[field])
+	result["recorded_breakdown"] = [dict(voucher_type=kind, category=category, **{k:engine.money(v) for k,v in values.items()}) for (kind,category),values in sorted(breakdown.items())]
+	def total(field):
+		values = [row[field] for row in result["audit_rows"]]
+		return engine.money(sum(engine.number(value) for value in values)) if all(value is not None for value in values) else None
+	result["tax_measures"] = {field:total(field) for field in ("recorded_output", "recorded_input", "claimed_output", "claimed_input",
+		"pending_output", "pending_input", "known_nonclaimed", "timing_output", "timing_input", "residual_output", "residual_input", "classification_difference")}
+	m = result["tax_measures"]
+	result["measure_labels"] = dict(recorded_output="Recorded Output VAT", recorded_input="Recorded Net Input VAT",
+		claimed_output="Output Allocated to Return", claimed_input="Approved Recoverable Input VAT",
+		pending_output="Output Pending Return Allocation", pending_input="Input Pending Recovery Verification",
+		known_nonclaimed="Confirmed Non-recoverable / Excluded Input VAT",timing_output="Output Tax-date Timing Difference",timing_input="Input Tax-date Timing Difference",
+		residual_output="Unexplained Output Residual",residual_input="Unexplained Input Residual",classification_difference="GL-to-recorded-tax Unexplained Residual",
+		recorded_net_movement="Recorded Output Less Net Input (credit movement)")
+	m["recorded_net_movement"] = engine.money(engine.number(m["recorded_output"]) - engine.number(m["recorded_input"])) if m["recorded_output"] is not None and m["recorded_input"] is not None else None
+	opening = sum((engine.number(g["debit"]) - engine.number(g["credit"]) for g in result.get("opening_entries", [])), engine.number(0))
+	debit, credit = total("raw_debit"), total("raw_credit")
+	closing = opening + engine.number(debit) - engine.number(credit)
+	result["ledger_summary"] = dict(currency=result["header"]["base_currency"], opening_debit=engine.money(max(opening,0)), opening_credit=engine.money(max(-opening,0)),
+		period_debit=debit, period_credit=credit, period_net_credit=engine.money(engine.number(credit)-engine.number(debit)),
+		closing_debit=engine.money(max(closing,0)), closing_credit=engine.money(max(-closing,0)))
+	for field in ("residual_output", "residual_input", "classification_difference"):
+		if any(row[field] is None or row[field] for row in result["audit_rows"]):
+			result["warnings"].append("Unexplained reconciliation residual: " + field + "; see Source Ledger Audit")

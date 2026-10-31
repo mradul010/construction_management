@@ -36,7 +36,7 @@ class TestVATCompleteness(unittest.TestCase):
 			for component in completeness.COMPONENTS:
 				self.assertEqual(box[component], 0)
 				self.assertFalse(self.state(result,box["box"],component))
-		self.assertTrue(all(isinstance(card["value"],(int,float)) and not card["provisional"] for card in report.summary_cards(result)))
+		self.assertTrue(all(not card["provisional"] for card in report.summary_cards(result)))
 
 	def test_missing_advance_emirate_affects_only_output_allocations_and_totals(self):
 		source = self.source(journal_category="Customer-advance output VAT",journal_vat_role="Output",base=455672.6,
@@ -58,16 +58,18 @@ class TestVATCompleteness(unittest.TestCase):
 			self.assertFalse(self.state(result,box))
 		self.assertFalse(self.state(result,"9","adjustment"))
 		cards = report.summary_cards(result)
-		self.assertEqual(cards[1]["value"],0)
-		self.assertTrue(cards[1]["provisional"])
-		self.assertEqual((cards[2]["value"],cards[2]["provisional"]),(0,False))
+		claim = next(c for c in cards if c["label"].startswith("Recoverable Purchase"))
+		self.assertEqual(claim["value"],0)
+		self.assertTrue(claim["provisional"])
+		adjustment = next(c for c in cards if c["label"].startswith("VAT Adjustments"))
+		self.assertEqual((adjustment["value"],adjustment["provisional"]),(0,False))
 
-	def test_saved_purchase_zero_is_complete_without_a_box_claim(self):
+	def test_default_purchase_zero_requires_approval_without_a_box_claim(self):
 		source = self.source(voucher_type="Purchase Invoice",journal_category=None,journal_vat_role=None,
 			recovery_source_amount=0,vat_rows_count=1)
 		result = self.build([source])
-		self.assertFalse(result["reviews"])
-		self.assertFalse(self.state(result,"9"))
+		self.assertTrue(result["reviews"])
+		self.assertTrue(self.state(result,"9"))
 		self.assertIsNone(result["details"][0]["vat_box"])
 		self.assertEqual(result["details"][0]["recorded_vat_amount"],52.12)
 
@@ -80,7 +82,7 @@ class TestVATCompleteness(unittest.TestCase):
 		self.assertTrue(self.state(result,"13"))
 		self.assertTrue(self.state(result,"14"))
 		self.assertFalse(self.state(result,"8","adjustment"))
-		self.assertTrue(report.summary_cards(result)[2]["provisional"])
+		self.assertTrue(next(c for c in report.summary_cards(result) if c["label"].startswith("VAT Adjustments"))["provisional"])
 
 	def test_saved_adjustment_rule_is_used_without_adding_source_fields(self):
 		self.settings["custom_vat201_classifications"] = [frappe._dict(voucher_type="Journal Entry",voucher_no="JV",source_row="GL",box="9",is_adjustment=1)]
@@ -107,7 +109,7 @@ class TestVATCompleteness(unittest.TestCase):
 		result = self.build(warnings=["TRN: Not Configured"],reconciliation=[dict(description="Output VAT",ledger_amount=100)])
 		self.assertEqual(result["status"],automatic.PRELIMINARY)
 		self.assertTrue(all(not self.state(result,box["box"],field) for box in result["boxes"] for field in completeness.COMPONENTS))
-		self.assertFalse(report.summary_cards(result)[3]["provisional"])
+		self.assertFalse(next(c for c in report.summary_cards(result) if c["label"].startswith("Net VAT"))["provisional"])
 
 	def test_inaccessible_scope_cannot_claim_confirmed_no_activity(self):
 		result = self.build(scope_incomplete=True)
@@ -127,9 +129,10 @@ class TestVATCompleteness(unittest.TestCase):
 		for box, row in zip(screen[1], rows[7:]):
 			self.assertEqual(list(row[2:5]),[box[field] for field in completeness.COMPONENTS])
 			self.assertTrue(all(isinstance(value,(int,float)) for value in row[2:5]))
-		self.assertEqual(screen[4][3]["value"],55062.68)
-		self.assertIn("Provisional",screen[4][3]["label"])
-		self.assertNotIn("Pending Verification",str(rows))
+		net = next(c for c in screen[4] if c["label"].startswith("Net VAT"))
+		self.assertEqual(net["value"],55062.68)
+		self.assertIn("Provisional",net["label"])
+		self.assertTrue(all(isinstance(v,(int,float)) for row in rows[7:7+len(result["boxes"])] for v in row[2:5]))
 
 	def test_role_normalized_warning_and_export_keep_raw_gl_separate(self):
 		source = self.source(journal_category="Customer-advance output VAT",journal_vat_role="Output",base=455672.6,
@@ -141,13 +144,13 @@ class TestVATCompleteness(unittest.TestCase):
 		self.assertEqual(rows[start+2][6],-22783.63)
 		self.assertTrue(any("recorded output VAT AED 22783.63" in warning for warning in result["warnings"]))
 
-	def test_saved_zero_recovery_explains_ledger_difference_but_not_missing_data(self):
+	def test_default_zero_does_not_become_confirmed_exclusion(self):
 		source = self.source(voucher_type="Purchase Invoice",journal_category=None,journal_vat_role=None,
 			recovery_source_amount=0,vat_rows_count=1)
 		result = self.build([source],reconciliation=[dict(description="Input VAT",ledger_amount=52.12)])
-		self.assertFalse(self.state(result,"13"))
+		self.assertTrue(self.state(result,"13"))
 		self.assertEqual(result["reconciliation"][0]["difference"],-52.12)
-		self.assertIn("recovery exclusions: AED 52.12",result["reconciliation"][0]["explanation"])
+		self.assertIn("recovery exclusions: AED 0.0",result["reconciliation"][0]["explanation"])
 
 	def test_unallocated_output_reversal_remains_negative_in_warnings(self):
 		source = self.source(journal_category="Customer-advance output VAT",journal_vat_role="Output",base=-455672.6,

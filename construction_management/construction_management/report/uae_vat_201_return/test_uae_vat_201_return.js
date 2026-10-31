@@ -36,7 +36,7 @@ function setup() {
 	return { report: frappe.query_reports["UAE VAT 201 Return"], frappe, calls };
 }
 
-test("only Company, filing period and dates are exposed; no approval workflow", () => {
+test("filters stay unchanged and review uses the existing permission-gated endpoint", () => {
 	const { report } = setup();
 	assert.deepEqual(
 		Array.from(report.filters, (f) => f.fieldname),
@@ -47,10 +47,11 @@ test("only Company, filing period and dates are exposed; no approval workflow", 
 		"open_review",
 		"Approve Classification",
 		"Generate Review Suggestions",
-		"review_endpoint",
 		"classification_status",
 	])
 		assert.ok(!source.includes(text));
+	assert.ok(source.includes('review_endpoint + "decide"'));
+	assert.ok(source.includes('row._can_review = message.can_review'));
 	for (const tab of ["Sales", "Purchases", "Journal Entries", "Needs Attention"])
 		assert.ok(source.includes(`"${tab}"`));
 });

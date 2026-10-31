@@ -18,7 +18,7 @@ class TestVAT201Review(unittest.TestCase):
 		self.assertEqual(box,"9")
 		self.assertIn("explicit review",reason)
 		self.assertIn("Expenses (AED) is missing",reason)
-		self.assertIn("no input VAT is claimed",review.suggest(dict(self.source,recovery_source_amount=0), {"VAT":"Both"})[1])
+		self.assertIn("recovery is pending approval",review.suggest(dict(self.source,recovery_source_amount=0), {"VAT":"Both"})[1])
 		self.assertNotIn("recovery_percent",self.source)
 
 	def test_sales_emirate_is_only_a_suggestion_and_not_company_fallback(self):

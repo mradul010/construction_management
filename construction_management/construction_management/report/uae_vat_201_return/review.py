@@ -19,6 +19,12 @@ def fingerprint(source):
 	return hashlib.sha256(json.dumps({k: source.get(k) for k in keys}, sort_keys=True, default=str).encode()).hexdigest()
 
 
+def decision_fingerprint(source):
+	"""Bind new approvals to recovery proposals and the exact amended document."""
+	return hashlib.sha256((fingerprint(source) + json.dumps({key: source.get(key) for key in
+		("recovery_source_amount", "reverse_recovery_percent")}, sort_keys=True, default=str)).encode()).hexdigest()
+
+
 def enrich_journals(sources):
 	from construction_management.construction_management.report.uae_vat_201_return.journal import match_journal, link_advance_evidence
 	cache = {}
@@ -116,7 +122,7 @@ def suggest(source, mappings, rules=()):
 			if source.get("reverse_charge") != "Y" and source.get("recovery_source_amount") in (None, ""):
 				reasons.append("Recoverable Standard Rated Expenses (AED) is missing")
 			elif source.get("reverse_charge") != "Y" and not flt(source.get("recovery_source_amount")):
-				reasons.append("Saved recoverable VAT amount is zero; no input VAT is claimed")
+				reasons.append("Saved recoverable VAT amount is zero; recovery is pending approval unless a valid reviewed decision exists")
 		else:
 			reasons.append("Untaxed purchase item: missing VAT does not prove zero-rated/exempt treatment or entitlement")
 	if source.get("base") is None:
@@ -201,7 +207,7 @@ def review_source(filters, voucher_type, voucher_no, source_row, classification_
 	from construction_management.construction_management.report.uae_vat_201_return.engine import build, settings_for
 	result = build(filters)
 	key = (voucher_type, voucher_no, source_row)
-	sources = result["reviews"] + result["events"] + result.get("excluded", [])
+	sources = result["reviews"] + result["events"] + result.get("excluded", []) + result.get("timing_events", [])
 	matching = [s for s in sources if tuple(s[k] for k in ("voucher_type", "voucher_no", "source_row")) == key]
 	source = next((s for s in matching if s.get("classification_id")==classification_id), None) if classification_id else None
 	source = source or next(iter(matching), None)
@@ -212,22 +218,27 @@ def review_source(filters, voucher_type, voucher_no, source_row, classification_
 	for record in records:
 		# Return fresh permission-checked evidence, not historic manager-only snapshots.
 		record.pop("source_evidence", None)
-	return dict(source=source, records=records)
+	return dict(source=source, records=records, decision_fingerprint=decision_fingerprint(source))
 
 
 @frappe.whitelist()
-def decide(filters, voucher_type, voucher_no, source_row, action, values=None, classification_id=None):
+def decide(filters, voucher_type, voucher_no, source_row, action, values=None, classification_id=None, expected_fingerprint=None):
 	from construction_management.construction_management.report.uae_vat_201_return.engine import apply_rule
 	f = frappe._dict(frappe.parse_json(filters))
 	doc = manager_access(f.company)
 	if action not in ("Save", "Approve", "Reject"):
 		frappe.throw(_("Invalid VAT review action"))
 	source = review_source(filters, voucher_type, voucher_no, source_row, classification_id)["source"]
+	if expected_fingerprint and expected_fingerprint != decision_fingerprint(source):
+		frappe.throw(_("Source evidence changed while the review dialog was open. Reload and review the current source."))
 	record = next((r for r in doc.custom_vat201_classifications if r.name == classification_id and
 		(r.voucher_type,r.voucher_no,r.source_row) == (voucher_type,voucher_no,source_row)), None)
 	if classification_id and not record:
 		frappe.throw(_("Classification does not belong to this source"))
 	if not record:
+		existing = [r for r in doc.custom_vat201_classifications if (r.voucher_type,r.voucher_no,r.source_row) == (voucher_type,voucher_no,source_row)]
+		if existing and not classification_id:
+			frappe.throw(_("Select the existing classification before saving this source decision"))
 		record = doc.append("custom_vat201_classifications", dict(voucher_type=voucher_type,voucher_no=voucher_no,source_row=source_row,origin="Manual"))
 	values = frappe._dict(frappe.parse_json(values) or {})
 	allowed = ("box","tax_date","recovery_confirmed","recovery_percent","override_base","taxable_base_aed",
@@ -237,7 +248,7 @@ def decide(filters, voucher_type, voucher_no, source_row, action, values=None, c
 			record.set(field, values[field])
 	if action == "Reject" and not record.get("review_remarks"):
 		frappe.throw(_("Rejection requires review remarks; rejection does not exclude the source from reconciliation"))
-	record.source_fingerprint = fingerprint(source)
+	record.source_fingerprint = decision_fingerprint(source)
 	record.source_evidence = frappe.as_json(source)
 	record.approved = int(action == "Approve")
 	record.review_status = "Approved" if record.approved else "Rejected" if action == "Reject" else "Pending Review"
