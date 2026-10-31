@@ -4,7 +4,7 @@ from decimal import Decimal
 
 import frappe
 from frappe import _
-from frappe.utils import escape_html, flt
+from frappe.utils import flt
 
 from construction_management.construction_management.report.uae_vat_201_return.automatic import build, detail_remarks
 from construction_management.construction_management.report.uae_vat_201_return.engine import OUTPUT, INPUT
@@ -22,13 +22,8 @@ def execute(filters=None):
 	result = build(filters)
 	frappe.local.vat201_current_result = result
 	rows = [dict(box,_box=True) for box in result["boxes"]]
-	header = result["header"]
-	metadata = " | ".join(f"{label}: {escape_html(str(header.get(key) or 'Not Configured'))}" for key,label in (
-		("legal_name_english","Legal Name"),("trn","TRN"),("registered_emirate","Registered Emirate"),
-		("from_date","From"),("to_date","To"),("due_date","Due Date"),("filing_frequency","Frequency")))
-	message = f"<strong>{escape_html(str(header.get('company') or ''))}</strong><br>{metadata}<br><strong>{escape_html(result['status'])}</strong> - Preparation only; not submitted to the FTA."
-	if result["warnings"]:
-		message += "<details><summary>Source and reconciliation notes (" + str(len(result["warnings"])) + ")</summary><ul>" + "".join("<li>" + escape_html(w) + "</li>" for w in result["warnings"]) + "</ul></details>"
+	from construction_management.construction_management.report.uae_vat_201_return.form_layout import form_html
+	message = form_html(result, interactive=True)
 	return get_columns(),rows,message,None,summary_cards(result),True
 
 
@@ -37,17 +32,12 @@ def summary_cards(result):
 	def pending(box, field="amount"):
 		return boxes[box].get("completeness", {}).get(field, {}).get("provisional", False)
 	def card(label, value, provisional=False):
-		return dict(label=_(label) + (_(" (Provisional)") if provisional else ""),
+		return dict(label=_(label),
 			value=_("Not Available") if value is None else value,
-			datatype="Data" if value is None else "Currency",currency="AED",provisional=provisional)
-	m = result.get("tax_measures", {})
-	return [card("Recorded Output VAT",m.get("recorded_output",result["observed"]["sales_vat"]),result.get("scope_incomplete",False)),
-		card("Recorded Net Input VAT",m.get("recorded_input"),result.get("scope_incomplete",False)),
-		card("Recoverable Purchase VAT",boxes["13"]["amount"],pending("13")),
-		card("Recorded Input Not Claimed (includes pending)",m.get("input_not_claimed")),
-		card("VAT Adjustments",sum(b["adjustment"] * (-1 if b["box"] in INPUT else 1)
-			for b in result["boxes"] if b["box"] in OUTPUT+INPUT), any(pending(box,"adjustment") for box in OUTPUT+INPUT)),
-		card("Net VAT Payable / Refundable",boxes["14"]["amount"],pending("14"))]
+			datatype="Data" if value is None else "Currency",currency="AED",precision=2,provisional=provisional)
+	return [card("Total Output Tax - Box 12",boxes["12"]["amount"],pending("12")),
+		card("Total Recoverable Input Tax - Box 13",boxes["13"]["amount"],pending("13")),
+		card("Net VAT Refundable - Box 14" if boxes["14"]["amount"] < 0 else "Net VAT Payable / Refundable - Box 14",boxes["14"]["amount"],pending("14"))]
 
 
 @frappe.whitelist()
@@ -71,6 +61,8 @@ def report_context(filters):
 def context_for(result):
 	# Source permissions are checked by the reader; no stored evidence snapshots are returned.
 	context = {key:result.get(key) for key in ("header","status","calculation_description","return_complete","warnings","details","reconciliation","observed","unallocated_output","review_summary","audit_rows","tax_measures","ledger_summary","recorded_breakdown","measure_labels","settings_name","calculated_at")}
+	from construction_management.construction_management.report.uae_vat_201_return.form_layout import form_html
+	context["form_print_html"] = form_html(result)
 	return context
 
 
@@ -140,7 +132,7 @@ def export_rows(result):
 	return [[("'"+v if v.startswith(("=","+","-","@")) else v) if isinstance(v,str) else v for v in row] for row in rows]
 
 
-def workbook_bytes(result):
+def audit_workbook_bytes(result):
 	from openpyxl import Workbook
 	from openpyxl.styles import Alignment, Font, PatternFill
 	from openpyxl.comments import Comment
@@ -216,25 +208,33 @@ def workbook_bytes(result):
 	return output.getvalue()
 
 
-def pdf_bytes(result):
+def workbook_bytes(result, detailed=False):
+	from construction_management.construction_management.report.uae_vat_201_return.form_layout import workbook_bytes as render
+	return render(result, audit=detailed, audit_bytes=audit_workbook_bytes(result) if detailed else None)
+
+
+def pdf_bytes(result, detailed=False):
 	from frappe.utils.pdf import get_pdf
-	return get_pdf(frappe.render_template("construction_management/report/uae_vat_201_return/return_print.html",dict(result=result,precision=frappe.get_precision("GL Entry","debit",currency="AED"))),options={"page-size":"A4","margin-top":"10mm","margin-bottom":"10mm","margin-left":"10mm","margin-right":"10mm"})
+	from construction_management.construction_management.report.uae_vat_201_return.form_layout import form_html
+	content = frappe.render_template("construction_management/report/uae_vat_201_return/return_print.html",dict(result=result,precision=frappe.get_precision("GL Entry","debit",currency="AED"))) if detailed else "<html><head><meta charset='utf-8'></head><body>" + form_html(result) + "</body></html>"
+	return get_pdf(content,options={"page-size":"A4","margin-top":"10mm","margin-bottom":"10mm","margin-left":"10mm","margin-right":"10mm","print-media-type":None})
 
 
 @frappe.whitelist()
-def download(filters, file_type="xlsx"):
+def download(filters, file_type="xlsx", detailed=0):
 	result = build(filters)
 	if file_type not in ("xlsx","csv","pdf"):
 		frappe.throw(_("Unsupported export format"))
 	frappe.has_permission("GL Entry","print" if file_type=="pdf" else "export",throw=True)
+	detailed = bool(frappe.utils.cint(detailed))
 	if file_type=="xlsx":
-		content = workbook_bytes(result)
+		content = workbook_bytes(result, detailed=detailed)
 	elif file_type=="pdf":
-		content = pdf_bytes(result)
+		content = pdf_bytes(result, detailed=detailed)
 	else:
 		stream = io.StringIO()
 		csv.writer(stream).writerows(export_rows(result))
 		content = stream.getvalue().encode("utf-8-sig")
-	frappe.local.response.filename = f"UAE-VAT-201-{result['header']['to_date']}.{file_type}"
+	frappe.local.response.filename = f"UAE-VAT-201-{result['header']['to_date']}{'-Detailed-Audit' if detailed else ''}.{file_type}"
 	frappe.local.response.filecontent = content
 	frappe.local.response.type = "pdf" if file_type=="pdf" else "binary"

@@ -1,0 +1,86 @@
+{% macro value(text) %}{{ (text or 'Not configured')|e }}{% endmacro %}
+{% macro amount(row, cell) %}
+{% if cell.applicable %}
+{% if interactive %}<a href="#" class="vat201-amount" data-box="{{ row.box }}" data-field="{{ cell.field }}"{% if cell.provisional %} title="Provisional known subtotal; return allocation is incomplete"{% endif %}>{% endif %}
+{{ frappe.utils.fmt_money(cell.value, precision=2) }}{% if cell.provisional %}<sup>*</sup>{% endif %}
+{% if interactive %}</a>{% endif %}
+{% endif %}
+{% endmacro %}
+{% macro table(rows, inputs=false) %}
+<table class="vat201-statutory"><colgroup><col style="width:6%"><col style="width:40%"><col style="width:18%"><col style="width:18%"><col style="width:18%"></colgroup>
+<thead><tr><th scope="col">Box</th><th scope="col">Description</th><th scope="col" class="vat201-number">Amount (AED)</th><th scope="col" class="vat201-number">{{ 'Recoverable VAT Amount (AED)' if inputs else 'VAT Amount (AED)' }}</th><th scope="col" class="vat201-number">Adjustments (AED)</th></tr></thead>
+<tbody>{% for row in rows %}<tr data-vat-box="{{ row.box }}"{% if row.total %} class="vat201-total"{% endif %}><td>{{ row.box }}</td><th scope="row">{{ row.description|e }}</th>{% for cell in row.cells %}<td class="vat201-number{% if not cell.applicable %} vat201-na{% endif %}" data-value-field="{{ cell.field }}"{% if not cell.applicable %} aria-label="Not applicable"{% endif %}>{{ amount(row, cell) }}</td>{% endfor %}</tr>{% endfor %}</tbody>
+</table>
+{% endmacro %}
+<style>
+.qatra-vat201-form {font-family:inherit;color:#30373d;background:#fff;width:100%;max-width:1150px;margin:0 auto;font-size:13px;line-height:1.45;letter-spacing:0;box-sizing:border-box;}
+.qatra-vat201-form * {box-sizing:border-box;letter-spacing:0;}
+.qatra-vat201-form h1 {font-size:22px;font-weight:600;margin:0 0 6px;line-height:1.3;}
+.qatra-vat201-form .vat201-status {font-size:12px;color:#59636c;margin:0 0 16px;}
+.qatra-vat201-form section {margin:0 0 18px;page-break-inside:auto;}
+.qatra-vat201-form h2 {font-size:14px;font-weight:600;background:#eff1f3;border:1px solid #d9dde1;padding:9px 11px;margin:0;page-break-after:avoid;}
+.qatra-vat201-form table {border-collapse:collapse;table-layout:fixed;width:100%;margin:0;border:1px solid #d9dde1;}
+.qatra-vat201-form td,.qatra-vat201-form th {border-bottom:1px solid #e1e4e7;padding:8px 9px;vertical-align:middle;overflow-wrap:anywhere;}
+.qatra-vat201-form th {font-weight:500;text-align:left;background:none;}
+.qatra-vat201-form .vat201-statutory tbody th {white-space:normal;word-break:normal;overflow-wrap:break-word;}
+.qatra-vat201-return-card.summary-item {height:auto;min-height:90px;max-width:none;display:flex;flex-direction:column;align-items:flex-start;justify-content:center;padding:14px 16px;overflow:visible;}
+.qatra-vat201-return-card .summary-label {height:auto;max-width:100%;white-space:normal;line-height:1.4;font-size:12px;color:#59636c;}
+.qatra-vat201-return-card .summary-value {height:auto;max-width:100%;line-height:1.4;font-size:22px;color:#30373d;white-space:nowrap;overflow:visible;margin-top:5px;}
+.qatra-vat201-form thead th {font-size:11px;color:#59636c;background:#fafbfc;}
+.qatra-vat201-form .vat201-number {text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap;overflow-wrap:normal;}
+.qatra-vat201-form thead .vat201-number {white-space:normal;}
+.qatra-vat201-form .vat201-total td,.qatra-vat201-form .vat201-total th {background:#eff1f3;font-weight:600;border-top:1px solid #ccd2d7;}
+.qatra-vat201-form .vat201-na {background:#fafbfc;}
+.qatra-vat201-form .vat201-meta td {width:50%;padding:10px 12px;}
+.qatra-vat201-form .vat201-label {display:block;font-size:11px;color:#68737d;margin-bottom:3px;}
+.qatra-vat201-form .vat201-meta strong {font-weight:500;}
+.qatra-vat201-form .vat201-net th {width:75%;}
+.qatra-vat201-form .vat201-note {font-size:11px;color:#68737d;margin:8px 0;}
+.qatra-vat201-form .vat201-amount {color:inherit;text-decoration:underline;text-decoration-color:#b7c0c7;text-underline-offset:3px;}
+.qatra-vat201-form .vat201-print-heading {display:none;}
+.qatra-vat201-form .vat201-footer {border-top:1px solid #d9dde1;padding-top:9px;}
+@media(max-width:700px) {
+ .qatra-vat201-form {font-size:11px;} .qatra-vat201-form h1 {font-size:19px;}
+ .qatra-vat201-form td,.qatra-vat201-form th {padding:7px 4px;}
+ .qatra-vat201-form .vat201-number {white-space:normal;overflow-wrap:anywhere;}
+ .qatra-vat201-form thead th {font-size:10px;}
+}
+@media print {
+ .qatra-vat201-form {font-family:Arial,sans-serif;max-width:none;font-size:8.5pt;line-height:1.3;}
+ .qatra-vat201-form h1 {font-size:16pt;} .qatra-vat201-form h2 {font-size:10pt;padding:6px 8px;}
+ .qatra-vat201-form td,.qatra-vat201-form th {padding:4px 7px;}
+ .qatra-vat201-form .vat201-meta td {padding:5px 9px;}
+ .qatra-vat201-form .vat201-label {font-size:8pt;margin-bottom:1px;}
+ .qatra-vat201-form .vat201-status {font-size:8pt;margin-bottom:9px;}
+ .qatra-vat201-form section {margin-bottom:10px;}
+ .qatra-vat201-form thead {display:table-header-group;}
+ .qatra-vat201-form tr {page-break-inside:avoid;}
+ .qatra-vat201-form .vat201-inputs {page-break-before:always;}
+ .qatra-vat201-form .vat201-print-heading {display:block;font-size:10pt;margin-bottom:12px;}
+ .qatra-vat201-form .vat201-net,.qatra-vat201-form .vat201-signatory {page-break-inside:avoid;}
+ .qatra-vat201-form .vat201-amount {text-decoration:none;}
+}
+</style>
+<article class="qatra-vat201-form">
+<h1>UAE VAT Return - VAT 201</h1>
+<p class="vat201-status">{{ form.status|e }}. Preparation only; not submitted to the FTA.</p>
+<section><h2>Taxable Person Details</h2><table class="vat201-meta"><tbody>
+<tr><td><span class="vat201-label">TRN</span><strong>{{ value(form.header.trn) }}</strong></td><td><span class="vat201-label">Company</span>{{ value(form.header.company) }}</td></tr>
+<tr><td><span class="vat201-label">Taxable Person Name (English)</span>{{ value(form.header.legal_name_english) }}</td><td><span class="vat201-label">Taxable Person Name (Arabic)</span>{{ value(form.header.legal_name_arabic) }}</td></tr>
+<tr><td colspan="2"><span class="vat201-label">Taxable Person Address</span>{{ value(form.header.address) }}</td></tr>
+</tbody></table></section>
+<section><h2>VAT Return Period</h2><table class="vat201-meta"><tbody>
+<tr><td><span class="vat201-label">Tax Period From / To</span>{{ value(form.header.from_date) }} to {{ value(form.header.to_date) }}</td><td><span class="vat201-label">VAT Return Due Date</span>{{ value(form.header.due_date) }}</td></tr>
+<tr><td><span class="vat201-label">Tax Year End</span>{{ value(form.header.tax_year_end) }}</td><td><span class="vat201-label">Filing Frequency / VAT Stagger</span>{{ value(form.header.filing_frequency) }} / {{ value(form.header.stagger) }}</td></tr>
+</tbody></table></section>
+<section class="vat201-outputs"><h2>VAT on Sales and All Other Outputs</h2>{{ table(form.outputs) }}</section>
+<section class="vat201-inputs"><div class="vat201-print-heading"><strong>UAE VAT Return - VAT 201</strong><br>{{ value(form.header.legal_name_english) }} | TRN {{ value(form.header.trn) }}<br>{{ value(form.header.from_date) }} to {{ value(form.header.to_date) }} | {{ form.status|e }}</div><h2>VAT on Expenses and All Other Inputs</h2>{{ table(form.inputs, true) }}</section>
+<section class="vat201-net"><h2>Net VAT Due</h2><table><tbody>{% for row in form.net %}<tr data-vat-box="{{ row.box }}"{% if row.total %} class="vat201-total"{% endif %}><th scope="row">{{ row.box }} &nbsp; {{ row.description|e }} (AED)</th><td class="vat201-number" data-value-field="amount">{{ amount(row, row.cells[0]) }}</td></tr>{% endfor %}</tbody></table></section>
+{% if form.provisional %}<p class="vat201-note">* Known subtotal only: some return amounts cannot be established from saved sources. This is not a final filing liability.</p>{% endif %}
+<section><h2>Additional Reporting Requirements</h2><table class="vat201-meta"><tbody><tr><td><span class="vat201-label">Profit Margin Scheme</span>{{ value(form.header.profit_margin_scheme) }}</td><td></td></tr></tbody></table></section>
+<section class="vat201-signatory"><h2>Declaration and Authorised Signatory</h2><table class="vat201-meta"><tbody>
+<tr><td><span class="vat201-label">Name (English)</span>{{ value(form.header.signatory_english) }}</td><td><span class="vat201-label">Name (Arabic)</span>{{ value(form.header.signatory_arabic) }}</td></tr>
+<tr><td><span class="vat201-label">Phone / Mobile</span>{% if form.header.mobile %}{{ (form.header.mobile_code or '')|e }} {{ form.header.mobile|e }}{% else %}Not configured{% endif %}</td><td><span class="vat201-label">Email</span>{{ value(form.header.email) }}</td></tr>
+</tbody></table></section>
+<p class="vat201-note vat201-footer">Calculated from saved ERPNext records. ERP-generated preparation, not a government-issued or submitted return.</p>
+</article>

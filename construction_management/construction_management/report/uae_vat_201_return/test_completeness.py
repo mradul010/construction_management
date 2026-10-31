@@ -60,11 +60,11 @@ class TestVATCompleteness(unittest.TestCase):
 			self.assertFalse(self.state(result,box))
 		self.assertFalse(self.state(result,"9","adjustment"))
 		cards = report.summary_cards(result)
-		claim = next(c for c in cards if c["label"].startswith("Recoverable Purchase"))
+		self.assertEqual(len(cards),3)
+		claim = next(c for c in cards if c["label"].startswith("Total Recoverable Input"))
 		self.assertEqual(claim["value"],0)
 		self.assertTrue(claim["provisional"])
-		adjustment = next(c for c in cards if c["label"].startswith("VAT Adjustments"))
-		self.assertEqual((adjustment["value"],adjustment["provisional"]),(0,False))
+		self.assertFalse(any(c["label"].startswith("VAT Adjustments") for c in cards))
 
 	def test_saved_purchase_zero_needs_no_approval_or_box_claim(self):
 		source = self.source(voucher_type="Purchase Invoice",journal_category=None,journal_vat_role=None,
@@ -84,7 +84,7 @@ class TestVATCompleteness(unittest.TestCase):
 		self.assertTrue(self.state(result,"13"))
 		self.assertTrue(self.state(result,"14"))
 		self.assertFalse(self.state(result,"8","adjustment"))
-		self.assertTrue(next(c for c in report.summary_cards(result) if c["label"].startswith("VAT Adjustments"))["provisional"])
+		self.assertTrue(next(c for c in report.summary_cards(result) if "Box 13" in c["label"])["provisional"])
 
 	def test_saved_adjustment_rule_is_used_without_adding_source_fields(self):
 		self.settings["custom_vat201_classifications"] = [frappe._dict(voucher_type="Journal Entry",voucher_no="JV",source_row="GL",box="9",is_adjustment=1)]
@@ -128,13 +128,18 @@ class TestVATCompleteness(unittest.TestCase):
 			screen = report.execute({})
 		book = load_workbook(io.BytesIO(report.workbook_bytes(result)))
 		rows = list(book.active.values)
-		for box, row in zip(screen[1], rows[7:]):
-			self.assertEqual(list(row[2:5]),[box[field] for field in completeness.COMPONENTS])
-			self.assertTrue(all(isinstance(value,(int,float)) for value in row[2:5]))
+		from construction_management.construction_management.report.uae_vat_201_return.form_layout import form_data
+		form=form_data(result)
+		for box in form["outputs"]+form["inputs"]:
+			row=next(row for row in rows if row[0]==box["box"])
+			self.assertEqual(list(row[2:5]),[c["value"] if c["applicable"] else None for c in box["cells"]])
+		for box in form["net"]:
+			row=next(row for row in rows if isinstance(row[0],str) and row[0].startswith(box["box"]+"  "))
+			self.assertEqual(row[4],box["cells"][0]["value"])
 		net = next(c for c in screen[4] if c["label"].startswith("Net VAT"))
 		self.assertEqual(net["value"],55062.68)
-		self.assertIn("Provisional",net["label"])
-		self.assertTrue(all(isinstance(v,(int,float)) for row in rows[7:7+len(result["boxes"])] for v in row[2:5]))
+		self.assertTrue(net["provisional"])
+		self.assertEqual(len(screen[4]),3)
 
 	def test_role_normalized_warning_and_export_keep_raw_gl_separate(self):
 		source = self.source(journal_category="Customer-advance output VAT",journal_vat_role="Output",base=455672.6,

@@ -1,5 +1,94 @@
 # UAE VAT 201 Return
 
+## Form-Style Presentation and Exports: 2026-10-31
+
+Presentation-only update. The specified [VAT Return Form 201 reference](https://tallysolutions.com/mena/wp-content/uploads/2018/vat/VAT%20Return%20Form%20201.pdf)
+was downloaded to `/tmp/vat201-layout-reference.pdf`, rendered and visually inspected
+before implementation. It is a 2018, single tall-page portal screenshot, not an A4
+fillable form. The implementation follows its taxpayer/period sections, outputs,
+inputs, net-tax fields, additional reporting and signatory order. Government logos,
+portal navigation, declaration checkbox, reference numbers and submission buttons
+are not copied or fabricated. This is not claimed to be a pixel-identical government
+form or a submitted return. The user's `(5).xlsx` workbook was inspected read-only.
+
+Default screen now contains exactly three native summary cards: Total Output Tax
+(Box 12), Total Recoverable Input Tax (Box 13), and Net VAT Payable / Refundable
+(Box 14). A negative net uses Refundable wording without changing its saved sign.
+Values come only from these existing return boxes, not recorded GL totals. The
+form-style header retains the truthful incomplete-allocation status. Framework
+filters/navigation remain unchanged. All 20 existing statutory lines remain visible,
+including zero values formatted with two decimals; outputs/inputs have distinct
+VAT/recoverable headings. Non-applicable zero cells are blank, while unexpected
+nonzero backend values remain visible rather than being discarded. Boxes 12-14
+each have their own single amount position, not generic taxable/VAT/adjustment cells.
+
+`form_layout.py` is a presentation projection, not a calculation engine. Its shared
+`form_content.html` renders the screen and primary PDF/native print content with
+scoped CSS. The numeric DataTable data remains intact as the framework's backing
+report, but its redundant visual grid is replaced by the form. Refresh replaces
+only this report's form; no global report styling/prototype changes were added.
+Native summary child elements receive a report-specific class. Amount links retain
+the existing permission-aware box-to-voucher endpoint.
+
+No transaction/audit/completeness/ledger tables render below the form by default.
+One **View Details** action opens the existing supporting data and linked transactions
+in a native dialog. Detailed reconciliation, raw balances and source notes remain
+available there. The full existing audit data remains available separately through
+**Export > Detailed Audit (Excel)** and **Detailed Audit (CSV)**. No audit records or
+previous workbooks are removed or rewritten.
+
+Default standard/custom Excel now has one **VAT 201 Form** sheet, formatted with the
+same section order, labels, numbers, blank non-applicable cells, two-decimal numeric
+formats, wrapping, print area, A4 portrait page setup and fit-to-width. The explicit
+detailed workbook starts with that same form and retains every previous supporting
+sheet. Default PDF is two A4 portrait pages: taxpayer/period and all output rows on
+page one; repeated taxpayer/period identification, inputs, net amounts and signatory
+information on page two. Rows are not split and output/input totals remain with
+their sections. Cards, filters, sidebars and action buttons do not print. The prior
+detailed PDF template remains available to the existing export service via its
+explicit `detailed` option. Native report print uses the same shared form content.
+
+### Verification
+
+161 Python tests and nine JavaScript tests pass. New tests cover three box-based
+cards/refundable wording, all statutory rows, blank versus true zero, nonzero-value
+preservation, numeric Excel/print settings, source HTML escaping, provisional flags
+and retained audit sheets. Live Qatra.local checks compare every applicable HTML/
+Excel form cell with the existing backend box value; standard Excel and custom
+Excel agree. Financial result and accounting/audit snapshots remain unchanged.
+No classification, recovery, source query or GL calculation was changed.
+
+Headless Chrome at device scale 1 (100% zoom) verified the real server-rendered
+component with installed Desk CSS: three cards, 20 rows, no desktop clipping or
+horizontal overflow at 1440px, all rows retained without page overflow at 390px,
+no default supporting tables, working View Details/journal links, working Box 9
+drilldown and one form after repeated rendering. Both generated A4 PDF pages were
+visually inspected. These are component/browser checks with the actual report
+handlers and source context, not an authenticated Desk-session verification.
+
+Current cards remain 55,062.68 / 10.00 / 55,052.68 AED and provisional. Recorded
+output/input remain 104,378.45 / 37,112.75, net ledger credit movement 67,265.70,
+and source recovery remains 10.00. Their different meanings are unchanged. The
+remaining source limitations documented below are not resolved by this layout.
+
+Artifacts: `/tmp/qatra-vat201-form.xlsx`, `/tmp/qatra-vat201-detailed-audit.xlsx`,
+`/tmp/qatra-vat201-form.pdf`, `/tmp/qatra-vat201-form-desktop.png`,
+`/tmp/qatra-vat201-form-mobile.png` and `/tmp/qatra-vat201-form-verification.json`.
+
+### Files and Deployment
+
+Changed: report Python/JavaScript, new `form_layout.py`, shared `form_content.html`,
+new `test_form_layout.py`, existing presentation/export tests and this document,
+all inside construction_management. No core edits, schema changes, financial-data
+updates or migration. No extra asset-bundle build is needed for directly loaded
+report JS/Jinja. Deploy the app through the existing Frappe Cloud workflow with its
+normal Python process reload, clear the actual site's cache using authorized Cloud
+tooling, and hard-refresh Desk. Production was not deployed or verified. Local:
+
+```bash
+bench --site Qatra.local clear-cache
+```
+
 ## Simple Saved-Record Workflow: 2026-10-31
 
 This section supersedes the report review/action instructions below. Users select
