@@ -1,5 +1,394 @@
 # UAE VAT 201 Return
 
+## Simple Saved-Record Workflow: 2026-10-31
+
+This section supersedes the report review/action instructions below. Users select
+Company and period, Refresh, and view/export the calculated report. Report-level
+Review/Resolve/Override controls, recovery dialogs, policy shortcut buttons and the
+Needs Attention tab have been removed from the JavaScript implementation, not
+hidden with CSS. The report no longer returns an unused `can_review` UI capability.
+Historical classifications, settings and audit records remain intact; existing
+valid supported decisions/settings still feed the original calculation engine.
+No new approval, policy or report was introduced.
+
+The screen shows official VAT boxes, compact recorded-versus-return reconciliation
+and the same eight-column linked Sales/Purchases/Journal Entries details. Raw
+balances, voucher-type breakdown and full bridge remain expandable. Routine rows
+use factual source labels. Source limitations appear as concise transaction notes,
+not mandatory actions: **Recovery not specified in source.** or **Output not
+allocated to an Emirate** where applicable. Workbook/PDF now use Source Notes in
+place of Needs Attention/Review sections. Recovery provenance and complete source
+references remain in the audit exports.
+
+The calculation description is **Calculated from saved ERPNext records**. The
+status additionally states incomplete return allocation where source information
+is unavailable. Numeric known subtotals retain component-level provisional flags
+and explanations; removing the review UI does not turn unknown entitlement into
+zero or claim that the return is final, verified or ready for filing.
+
+### Current Local Evidence
+
+ACC-PINV-2026-00293-1 still reads its saved standard AED recovery amount directly:
+source base 1,557.50, recorded VAT 77.88, claim 10.00 and recorded VAT not claimed
+67.88. Bill number/date remain the structured 16937 / 2026-07-16. Zero/partial/full
+recovery, signed returns, currency semantics and duplicate protection are unchanged.
+
+ACC-JV-2026-00007-1 still produces four supported groups: 96.00/4.80,
+936.50/46.82, 300.00/15.00 and 1,042.37/52.12, totalling base 2,374.87 and posted
+VAT 118.74. Expense descriptions/project/cost center remain separated. No saved
+JE/account/company recovery field, approved JE classification or recovery rule
+exists locally. The broader expense-JV recorded input of 597.21 therefore remains
+unspecified, not confirmed non-recoverable or automatically claimed. Existing
+supported settings continue to resolve automatically when present; they were
+verified with isolated in-memory full/partial/zero settings, never saved.
+
+ACC-JV-2026-00001 and ACC-JV-2026-00002 contain no saved transaction Emirate, explicit
+invoice references, linked submitted sales-advance allocations/JE adjustments or
+attached original tax documents. They remain recorded output of 26,532.14 and
+22,783.63 respectively. The missing reporting Emirate cannot be established from
+Company/Customer address, project or free text. No structured overlap link was
+found; that is not proof that unlinked original tax invoices do not exist.
+
+Live period 2026-05-01 through 2026-07-31 remains:
+
+| Measure | AED |
+| --- | ---: |
+| Recorded output VAT | 104,378.45 |
+| Recorded net input VAT | 37,112.75 |
+| Period net ledger credit movement | 67,265.70 |
+| Return-allocated output | 55,062.68 |
+| Saved eligible input claim | 10.00 |
+| Purchase invoice VAT unclaimed per saved amounts | 36,505.54 |
+| Expense-JV recovery unspecified | 597.21 |
+| Output not allocated to an Emirate | 49,315.77 |
+| Known net return calculation, incomplete | 55,052.68 |
+| Opening debit / Closing credit | 535.57 / 66,730.13 |
+
+All 315 current vouchers reconcile with native GL, period debit 37,274.40 and credit
+104,540.10; bridge residuals remain zero. Three untaxed foreign-purchase item rows
+also lack sufficient source import/reverse-charge treatment. These 22 unavailable
+source rows remain traceable without an intrusive review workflow or invented tax.
+Recorded balances are not substituted for statutory claims or payable.
+
+### Checks and Delivery
+
+Changes are confined to construction_management: `automatic.py`, `policy.py`,
+`reconciliation.py`, `uae_vat_201_return.py`, `uae_vat_201_return.js`,
+`return_print.html`, related regression tests and this document. The existing
+read-only API/export service and submitted-source permission filters are reused.
+Refresh bypasses prepared results; screen/context, standard Excel and custom
+workbook values agree, and PDF generation preserves the same figures/status.
+Read-only snapshots cover invoices, journal/GL rows, recovery values, policies,
+classifications, settings, Versions and Comments. No financial/audit data changed.
+No authenticated browser verification or production deployment is claimed.
+Final checks passed 155 Python tests and nine JavaScript tests. Live standard
+Excel/custom workbook amounts, PDF output, native GL comparison and read-only
+snapshots passed. No routine approval controls remain in the report source.
+
+Deploy the updated construction_management app using the existing Frappe Cloud
+workflow, with its normal Python process reload. Use supported Cloud tooling for
+the actual site identifier; no shared-bench shell access is assumed. No schema
+setup, migrate or extra asset-bundle build is required for this change. Clear the
+site cache and hard-refresh Desk. Local command:
+
+```bash
+bench --site Qatra.local clear-cache
+```
+
+## Structured Expense Journal Recovery: 2026-10-31
+
+The report reuses the existing **VAT 201 Recovery Policy** table for Expense
+Journal rules. No second policy system, new verification field or schema change
+was added. Purchase Invoice recovery remains the saved AED Currency amount and is
+not routed through journal rules.
+
+The generator belongs to qatra_custom (`journal_entry.py` and its form JavaScript).
+It creates same-side VAT rows from configured source rows and copies project/cost
+center; it does not currently save a source-row link. The report resolver in
+construction_management prefers explicit links where available, then reconciles
+saved generator amounts by VAT account, project, cost center, side, rate and
+inclusive/exclusive split. Actual saved VAT and active GL remain authoritative;
+the calculated generator expectation is only a matching check. Posted rounding,
+including 936.50 / 46.82, is preserved. A blank Party does not exclude petty cash.
+
+When one-to-one matching is ambiguous but the entire expense dimension group
+reconciles, the report now retains one supported group total with all original
+base/tax/GL references. It does not invent per-line allocations or repeat the
+group base on each tax row. Conflicting explicit links, non-expense transfers,
+unreconciled currency amounts and unsupported groups remain unresolved. Previously
+saved decisions/restrictions on any grouped GL member cannot silently become a
+different group decision; a group-bound renewed decision is needed where relevant.
+The source-ledger audit recognizes every grouped GL reference once.
+
+Previously, even an approved matching Expense Journal rule additionally demanded
+bill number/date and an attachment on each JE header. This prevented rules from
+resolving structured petty-cash journals. The approved company rule now supplies
+the reusable eligibility basis; these header fields are not repeated approval gates.
+The rule still requires existing manager approval, exact expense-account scope,
+effective dates, percentage, payment condition, business-use basis and supporting
+policy reference. Existing explicit manual restrictions take precedence. A rule
+limited to paid invoices cannot assume invoice paid status for a journal. No rule
+or ambiguous/conflicting rules leave recovery unresolved without erasing base/VAT.
+
+The eight report columns are unchanged. Remarks now includes the expense account,
+saved project/cost center, description, recoverable amount and rule identity.
+Resolved rows need no per-voucher action; genuine exceptions retain their action.
+Managers can use **Settings > Journal Recovery Rules** to open the same UAE VAT
+Settings configuration. No supplier, recovery percentage or original tax amount is
+invented. Zero-recovery rules retain recorded VAT and have no Box 9 claim label.
+
+Read-only Qatra.local verification for ACC-JV-2026-00007-1:
+
+| Source base | Posted VAT | Full-rule claim (test only) |
+| ---: | ---: | ---: |
+| 96.00 | 4.80 | 4.80 |
+| 936.50 | 46.82 | 46.82 |
+| 300.00 | 15.00 | 15.00 |
+| 1,042.37 | 52.12 | 52.12 |
+| **2,374.87** | **118.74** | **118.74** |
+
+Full/50%/zero rule scenarios were exercised against the actual source evidence
+strictly in memory: journal claims 118.74 / 59.37 / 0; Site Misc Tools claims
+52.12 / 26.06 / 0. Source VAT, all 315 voucher reconciliations and Purchase Invoice
+saved recovery 10 remained unchanged. Standard Excel and custom workbook matched;
+PDF generation and unchanged accounting/settings/audit snapshots passed.
+The final regression suite passes 154 Python tests and nine JavaScript tests,
+including grouping, explicit-link conflicts, zero-VAT exclusion, reversal/FX
+matching, GL aliases, manual restriction precedence and policy provenance.
+
+The local Company still has zero approved recovery rules. An authorized manager
+must configure appropriate Expense Journal rows in the existing company table,
+covering the actual expense accounts (Printing & Stationary and Cost Of Construction
+Projects here), with narrower project/cost-center scopes where required and the
+company's approved eligible percentages/basis. No blanket 100% rule was saved.
+Without that configuration, the recorded 118.74 remains visible and only recovery
+is unresolved. The broader live report retains 22 unresolved source rows and a
+provisional liability. Customer advances and their missing-Emirate issues remain
+separate; no output VAT was converted into an input claim.
+
+Changes: `journal.py`, `policy.py`, `review.py`, `engine.py`, `reconciliation.py`,
+`automatic.py`, report JavaScript, regression tests and this document, all inside
+construction_management. No qatra_custom/core files, JEs, GL entries, recovery
+decisions or submitted documents were changed. No migrate or build is required;
+deploy the app through its existing workflow, reload Python normally, clear site
+cache and hard-refresh Desk. No production or authenticated-browser verification
+is claimed. Verification artifacts: `/tmp/qatra-vat201-journal-rules.xlsx`,
+`/tmp/qatra-vat201-journal-rules.pdf`, and
+`/tmp/qatra-vat201-journal-rules-verification.json`.
+
+## Saved Invoice Recovery: 2026-10-31
+
+This section supersedes the recovery-policy/default-zero requirements below for
+ordinary Purchase Invoices. Installed UAE metadata defines
+`recoverable_standard_rated_expenses` as Currency, labelled **Recoverable Standard
+Rated Expenses (AED)**, default zero, with no percentage semantics. The installed
+native report sums this amount directly; its foreign-currency tests maintain this
+AED amount independently of the invoice currency. The UAE controller disallows a
+nonzero standard recovery amount on reverse-charge purchases, which instead use
+the existing separate reverse-charge percentage. No core code was changed.
+
+For standard-rated purchases, the saved invoice amount now owns recovery. Zero is
+zero, not an incomplete decision; partial and full amounts remain their saved AED
+values. No custom recovery flags, policy match, Version-history query, separate
+approval, reason or attachment is required to read it. Historical report approvals
+and policies remain stored but cannot override this field for ordinary invoices.
+Ordinary standard-rated purchase rows expose no Review/Override action, and the report's Recovery Policies
+button was removed. Existing supported journal decisions/policies and reverse-charge
+treatment remain separate and unchanged.
+
+The existing engine calculates the claim using Decimal arithmetic and framework
+AED precision. For multiple disjoint VAT rows, the single saved invoice amount is
+allocated proportionately to their recorded VAT with cumulative currency rounding,
+so each source row contributes once and allocations sum to the saved rounded
+amount. Duplicate source identities cannot duplicate claims. Unsupported/mixed-sign
+allocations, missing values, nonfinite values, wrong signs, excessive recovery,
+unsupported taxable bases and source/GL mismatches remain explicit data errors.
+Saved taxable bases and VAT are never reconstructed by dividing rounded VAT by a
+rate. Negative return claims retain their saved signs. Foreign invoice amounts use
+saved Company-base amounts; the recovery field is already AED and is not multiplied
+by the transaction conversion rate again. Non-AED Companies still require supported
+Company-to-AED tax-point evidence; no rate is invented.
+
+The eight detail columns remain Date, Voucher Number, Party, Taxable Amount, VAT
+Amount, VAT Treatment, VAT Box, Remarks. Source taxable amount and recorded VAT stay
+visible at zero recovery. Zero-claim rows say **No input VAT claimed** and have no
+Box 9 label. Remarks shows recovery basis and structured supplier invoice number/
+bill date; stale free-text invoice dates are not parsed. Missing/invalid supplier
+TRN is a concise source-quality note, not a gate that replaces saved recovery.
+Saved values are not described as independently verified by the report.
+
+The primary cards show recorded output/input, recoverable purchases, recorded input
+not claimed, adjustments and the provisional net calculation. Detailed raw balances
+and the recorded-to-return bridge are collapsible; the compact reconciliation and
+genuinely unresolved source rows remain available. A deliberate partial/zero-claim
+difference is explained in the bridge rather than treated as a recovery exception.
+
+### Verified Local Results
+
+Read-only Qatra.local verification for 2026-05-01 through 2026-07-31:
+
+| Source / measure | AED |
+| --- | ---: |
+| ACC-PINV-2026-00293-1 source taxable amount | 1,557.50 |
+| Recorded VAT | 77.88 |
+| Existing saved recovery / Box 9 VAT claim | 10.00 |
+| Recorded VAT not claimed for that invoice | 67.88 |
+| Period recorded output VAT | 104,378.45 |
+| Period recorded net input VAT | 37,112.75 |
+| Period input VAT claimed | 10.00 |
+| Recorded input less current claim, including pending journal VAT | 37,102.75 |
+| Known recorded input not claimed | 36,505.54 |
+| Journal input recovery still unresolved | 597.21 |
+| Advance output allocation still unresolved | 49,315.77 |
+| Known net return subtotal (provisional) | 55,052.68 |
+
+The invoice already had recovery 10 when this task began. It was not edited. Its
+structured bill number is 16937 and bill date 2026-07-16. The obsolete custom fields
+remain zero without suppressing the claim. ACC-PINV-2026-00210-1 retains taxable
+323.00, VAT 16.15 and saved zero recovery, with no recovery warning or Box 9 label.
+
+All 315 current voucher amounts match native GL: debit 37,274.40, credit 104,540.10,
+net credit movement 67,265.70, opening debit 535.57 and closing credit 66,730.13.
+Recorded-to-claim bridge residuals are zero. There are 22 remaining source exceptions:
+17 matched purchase-journal tax rows lacking saved supported entitlement, two
+customer advances lacking authoritative reporting Emirate, and three untaxed
+foreign-purchase item rows needing import/treatment review. These are not 22 unique
+vouchers. No journal recovery or Emirate was fabricated and the net return remains
+provisional, not forced to the ledger movement or balance.
+
+Refresh bypasses stale prepared data. Standard Excel, custom workbook and PDF use
+the same existing live calculation service. Verification compares screen/context
+amounts and workbook values and checks unchanged source, GL, Version, Comment,
+classification, settings and policy snapshots. Artifacts are
+`/tmp/qatra-vat201-saved-recovery.xlsx`, `/tmp/qatra-vat201-saved-recovery.pdf` and
+`/tmp/qatra-vat201-saved-recovery-verification.json`. No accounting data, recovery
+value, historical custom-field data or approval was modified.
+
+### Changed Files and Deployment
+
+This simplification changes `automatic.py`, `engine.py`, `reconciliation.py`,
+`policy.py` (journal exception wording only), `uae_vat_201_return.py`,
+`uae_vat_201_return.js`, relevant Python/JavaScript regression tests and this document
+inside construction_management. The prior shared live API/export implementation is
+retained. No new field, DocType, policy or migration is required by this change.
+
+Deploy the updated custom app through the existing Frappe Cloud workflow, with its
+normal Python process reload, then clear the actual site's cache and hard-refresh
+Desk. Do not assume shell access on a shared cloud bench. Local cache command:
+
+```bash
+bench --site Qatra.local clear-cache
+```
+
+On production use the actual site identifier with the authorized Cloud console or
+operator. No migrate or additional asset-bundle build is required for this change.
+No production deployment or authenticated-browser verification is claimed.
+Regression verification passed 149 Python tests and nine JavaScript tests,
+including direct saved-value precedence, zero/partial/full recovery, source
+quality versus data errors, return signs, AED field semantics on foreign invoices,
+multi-tax-row allocation/deduplication and removal of purchase approval controls.
+
+## Source-Based Recovery Policies and Live Exports: 2026-10-31
+
+This section supersedes the earlier requirement for individual approvals on every
+ordinary purchase. The existing Construction Management report now applies a
+uniquely matching approved company recovery policy, or an eligible saved nonzero
+AED recovery amount, through its existing calculation engine. Default zero alone
+does not establish intent; retained valid manual decisions, including explicit
+zero, take precedence. No source recovery value or approval is written by Refresh.
+
+UAE VAT Settings now supports an app-owned **VAT 201 Recovery Policy** child table.
+Accounts Managers/System Managers approve dated policies scoped to an exact expense
+account plus invoice Tax Category and/or Purchase Tax Template. Optional Project
+and Cost Center restrictions, eligible percentage, payment condition, business-use
+basis and supporting policy reference are maintained once. Conflicting matches
+remain exceptions. Policy identity and approval provenance are exported separately
+from individual review approval; policy-derived events are not labelled reviewed
+by an accountant. Settings changes retain the existing parent audit trail.
+
+Ordinary domestic positive-recovery policies require saved supplier invoice
+number/date and a valid supplier TRN, an evidenced UAE supplier country, supported
+taxable-base allocation and matching posted VAT. Supplier master TRN, primary
+address and country are read only where the invoice lacks the corresponding
+source, subject to permissions; linked invoice evidence takes precedence. Saved
+item-wise tax details can resolve separate taxable bases only when their saved
+tax reconciles; overlapping bases are not counted twice. Signed returns, partial
+recovery, non-recoverable policies, discounts and existing reverse-charge/FX paths
+are retained. Journal policies additionally require the existing structured
+expense/tax-row match and saved original bill evidence. No VAT rate/account-name
+heuristic creates entitlement.
+
+Resolved routine inputs require no review popup. An optional authorized override
+asks only eligible recovery and reason when source date/base/currency are already
+known; genuine exceptions expose only relevant additional fields. The existing
+eight transaction columns remain unchanged. Source taxable base and recorded VAT
+stay visible independently of return claims, including zero-recovery cases.
+
+The previous standard Excel path exported only the visible box grid. A supported
+API hook now routes this report's standard Excel/CSV export to its existing full
+preparation exporter. Other reports delegate unchanged to Frappe. Refresh bypasses
+prepared results and uses one request-local calculation for the grid and context;
+exports freshly read the same selected filters through the same calculation service.
+There is no cross-request calculation cache or separate export arithmetic. The
+standard workbook and custom workbook match, including the recorded bridge, source
+audit and opening/closing balances. PDF uses that same report service.
+
+### Local Verification and Remaining Configuration
+
+Qatra.local: Frappe 16.31.0 / ERPNext 16.32.1. Local targeted setup added only the
+policy child DocType/table field and refreshed this report's metadata. No migrate,
+accounting changes or policy approvals were performed. There are **zero configured
+policies**. An authorized manager must establish actual company policy; no full
+recovery policy was assumed or saved for testing.
+
+For 2026-05-01 through 2026-07-31, all 315 voucher audit totals reconcile with native
+General Ledger. Recorded output is AED 104,378.45; net recorded input AED 37,112.75;
+period debit AED 37,274.40; period credit AED 104,540.10; net credit movement
+AED 67,265.70. Opening debit is AED 535.57 and closing credit AED 66,730.13.
+Allocated output remains AED 55,062.68 and claimed input zero; this is an incomplete
+return subtotal, not a final liability. All recorded-to-claim bridge residuals are
+zero because unresolved amounts remain explicitly pending.
+
+There are 317 source exceptions: 295 purchase tax rows without an approved recovery
+policy/decision, 17 matched purchase-journal tax rows, two customer advances missing
+authoritative reporting Emirate, and three untaxed foreign-purchase item rows needing
+treatment review. A read-only hypothetical-policy check found 244 purchase rows with
+simple expense/tax scope: 193 lack the required saved supplier invoice identity/date
+or valid supplier TRN; 51 lack a supported UAE country/address. No actual purchase
+qualified for automatic full recovery in that check. Policy setup alone therefore
+does not resolve the missing original-source evidence. These counts are source
+rows, not unique invoices, and no supplier/invoice correction was made.
+
+Tests: 144 Python and nine JavaScript tests pass, including eligible full/partial/
+zero policies, signed returns, manual precedence, source evidence, policy conflicts,
+permissions, shared live result and standard export routing. Runtime checks confirm
+fresh calculation timestamps, identical standard/custom workbook amounts, eight
+transaction columns and unchanged accounting/configuration snapshots. No
+authenticated-browser verification or production deployment is claimed.
+
+The supplied GL workbook also has 315 vouchers and the same debit/credit totals,
+but seven voucher identities differ from the current local database. The audit
+matches current native GL by exact voucher identity; the older workbook is not
+silently matched by equal amounts or assumed amendment lineage. The differences
+are retained in `/tmp/qatra-vat201-export-voucher-differences.json`. PDF generation
+passed with six A4 pages including the preparation/reconciliation appendices.
+
+### Deployment
+
+All changes are in construction_management. Deploy the app through the existing
+Frappe Cloud workflow, including its normal Python process reload. Then have an
+authorized operator run the targeted setup on the actual site name (not the URL):
+
+```bash
+bench --site <site-name> execute construction_management.construction_management.report.uae_vat_201_return.configuration.setup_recovery_policy
+bench --site <site-name> reload-doc construction_management report uae_vat_201_return
+bench --site <site-name> clear-cache
+```
+
+No additional asset-bundle build is required for these directly loaded report files.
+The targeted setup was already performed on Qatra.local; production remains
+undeployed/unverified. Do not assume shell access on a shared Frappe Cloud bench.
+
 ## Recorded Ledger Reconciliation: 2026-10-31
 
 This section supersedes the saved-zero-as-confirmed-exclusion policy in earlier

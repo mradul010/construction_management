@@ -1,13 +1,55 @@
 """Automatic source-based VAT preparation, without a classification workflow."""
 from decimal import InvalidOperation
+from collections import defaultdict
 
 import frappe
 from frappe.utils import flt
+from frappe.utils import getdate
 
 from construction_management.construction_management.report.uae_vat_201_return import engine
 
 
-PRELIMINARY = "Requires Review"
+PRELIMINARY = "Calculated from saved ERPNext records - incomplete return allocation"
+
+
+def standard_purchase(source):
+	return source.get("voucher_type") == "Purchase Invoice" and source.get("reverse_charge") != "Y" and bool(source.get("raw_vat"))
+
+
+def allocate_saved_recovery(sources):
+	"""Allocate the one saved AED amount once across disjoint posted VAT rows."""
+	groups = defaultdict(dict)
+	for source in sources:
+		if standard_purchase(source):
+			groups[source["voucher_no"]][source["source_row"]] = source
+	for rows in groups.values():
+		rows = sorted(rows.values(), key=lambda row: row["source_row"])
+		try:
+			saved = rows[0].get("recovery_source_amount")
+			if saved in (None, ""):
+				raise ValueError("Saved purchase VAT recovery amount is missing")
+			saved = engine.number(saved)
+			vats = [engine.number(row["raw_vat"]) for row in rows]
+			total = sum(vats, engine.number(0))
+			if not saved.is_finite() or not all(v.is_finite() for v in vats) or not total:
+				raise ValueError("Saved purchase VAT recovery amount or recorded VAT is invalid")
+			if any(v * total < 0 for v in vats) or saved * total < 0 or abs(saved) > abs(total):
+				raise ValueError("Saved purchase VAT recovery has an invalid sign, exceeds recorded VAT, or needs mixed-sign tax-row allocation")
+			cumulative, allocated = engine.number(0), engine.number(0)
+			for row, vat in zip(rows, vats):
+				cumulative += vat
+				next_amount = engine.number(engine.money(saved * cumulative / total))
+				row["recovery_allocated_amount"] = next_amount - allocated
+				allocated = next_amount
+		except (InvalidOperation, ValueError, TypeError) as error:
+			for row in rows:
+				row["recovery_calculation_issue"] = str(error)
+	for source in sources:
+		if standard_purchase(source):
+			resolved = groups[source["voucher_no"]][source["source_row"]]
+			for field in ("recovery_allocated_amount", "recovery_calculation_issue"):
+				if field in resolved:
+					source[field] = resolved[field]
 
 
 def sales_emirate_box(source):
@@ -60,7 +102,11 @@ def source_rule(source, base_currency):
 			box = "3"
 		else:
 			# This standard Currency field contains recoverable VAT in AED, not a % or flag.
-			value = source.get("recovery_source_amount")
+			if base_currency != "AED":
+				return None, "Saved recovery is AED; source taxable base and VAT require evidenced Company-to-AED conversion"
+			if source.get("recovery_calculation_issue"):
+				return None, source["recovery_calculation_issue"]
+			value = source.get("recovery_allocated_amount", source.get("recovery_source_amount"))
 			if value in (None, ""):
 				return None, "Purchase VAT recoverable amount is missing"
 			try:
@@ -72,7 +118,7 @@ def source_rule(source, base_currency):
 				return None, "Purchase VAT recoverable amount must have the saved VAT sign and cannot exceed recorded VAT"
 			if amount == 0:
 				return None, None
-			if source.get("vat_rows_count") != 1:
+			if source.get("vat_rows_count") != 1 and "recovery_allocated_amount" not in source:
 				return None, "Purchase VAT recovery amount needs allocation across multiple VAT rows"
 			recovery = amount / vat * 100
 			evidence = "Saved recoverable_standard_rated_expenses on " + source["voucher_no"]
@@ -112,13 +158,24 @@ def build(filters=None, settings_override=None):
 	# The existing reader enforces source permissions, dates, signs and active GL.
 	# Existing valid verified decisions remain usable; no review rows are written.
 	result = engine.build(filters, settings_override=settings_override)
+	# Saved source recovery supersedes historical report-only purchase approvals.
+	# Keep those audit records intact; only replace their calculated contributions.
+	if "sources" in result:
+		for field in ("events", "reviews", "excluded", "timing_events"):
+			result[field] = [row for row in result.get(field, []) if not standard_purchase(row)]
+		result["reviews"].extend(dict(row) for row in result["sources"] if standard_purchase(row)
+			and getdate(result["filters"].from_date) <= getdate(row["posting_date"]) <= getdate(result["filters"].to_date))
 	settings = settings_override if settings_override is not None else engine.settings_for(result["filters"].company)
+	result["settings_name"] = settings.get("name")
+	result["calculated_at"] = str(frappe.utils.now_datetime())
 	mappings = engine.account_mappings(settings.get("uae_vat_accounts", []))
+	allocate_saved_recovery([row for row in result["reviews"] if mappings.get(row.get("tax_account")) in ("Input", "Both")])
 	events = []
 	issues, details = [], []
 	# Saved invoice Emirate also governs any retained historical standard-rated event.
 	for event in result["events"]:
 		event = dict(event)
+		event["treatment_source"] = "Manual approved override"
 		if event["voucher_type"] == "Purchase Invoice" and event["box"] == "9" and not event.get("adjustment"):
 			# engine events have passed approval, fingerprint and recovery checks.
 			# Do not overwrite an approved allocation with a default invoice zero.
@@ -129,7 +186,7 @@ def build(filters=None, settings_override=None):
 		if event["voucher_type"] in ("Sales Invoice", "POS Invoice") and event["box"] in engine.OUTPUT[:7]:
 			box, error = sales_emirate_box(event)
 			if error:
-				issues.append(dict(event, issue=error, recommended_action=action_for(event), treatment="Needs Attention", vat_box=None))
+				issues.append(dict(event, issue=error, recommended_action=action_for(event), treatment="Recorded sales VAT", vat_box=None))
 				continue
 			event.update(box=box, emirate=event["source_emirate"], classification=engine.LABELS[box])
 		events.append(event)
@@ -140,13 +197,15 @@ def build(filters=None, settings_override=None):
 			continue
 		seen.add(key)
 		row = dict(source, currency=result["header"]["base_currency"], vat_box=None)
-		if source.get("classification_status") in ("Rejected", "Needs Review") or source.get("requires_review") or source.get("review", "").startswith(("Duplicated", "Source evidence changed", "Outside VAT exclusion conflicts")):
+		if not standard_purchase(source) and (source.get("classification_status") in ("Rejected", "Needs Review") or source.get("requires_review") or source.get("review", "").startswith(("Duplicated", "Source evidence changed", "Outside VAT exclusion conflicts"))):
 			rule, problem = None, "Previous source verification is rejected, conflicting or no longer valid; verify source evidence"
 			events = [e for e in events if tuple(e[k] for k in ("voucher_type", "voucher_no", "source_row")) != key]
 		else:
-			rule, problem = source_rule(source, result["header"]["base_currency"])
-			if source["voucher_type"] == "Purchase Invoice" and source.get("raw_vat") and not problem:
-				rule, problem = None, "Input VAT recovery is pending accountant approval; the saved recovery amount alone is not an approved decision"
+			if source.get("journal_category") == "Recorded purchase VAT":
+				from construction_management.construction_management.report.uae_vat_201_return.policy import resolve
+				rule, problem = resolve(source, settings, result["header"]["base_currency"])
+			else:
+				rule, problem = source_rule(source, result["header"]["base_currency"])
 		if rule:
 			side = "Input" if rule.box in engine.INPUT else "Output"
 			if source.get("tax_account") and mappings.get(source["tax_account"]) not in (side,"Both"):
@@ -164,6 +223,17 @@ def build(filters=None, settings_override=None):
 					event, problem = engine.apply_rule(source, calculation_rule, result["header"]["base_currency"], source_verified=True)
 					if problem:
 						break
+					if calculation_rule.get("treatment_source"):
+						event.update(treatment_source=calculation_rule.treatment_source, policy_id=calculation_rule.get("policy_id"),
+							policy_name=calculation_rule.get("policy_name"), policy_approved_by=calculation_rule.get("policy_approved_by"),
+							policy_approval_time=calculation_rule.get("policy_approval_time"),
+							recovery_basis=("Policy: " + calculation_rule.policy_name + " (" + calculation_rule.policy_id + ")") if calculation_rule.get("policy_id") else "Saved explicit invoice recovery amount (AED)",
+							treatment="Policy-derived purchase recovery" if calculation_rule.get("policy_id") else "Saved source recovery decision")
+						if not event["recoverable_vat_amount"]:
+							details.append(dict(event, vat_box="", treatment="Policy-derived non-recoverable VAT"))
+							continue
+						calculated.append(event)
+						continue
 					if calculation_rule.box in engine.INPUT:
 						if source.get("reverse_charge") == "Y":
 							basis = "Saved Recoverable Reverse Charge (%): " + str(source.get("reverse_recovery_percent"))
@@ -171,6 +241,8 @@ def build(filters=None, settings_override=None):
 							basis = "Saved Recoverable Standard Rated Expenses (AED): " + str(engine.money(source.get("recovery_source_amount")))
 						event["recovery_basis"] = basis
 						event["treatment"] = "Reverse-charge purchase" if source.get("reverse_charge") == "Y" else "Standard-rated purchase"
+						if standard_purchase(source):
+							event["treatment_source"] = "Saved source recovery amount"
 					elif calculation_rule.box == "3":
 						event["treatment"] = "Recorded reverse-charge output VAT; input recovery does not reduce output liability"
 					else:
@@ -179,9 +251,9 @@ def build(filters=None, settings_override=None):
 				if not problem:
 					events.extend(calculated)
 		if problem:
-			row.update(issue=problem, recommended_action=action_for(row), treatment="Needs Attention")
+			row.update(issue=problem, recommended_action=action_for(row), treatment="Recorded source transaction")
 			if row.get("journal_category") == "Recorded purchase VAT":
-				row["treatment"] = "Recorded purchase VAT - recovery unresolved"
+				row["treatment"] = "Recorded expense JV VAT"
 			elif row.get("journal_category") == "Customer-advance output VAT":
 				row["treatment"] = "Customer-advance output VAT"
 			elif row.get("potential_reverse_charge") and not row.get("tax_account") and not row.get("raw_vat"):
@@ -195,6 +267,7 @@ def build(filters=None, settings_override=None):
 			row.update(treatment=(treatment + " purchase - no input claim") if treatment in ("Zero Rated", "Exempt") else "No recorded VAT - no input claim", vat_amount=0)
 			details.append(row)
 	for event in events:
+		event["treatment"] = transaction_label(event)
 		details.append(dict(event, vat_box=event["box"], treatment=event.get("treatment") or event.get("recovery_basis") or "Preserved verified source treatment"))
 	for excluded in result.get("excluded", []):
 		details.append(dict(excluded, vat_box=None, treatment="Documented non-return movement"))
@@ -206,11 +279,16 @@ def build(filters=None, settings_override=None):
 		if row.get("recoverable_vat_amount") is not None:
 			full = engine.number(row.get("recorded_vat_amount"))
 			claim = engine.number(row["recoverable_vat_amount"])
-			row["recovery_status"] = "Verified non-recoverable" if not claim else "Verified fully recoverable" if claim == full else "Verified partially recoverable"
+			row["recovery_status"] = ("Policy-derived zero" if not claim else "Policy-derived full" if claim == full else "Policy-derived partial") if row.get("policy_id") else ("Saved source zero" if not claim else "Saved source full" if claim == full else "Saved source partial") if row.get("treatment_source") == "Saved source recovery amount" else "Verified non-recoverable" if not claim else "Verified fully recoverable" if claim == full else "Verified partially recoverable"
 		elif row.get("journal_vat_role") == "Input" or row["voucher_type"] == "Purchase Invoice" and row.get("raw_vat"):
-			row["recovery_status"] = "Pending verification"
+			row["recovery_status"] = "Not specified in source"
 		elif row["voucher_type"] == "Purchase Invoice":
 			row["recovery_status"] = "No recorded VAT"
+		row["treatment"] = transaction_label(row)
+		if row.get("issue") and row.get("journal_vat_role") == "Output" and not row.get("journal_duplicate_risk") and row.get("source_emirate") not in engine.get_emirates():
+			row["issue"] = "Output not allocated to an Emirate"
+		if row.get("potential_reverse_charge") and not row.get("raw_vat"):
+			row["issue"] = "No recorded VAT; import/reverse-charge treatment is not established in source."
 		row["display_remarks"] = detail_remarks(row)
 	boxes = engine.aggregate(events)
 	for rec in result["reconciliation"]:
@@ -221,11 +299,8 @@ def build(filters=None, settings_override=None):
 	# Remove obsolete workflow warnings; retain configuration, ledger and permissions issues.
 	warnings = [w for w in result["warnings"] if not any(text in w for text in (
 		"classification review", "Unapproved sources", "VAT differs from the posting-date ledger"))]
-	if issues:
-		warnings.append(f"{len(issues)} source rows need attention. Uncertain tax is excluded from payable calculation; this is not a nil return.")
-	for rec in result["reconciliation"][:2]:
-		if rec["difference"]:
-			warnings.append(rec["description"]+" differs from the posting-date ledger; see Needs Attention and recovery/timing evidence")
+	# A recorded-versus-claim difference is expected for saved partial/zero recovery;
+	# the linked bridge explains it without turning it into a recovery exception.
 	result.update(events=events, boxes=list(boxes.values()), reviews=issues, details=details, warnings=warnings)
 	from construction_management.construction_management.report.uae_vat_201_return import reconciliation, calendar
 	reconciliation.apply(result, settings)
@@ -241,16 +316,30 @@ def build(filters=None, settings_override=None):
 		group["count"] += 1
 		group["vouchers"].add(source["voucher_no"])
 	result["review_summary"] = [dict(group, vouchers=sorted(group["vouchers"])) for group in groups.values()]
-	result["status"] = PRELIMINARY if issues or result["warnings"] else "Ready for Review"
-	if result["header"].get("period_kind") == "Analytical period" and not issues and not result.get("scope_incomplete"):
-		result["status"] = "Draft"
+	result["calculation_description"] = "Calculated from saved ERPNext records"
+	result["return_complete"] = not issues and not result.get("scope_incomplete") and not result["warnings"]
+	result["status"] = PRELIMINARY if not result["return_complete"] else result["calculation_description"]
 	return result
+
+
+def transaction_label(row):
+	if row.get("journal_category") == "Recorded purchase VAT":
+		return "Recorded expense JV VAT"
+	if row.get("journal_category") == "Customer-advance output VAT":
+		return "Customer-advance output VAT"
+	if row["voucher_type"] == "Purchase Invoice":
+		if row.get("is_return") or engine.number(row.get("raw_vat")) < 0:
+			return "Purchase return"
+		if not row.get("raw_vat"):
+			return "No recorded VAT"
+		return "Saved recoverable input VAT" if row.get("recoverable_vat_amount") else "Recorded standard-rated purchase"
+	return row.get("treatment") or "Recorded source transaction"
 
 
 def is_zero_claim(source):
 	return (source.get("voucher_type") == "Purchase Invoice" and source.get("reverse_charge") != "Y"
-		and source.get("recovery_source_amount") not in (None, "")
-		and engine.number(source["recovery_source_amount"]) == 0 and bool(source.get("raw_vat")))
+		and source.get("recovery_allocated_amount", source.get("recovery_source_amount")) not in (None, "")
+		and engine.number(source.get("recovery_allocated_amount", source.get("recovery_source_amount"))) == 0 and bool(source.get("raw_vat")))
 
 
 def zero_claim_detail(source):
@@ -258,11 +347,24 @@ def zero_claim_detail(source):
 		invoice_taxable_amount=source.get("invoice_taxable_amount", source.get("base")),
 		recorded_vat_amount=source.get("recorded_vat_amount", source.get("raw_vat")),
 		recoverable_vat_amount=0, treatment="No input VAT claimed",
-		recovery_basis="Saved Recoverable Standard Rated Expenses (AED): 0.00")
+		treatment_source="Saved source recovery amount",
+		recovery_basis="Saved Recoverable Standard Rated Expenses (AED): " + str(engine.money(source.get("recovery_source_amount"))))
 
 
 def detail_remarks(row):
 	parts = [row.get("remarks") or (row.get("reason") if row.get("recoverable_vat_amount") is None else "") or ""]
+	if row.get("voucher_type") == "Journal Entry" and row.get("journal_category") == "Recorded purchase VAT":
+		parts.extend(["Project: " + str(row.get("project") or "not saved"),
+			"Cost Center: " + str(row.get("cost_center") or "not saved")])
+		if row.get("journal_expense_accounts"):
+			parts.append("Expense: " + ", ".join(row["journal_expense_accounts"]))
+		if row.get("journal_grouped_allocation"):
+			parts.append("Reconciled group total; no one-to-one expense/tax allocation asserted")
+	if row.get("voucher_type") == "Purchase Invoice":
+		parts = ["Supplier invoice: {}; Bill date: {}".format(row.get("bill_no") or "not saved", row.get("bill_date") or "not saved")]
+		trn = str(row.get("source_tax_id") or "").strip()
+		if len(trn) != 15 or not trn.isdigit():
+			parts.append("Source quality: supplier TRN is missing or invalid (saved recovery unchanged)")
 	if row.get("journal_source_note"):
 		parts.append(row["journal_source_note"])
 	if row.get("issue"):
@@ -273,6 +375,8 @@ def detail_remarks(row):
 		if "Saved Recoverable Standard Rated Expenses" in basis:
 			basis = "saved invoice recovery amount"
 		parts.append("Recoverable VAT: AED {:.2f}; {}".format(claim, basis))
+		if row.get("recorded_vat_amount") is not None:
+			parts.append("Recorded VAT not claimed: AED {:.2f}".format(engine.money(engine.number(row["recorded_vat_amount"]) - engine.number(claim))))
 	return "; ".join(part for part in parts if part)
 
 
@@ -286,5 +390,5 @@ def action_for(source):
 			return "Review the original supplier tax invoice, nature/place of supply and customs/import evidence to establish any output VAT obligation before considering input recovery; foreign address alone does not decide the treatment"
 		return "Review the saved Recoverable Standard Rated Expenses (AED), tax rows and accounting evidence; recorded VAT alone does not establish entitlement"
 	if source.get("journal_category") == "Recorded purchase VAT":
-		return "Recorded base and VAT are matched. Establish eligible recovery using the existing VAT classification/accounting evidence; the VAT account mapping alone does not grant recovery"
+		return "Saved expense, generated tax and GL rows establish recorded VAT, not recovery entitlement."
 	return "Check original journal links, advance tax invoice/payment evidence and purpose; exclude settlements only with supporting evidence"

@@ -1,0 +1,25 @@
+{
+ "doctype": "DocType", "name": "VAT 201 Recovery Policy", "module": "Construction Management",
+ "istable": 1, "editable_grid": 1, "engine": "InnoDB",
+ "field_order": ["policy_name", "enabled", "applies_to", "expense_account", "tax_category", "tax_template", "project", "cost_center", "valid_from", "valid_to", "recovery_percent", "payment_condition", "basis", "supporting_reference", "approved", "approved_by", "approval_time"],
+ "fields": [
+  {"fieldname":"policy_name","label":"Policy Name","fieldtype":"Data","reqd":1,"in_list_view":1},
+  {"fieldname":"enabled","label":"Enabled","fieldtype":"Check","default":"1"},
+  {"fieldname":"applies_to","label":"Source Type","fieldtype":"Select","options":"Purchase Invoice\nExpense Journal","reqd":1,"in_list_view":1},
+  {"fieldname":"expense_account","label":"Expense Account (Exact Posting Account)","fieldtype":"Link","options":"Account","reqd":1,"in_list_view":1},
+  {"fieldname":"tax_category","label":"Tax Category","fieldtype":"Link","options":"Tax Category","depends_on":"eval:doc.applies_to == 'Purchase Invoice'"},
+  {"fieldname":"tax_template","label":"Purchase Tax Template","fieldtype":"Link","options":"Purchase Taxes and Charges Template","depends_on":"eval:doc.applies_to == 'Purchase Invoice'"},
+  {"fieldname":"project","label":"Project (Optional Exact Scope)","fieldtype":"Link","options":"Project"},
+  {"fieldname":"cost_center","label":"Cost Center (Optional Exact Scope)","fieldtype":"Link","options":"Cost Center"},
+  {"fieldname":"valid_from","label":"Effective From","fieldtype":"Date","reqd":1},
+  {"fieldname":"valid_to","label":"Effective To","fieldtype":"Date"},
+  {"fieldname":"recovery_percent","label":"Eligible Recovery %","fieldtype":"Percent","reqd":1,"in_list_view":1},
+  {"fieldname":"payment_condition","label":"Payment Condition","fieldtype":"Select","options":"Paid invoices only\nPaid or intended within required time","reqd":1},
+  {"fieldname":"basis","label":"Approved Business Use / Eligibility Basis","fieldtype":"Small Text","reqd":1},
+  {"fieldname":"supporting_reference","label":"Company Policy Evidence Reference","fieldtype":"Data","reqd":1},
+  {"fieldname":"approved","label":"Approved for Automatic Application","fieldtype":"Check","default":"0","in_list_view":1},
+  {"fieldname":"approved_by","label":"Policy Approved By","fieldtype":"Link","options":"User","read_only":1},
+  {"fieldname":"approval_time","label":"Policy Approval Time","fieldtype":"Datetime","read_only":1}
+ ],
+ "permissions": []
+}

@@ -4,12 +4,20 @@ from frappe.custom.doctype.custom_field.custom_field import create_custom_fields
 from frappe.utils import cint, flt, getdate, now_datetime
 
 
+def setup_recovery_policy():
+	"""Targeted metadata installation; never creates a policy or grants recovery."""
+	frappe.reload_doc("construction_management", "doctype", "vat_201_recovery_policy")
+	create_custom_fields({"UAE VAT Settings": [dict(fieldname="custom_vat201_recovery_policies", fieldtype="Table",
+		label="VAT 201 Recovery Policies", options="VAT 201 Recovery Policy", module="Construction Management")]})
+
+
 def setup():
-	for name in ("vat_201_filing_period", "vat_201_classification"):
+	for name in ("vat_201_filing_period", "vat_201_classification", "vat_201_recovery_policy"):
 		frappe.reload_doc("construction_management", "doctype", name)
 	fields = [
 		("custom_vat201_periods", "Table", "VAT 201 Filing Periods", "VAT 201 Filing Period"),
 		("custom_vat201_classifications", "Table", "VAT 201 Classifications", "VAT 201 Classification"),
+		("custom_vat201_recovery_policies", "Table", "VAT 201 Recovery Policies", "VAT 201 Recovery Policy"),
 		("custom_vat201_legal_name_english", "Data", "Registered Legal Name in English", None),
 		("custom_vat201_registration_date", "Date", "VAT Registration Date", None),
 		("custom_vat201_registered_emirate", "Select", "Registered Emirate", "\nAbu Dhabi\nDubai\nSharjah\nAjman\nUmm Al Quwain\nRas Al Khaimah\nFujairah"),
@@ -74,6 +82,8 @@ def hide_legacy_purchase_recovery_fields():
 
 def validate_settings(doc, method=None):
 	previous = doc.get_doc_before_save()
+	from construction_management.construction_management.report.uae_vat_201_return.policy import validate
+	validate(doc, previous)
 	old = {r.name: r.as_dict() for r in previous.get("custom_vat201_classifications", [])} if previous else {}
 	keys = set()
 	manager = bool(set(frappe.get_roles()) & {"Accounts Manager", "System Manager"})

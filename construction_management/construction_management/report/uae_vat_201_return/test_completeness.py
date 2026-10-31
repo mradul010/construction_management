@@ -49,6 +49,8 @@ class TestVATCompleteness(unittest.TestCase):
 		self.assertTrue(all(not self.state(result,box["box"],"adjustment") for box in result["boxes"]))
 		self.assertEqual(result["unallocated_output"][0]["recorded_vat"],22783.63)
 		self.assertFalse(result["events"])
+		self.assertEqual(result["details"][0]["issue"],"Output not allocated to an Emirate")
+		self.assertFalse(result["return_complete"])
 
 	def test_purchase_journal_recovery_affects_only_input_and_net(self):
 		result = self.build([self.source()])
@@ -64,12 +66,12 @@ class TestVATCompleteness(unittest.TestCase):
 		adjustment = next(c for c in cards if c["label"].startswith("VAT Adjustments"))
 		self.assertEqual((adjustment["value"],adjustment["provisional"]),(0,False))
 
-	def test_default_purchase_zero_requires_approval_without_a_box_claim(self):
+	def test_saved_purchase_zero_needs_no_approval_or_box_claim(self):
 		source = self.source(voucher_type="Purchase Invoice",journal_category=None,journal_vat_role=None,
 			recovery_source_amount=0,vat_rows_count=1)
 		result = self.build([source])
-		self.assertTrue(result["reviews"])
-		self.assertTrue(self.state(result,"9"))
+		self.assertFalse(result["reviews"])
+		self.assertFalse(self.state(result,"9"))
 		self.assertIsNone(result["details"][0]["vat_box"])
 		self.assertEqual(result["details"][0]["recorded_vat_amount"],52.12)
 
@@ -139,18 +141,18 @@ class TestVATCompleteness(unittest.TestCase):
 			raw_vat=engine.number(-22783.63),debit=0,credit=22783.63,invoice_taxable_amount=455672.6,recorded_vat_amount=22783.63)
 		result = self.build([source])
 		rows = report.export_rows(result)
-		start = next(i for i,row in enumerate(rows) if row[0] == "Needs Attention")
+		start = next(i for i,row in enumerate(rows) if row[0] == "Source Notes")
 		self.assertEqual(rows[start+2][4],22783.63)
 		self.assertEqual(rows[start+2][6],-22783.63)
 		self.assertTrue(any("recorded output VAT AED 22783.63" in warning for warning in result["warnings"]))
 
-	def test_default_zero_does_not_become_confirmed_exclusion(self):
+	def test_saved_zero_explains_unclaimed_recorded_vat(self):
 		source = self.source(voucher_type="Purchase Invoice",journal_category=None,journal_vat_role=None,
 			recovery_source_amount=0,vat_rows_count=1)
 		result = self.build([source],reconciliation=[dict(description="Input VAT",ledger_amount=52.12)])
-		self.assertTrue(self.state(result,"13"))
+		self.assertFalse(self.state(result,"13"))
 		self.assertEqual(result["reconciliation"][0]["difference"],-52.12)
-		self.assertIn("recovery exclusions: AED 0.0",result["reconciliation"][0]["explanation"])
+		self.assertIn("recovery exclusions: AED 52.12",result["reconciliation"][0]["explanation"])
 
 	def test_unallocated_output_reversal_remains_negative_in_warnings(self):
 		source = self.source(journal_category="Customer-advance output VAT",journal_vat_role="Output",base=-455672.6,

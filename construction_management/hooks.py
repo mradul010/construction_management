@@ -377,6 +377,8 @@ extend_doctype_class = {
 #
 override_whitelisted_methods = {
 	"erpnext.accounts.doctype.payment_entry.payment_entry.get_payment_entry": "construction_management.construction_management.retention_payment.get_payment_entry",
+	"frappe.desk.query_report.run": "construction_management.construction_management.report.uae_vat_201_return.api.run",
+	"frappe.desk.query_report.export_query": "construction_management.construction_management.report.uae_vat_201_return.api.export_query",
 }
 #
 # each overriding function accepts a `data` argument;

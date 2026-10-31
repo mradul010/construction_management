@@ -31,6 +31,7 @@ class TestRecordedBridge(unittest.TestCase):
 			self.assertEqual(m['recorded_input'],debit-credit)
 			self.assertEqual(m['claimed_input'],claim)
 			self.assertEqual(m['known_nonclaimed'],debit-credit-claim)
+			self.assertEqual(m['input_not_claimed'],debit-credit-claim)
 			self.assertEqual(m['pending_input'],0)
 			self.assertEqual(m['residual_input'],0)
 
@@ -40,6 +41,7 @@ class TestRecordedBridge(unittest.TestCase):
 		reconciliation.apply(r,self.settings)
 		self.assertEqual(r['tax_measures']['pending_input'],50)
 		self.assertEqual(r['tax_measures']['known_nonclaimed'],0)
+		self.assertEqual(r['tax_measures']['input_not_claimed'],50)
 		self.assertEqual(r['tax_measures']['residual_input'],0)
 
 	def test_opening_and_period_are_separate(self):
@@ -61,14 +63,14 @@ class TestRecordedBridge(unittest.TestCase):
 		self.assertNotEqual(review.decision_fingerprint(s),review.decision_fingerprint(dict(s,recovery_source_amount=10)))
 		self.assertNotEqual(review.decision_fingerprint(s),review.decision_fingerprint(dict(s,voucher_no='PI-1')))
 
-	def test_default_zero_remains_pending_in_actual_pipeline(self):
+	def test_saved_zero_is_not_pending_in_actual_pipeline(self):
 		s = dict(voucher_type='Purchase Invoice',voucher_no='PI',source_row='TAX',posting_date='2026-06-01',
 			tax_account='VAT',base=1000,raw_vat=50,recovery_source_amount=0,vat_rows_count=1)
 		r = dict(filters=frappe._dict(company='TEST'),header=dict(base_currency='AED'),events=[],reviews=[s],excluded=[],warnings=[],reconciliation=[])
 		with patch.object(engine,'build',return_value=r), patch.object(engine,'settings_for',return_value=self.settings):
 			output = automatic.build({'company':'TEST'})
-		self.assertEqual(output['details'][0]['recovery_status'],'Pending verification')
-		self.assertIn('pending accountant approval',output['details'][0]['issue'])
+		self.assertEqual(output['details'][0]['recovery_status'],'Saved source zero')
+		self.assertFalse(output['reviews'])
 		self.assertFalse(output['events'])
 
 	def test_authorized_review_preserves_zero_approval_without_invoice_change(self):

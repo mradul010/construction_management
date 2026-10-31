@@ -27,9 +27,9 @@ th:nth-child(1) {width: 7%;} th:nth-child(2) {width: 39%;} .num {text-align: rig
 <tr><td>Address<br>{{ text(h.address) }}</td><td>Tax Year End<br>{{ text(h.tax_year_end) }}</td></tr>
 <tr><td>Registered Emirate<br>{{ text(h.registered_emirate) }}</td><td>Filing Frequency<br>{{ text(h.filing_frequency) }}</td></tr></table>
 <p>{{ h.period_kind }} | Reporting Currency: AED</p>
-{% if result.get('observed') %}<p>Recorded invoice VAT (not final return amounts): Sales AED {{ frappe.utils.fmt_money(result.observed.sales_vat, precision=precision) if result.observed.sales_vat is not none else 'Unavailable' }}; Purchases AED {{ frappe.utils.fmt_money(result.observed.purchases_vat, precision=precision) if result.observed.purchases_vat is not none else 'Unavailable' }}. Source rows needing attention: {{ result.reviews|length }}.</p>{% endif %}
+{% if result.get('tax_measures') %}<p>Recorded output VAT: AED {{ frappe.utils.fmt_money(result.tax_measures.recorded_output, precision=precision) }}; recorded net input VAT: AED {{ frappe.utils.fmt_money(result.tax_measures.recorded_input, precision=precision) }}. These are recorded amounts, not final return claims.</p>{% endif %}
 <h2>VAT on Sales and All Other outputs</h2>{{ table(['1a','1b','1c','1d','1e']) }}
-<p class="note">Uncertain tax is excluded from payable calculation and listed in Needs Attention in the report and Excel/CSV export. Preliminary figures are not a nil return or final liability.</p>
+<p class="note">Calculated from saved ERPNext records. Unallocated output and unspecified recovery remain in reconciliation and Source Notes. A partial return calculation is not a final liability.</p>
 </div>
 <div class="page"><h1>UAE VAT 201 RETURN</h1><p>{{ h.company }} | {{ h.from_date }} – {{ h.to_date }} | {{ result.status }}</p>
 <h2>VAT on Sales and All Other outputs</h2>{{ table(['1f','1g','2','3','4','5','6','7','8']) }}
@@ -45,12 +45,12 @@ th:nth-child(1) {width: 7%;} th:nth-child(2) {width: 39%;} .num {text-align: rig
 <tr><td>Mobile Country Code<br>{{ text(h.mobile_code) }}</td><td>Mobile Number<br>{{ text(h.mobile) }}</td></tr>
 <tr><td>Date of Submission (as recorded)<br>{{ text(h.submission_date) }}</td><td>Email Address<br>{{ text(h.email) }}</td></tr></table>
 <h2>Tax Reconciliation</h2><table><thead><tr><td>Description</td><td>Report (AED)</td><td>Ledger (AED)</td><td>Difference (AED)</td></tr></thead><tbody>{% for r in result.reconciliation %}<tr><td>{{ r.description }}</td>{% for field in ['report_amount','ledger_amount','difference'] %}<td class="num">{{ frappe.utils.fmt_money(r[field],precision=precision) if r[field] is not none else 'Not Available' }}</td>{% endfor %}</tr>{% endfor %}</tbody></table>
-<p class="note">{{ result.reviews|length }} source rows require accounts review. The following review appendix identifies the remaining evidence and filing-calendar issues. Recorded VAT does not establish recoverability.</p>
+<p class="note">{{ result.reviews|length }} source rows have unavailable treatment information, identified in the source appendix. Recorded VAT does not establish recoverability.</p>
 </div>
-<div class="page review-page"><h1>VAT 201 REVIEW NOTES</h1><p>{{ h.company }} | TRN {{ text(h.trn) }} | {{ h.from_date }} – {{ h.to_date }} | {{ result.status }}</p>
-<h2>Source Evidence Required</h2>
-<table class="review"><thead><tr><th>Sources</th><th>Evidence Required</th></tr></thead><tbody>
-{% for item in result.get('review_summary', []) %}<tr><td><strong>{{ item.count }} source rows</strong><br>{{ item.vouchers[:5]|join(', ') }}{% if item.vouchers|length > 5 %}<br>All voucher references are in the Review workbook sheet.{% endif %}</td><td>{{ item.issue }}<br><br>{{ item.action }}</td></tr>{% endfor %}
+<div class="page review-page"><h1>VAT 201 SOURCE NOTES</h1><p>{{ h.company }} | TRN {{ text(h.trn) }} | {{ h.from_date }} – {{ h.to_date }} | {{ result.status }}</p>
+<h2>Unavailable Source Information</h2>
+<table class="review"><thead><tr><th>Sources</th><th>Source Limitation</th></tr></thead><tbody>
+{% for item in result.get('review_summary', []) %}<tr><td><strong>{{ item.count }} source rows</strong><br>{{ item.vouchers[:5]|join(', ') }}{% if item.vouchers|length > 5 %}<br>All voucher references are in the Source Notes workbook sheet.{% endif %}</td><td>{{ item.issue }}</td></tr>{% endfor %}
 </tbody></table>
 <h2>Filing Calendar Review</h2>
 {% for issue in result.get('calendar_issues', []) %}<p class="note">{{ issue }}</p>{% else %}<p class="note">No maintained-period mismatch identified. This report does not file or validate submission with the FTA.</p>{% endfor %}
