@@ -3,7 +3,7 @@ from unittest.mock import patch
 
 import frappe
 
-from construction_management.construction_management.report.uae_vat_201_return import automatic, engine, journal
+from construction_management.construction_management.report.uae_vat_201_return import automatic, engine, journal, reconciliation
 
 
 class TestJournalVAT(unittest.TestCase):
@@ -63,13 +63,52 @@ class TestJournalVAT(unittest.TestCase):
 		self.assertEqual(source["base"], 300)
 		self.assertEqual(set(source["generated_tax_rows"]), {"T1", "T2"})
 
-	def test_ambiguous_matches_are_not_guessed_and_explicit_links_disambiguate(self):
+	def test_ambiguous_matches_preserve_group_total_and_explicit_links_disambiguate(self):
 		rows = [self.base("B1", 100), self.base("B2", 100), self.tax("T1", 5), self.tax("T2", 5)]
 		sources = [self.source("G1", 5), self.source("G2", 5)]
-		self.assertTrue(all(s.get("journal_match_issue") for s in self.match(rows, sources)))
+		grouped = self.match(rows, sources)
+		self.assertEqual(len(grouped), 1)
+		self.assertEqual((grouped[0]["base"], grouped[0]["recorded_vat_amount"]), (200, 10))
+		self.assertTrue(grouped[0]["journal_grouped_allocation"])
+		self.assertEqual(set(grouped[0]["journal_group_gl_rows"]), {"G1", "G2"})
 		rows[2]["custom_vat_source_row"], rows[3]["custom_vat_source_row"] = "B1", "B2"
 		sources = [self.source("G1", 5, voucher_detail_no="T1"), self.source("G2", 5, voucher_detail_no="T2")]
 		self.assertEqual([s["base_row_references"] for s in self.match(rows, sources)], [["B1"], ["B2"]])
+
+	def test_invalid_explicit_links_do_not_get_overridden_by_group_total(self):
+		rows = [self.base("B1",100), self.base("B2",200), self.tax("T1",5,custom_vat_source_row="B2"), self.tax("T2",10,custom_vat_source_row="B1")]
+		sources = self.match(rows, [self.source("G1",5),self.source("G2",10)])
+		self.assertTrue(all(s.get("journal_match_issue") for s in sources))
+
+	def test_ambiguous_group_reconciles_all_gl_rows_once_without_a_base_split(self):
+		rows = [self.base("B1",100),self.base("B2",100),self.tax("T1",5),self.tax("T2",5)]
+		sources = self.match(rows,[self.source("G1",5),self.source("G2",5)])
+		entries = [dict(name=name,voucher_type="Journal Entry",voucher_no="TEST-JV",account="VAT",debit=5,credit=0,
+			posting_date="2026-06-30") for name in ("G1","G2")]
+		result = dict(sources=sources,ledger_entries=entries,source_headers={},reviews=sources,events=[],details=sources,
+			header=dict(base_currency="AED"),boxes=list(engine.aggregate([]).values()),warnings=[],control_movement=10)
+		reconciliation.apply(result,dict(uae_vat_accounts=[frappe._dict(account="VAT",custom_vat201_side="Both")]))
+		self.assertEqual(result["tax_measures"]["recorded_input"],10)
+		self.assertEqual(result["tax_measures"]["pending_input"],10)
+		self.assertEqual(result["tax_measures"]["residual_input"],0)
+		self.assertEqual(result["audit_rows"][0]["source_to_gl_difference"],0)
+
+	def test_group_cannot_silently_overwrite_a_member_restriction(self):
+		source=self.source("G1",10,journal_grouped_allocation=True,journal_group_gl_rows=["G1","G2"])
+		rule=dict(voucher_type="Journal Entry",voucher_no="TEST-JV",source_row="G2",approved=1,recovery_percent=0)
+		self.assertTrue(journal.group_decision_issue(source,[rule]))
+		self.assertTrue(journal.group_decision_issue(source,[dict(rule,source_row="G1")]))
+		self.assertTrue(journal.group_decision_issue(source,[dict(rule,approved=0,review_status="Rejected")]))
+		self.assertIsNone(journal.group_decision_issue(source,[dict(rule,approved=0,review_status="Pending Review")]))
+		self.assertIsNone(journal.group_decision_issue(source,[dict(rule,source_row="G1",source_fingerprint="GROUP-BOUND-DECISION")]))
+
+	def test_zero_vat_and_generated_tax_rows_never_inflate_base(self):
+		rows = [self.base(), self.tax(), self.base("UNTAXED",9999,custom_vat_account=None), self.base("ZERO",8888,custom_vat_rate=0)]
+		# A zero-rate row belongs to its distinct zero-VAT account in the generator.
+		rows[-1]["custom_vat_account"] = "ZERO-VAT"
+		source = self.match(rows)[0]
+		self.assertEqual(source["base"], journal.number("1042.37"))
+		self.assertEqual(source["base_row_references"], ["BASE"])
 
 	def test_missing_explicit_link_and_bad_gl_cannot_fallback_to_remarks(self):
 		for tax, source in ((self.tax(custom_vat_source_row="MISSING"), self.source()),

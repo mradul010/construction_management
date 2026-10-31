@@ -36,6 +36,9 @@ def apply(result, settings):
 	mappings = engine.account_mappings(settings.get("uae_vat_accounts", []))
 	sources = result.get("sources", [])
 	by_gl = {(row["voucher_type"],row["voucher_no"],row["source_row"]):row for row in sources if "debit" in row}
+	for source in sources:
+		for gl_row in source.get("journal_group_gl_rows", []):
+			by_gl[(source["voucher_type"],source["voucher_no"],gl_row)] = source
 	issues = {(row["voucher_type"],row["voucher_no"],row["source_row"]):row for row in result["reviews"]}
 	excluded = {(row["voucher_type"],row["voucher_no"],row["source_row"]):row for row in result.get("excluded", [])}
 	groups = defaultdict(lambda: dict(entries=[], sources=[], events=[], details=[], timing=[]))
@@ -114,6 +117,13 @@ def apply(result, settings):
 		ledger_amount=result.get("control_movement"),difference=None,currency="AED"))
 	result.update(audit_rows=rows,reconciliation=reconciliation)
 	bridge(result)
+	for side, description in (("input", "Recovery not specified in source."), ("output", "Output not allocated to an Emirate")):
+		selected = [source for source in result["reviews"] if source.get("issue") == description]
+		if selected:
+			values = [source.get("recorded_vat_amount") for source in selected]
+			amount = engine.money(sum(engine.number(value) for value in values)) if all(value is not None for value in values) else None
+			reconciliation.append(dict(description=description, report_amount=None, ledger_amount=amount,
+				difference=None, currency="AED", explanation="; ".join(sorted({source["voucher_no"] for source in selected}))))
 	result["warnings"] = [warning for warning in result["warnings"] if "differs from the posting-date ledger" not in warning and "Tax-account postings remain unallocated" not in warning]
 	for row in reconciliation[:2]:
 		if row["difference"] and any(result.get("tax_measures",{}).get(field) for field in ("pending_output","pending_input","residual_output","residual_input")):
@@ -165,12 +175,14 @@ def bridge(result):
 		"pending_output", "pending_input", "known_nonclaimed", "timing_output", "timing_input", "residual_output", "residual_input", "classification_difference")}
 	m = result["tax_measures"]
 	result["measure_labels"] = dict(recorded_output="Recorded Output VAT", recorded_input="Recorded Net Input VAT",
-		claimed_output="Output Allocated to Return", claimed_input="Approved Recoverable Input VAT",
+		claimed_output="Output Allocated to Return", claimed_input="Recoverable Input VAT from Saved Sources / Supported Journal Treatment",
 		pending_output="Output Pending Return Allocation", pending_input="Input Pending Recovery Verification",
-		known_nonclaimed="Confirmed Non-recoverable / Excluded Input VAT",timing_output="Output Tax-date Timing Difference",timing_input="Input Tax-date Timing Difference",
+		known_nonclaimed="Input VAT Unclaimed per Saved Recovery / Supported Decisions", input_not_claimed="Recorded Input VAT Less Current Return Claim (includes pending items)",
+		timing_output="Output Tax-date Timing Difference",timing_input="Input Tax-date Timing Difference",
 		residual_output="Unexplained Output Residual",residual_input="Unexplained Input Residual",classification_difference="GL-to-recorded-tax Unexplained Residual",
 		recorded_net_movement="Recorded Output Less Net Input (credit movement)")
 	m["recorded_net_movement"] = engine.money(engine.number(m["recorded_output"]) - engine.number(m["recorded_input"])) if m["recorded_output"] is not None and m["recorded_input"] is not None else None
+	m["input_not_claimed"] = engine.money(engine.number(m["recorded_input"]) - engine.number(m["claimed_input"])) if m["recorded_input"] is not None and m["claimed_input"] is not None else None
 	opening = sum((engine.number(g["debit"]) - engine.number(g["credit"]) for g in result.get("opening_entries", [])), engine.number(0))
 	debit, credit = total("raw_debit"), total("raw_credit")
 	closing = opening + engine.number(debit) - engine.number(credit)

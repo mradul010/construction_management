@@ -36,7 +36,7 @@ function setup() {
 	return { report: frappe.query_reports["UAE VAT 201 Return"], frappe, calls };
 }
 
-test("filters stay unchanged and review uses the existing permission-gated endpoint", () => {
+test("filters stay unchanged and all report approval actions are removed", () => {
 	const { report } = setup();
 	assert.deepEqual(
 		Array.from(report.filters, (f) => f.fieldname),
@@ -48,12 +48,24 @@ test("filters stay unchanged and review uses the existing permission-gated endpo
 		"Approve Classification",
 		"Generate Review Suggestions",
 		"classification_status",
+		"review_endpoint",
+		"data-review-source",
+		"Resolve VAT Exception",
+		"Approve Override",
+		"Needs Attention",
 	])
 		assert.ok(!source.includes(text));
-	assert.ok(source.includes('review_endpoint + "decide"'));
-	assert.ok(source.includes('row._can_review = message.can_review'));
-	for (const tab of ["Sales", "Purchases", "Journal Entries", "Needs Attention"])
+	assert.ok(source.includes('report.raw_data?.vat201_context'));
+	for (const tab of ["Sales", "Purchases", "Journal Entries"])
 		assert.ok(source.includes(`"${tab}"`));
+});
+
+test("no recovery or policy workflow is registered in the report", () => {
+	const { report } = setup();
+	assert.equal(report.get_review_fields, undefined);
+	const source = fs.readFileSync(`${__dirname}/uae_vat_201_return.js`, "utf8");
+	for (const field of ["recovery_percent", "supporting_reference\", label", "Journal Recovery Rules", "Recovery Policies", "primary_action_label"])
+		assert.ok(!source.includes(field));
 });
 
 test("formatter preserves numeric values and distinguishes pending from nil", () => {
@@ -295,7 +307,7 @@ test("unknown source base is not replaced with a reviewed claim allocation", asy
 		stopImmediatePropagation() {},
 	});
 	const cells = [...html.matchAll(/<td[^>]*>([\s\S]*?)<\/td>/g)].map((cell) => cell[1]);
-	assert.equal(cells[3], "Pending Verification");
+	assert.equal(cells[3], "Not specified");
 	assert.equal(cells[6], "9");
 	assert.equal(cells.length, 8);
 	assert.ok(!html.includes("AED 1000"));

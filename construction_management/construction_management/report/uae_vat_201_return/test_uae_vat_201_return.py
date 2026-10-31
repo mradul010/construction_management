@@ -191,7 +191,7 @@ class TestUAEVAT201Return(unittest.TestCase):
 		result=dict(header={"company":"Test Company","trn":"TEST","from_date":"2026-06-01"},status="Needs Review",warnings=["=UNTRUSTED()"],boxes=list(engine.aggregate([self.event()]).values()),events=[self.event()],reviews=[],reconciliation=[dict(description="Output VAT",report_amount=50,ledger_amount=49,difference=1)])
 		book=load_workbook(io.BytesIO(workbook_bytes(result)))
 		values=[c.value for sheet in book for row in sheet for c in row]
-		for text in ("Test Company","VAT 201 Preparation","Transactions","Reconciliation","Review"):
+		for text in ("Test Company","VAT 201 Preparation","Transactions","Reconciliation","Source Notes"):
 			if text in book.sheetnames:
 				continue
 			self.assertIn(text,values)

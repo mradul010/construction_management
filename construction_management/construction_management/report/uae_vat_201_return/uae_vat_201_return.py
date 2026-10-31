@@ -20,6 +20,7 @@ def get_columns():
 
 def execute(filters=None):
 	result = build(filters)
+	frappe.local.vat201_current_result = result
 	rows = [dict(box,_box=True) for box in result["boxes"]]
 	header = result["header"]
 	metadata = " | ".join(f"{label}: {escape_html(str(header.get(key) or 'Not Configured'))}" for key,label in (
@@ -27,7 +28,7 @@ def execute(filters=None):
 		("from_date","From"),("to_date","To"),("due_date","Due Date"),("filing_frequency","Frequency")))
 	message = f"<strong>{escape_html(str(header.get('company') or ''))}</strong><br>{metadata}<br><strong>{escape_html(result['status'])}</strong> - Preparation only; not submitted to the FTA."
 	if result["warnings"]:
-		message += "<details><summary>Review and reconciliation notes (" + str(len(result["warnings"])) + ")</summary><ul>" + "".join("<li>" + escape_html(w) + "</li>" for w in result["warnings"]) + "</ul></details>"
+		message += "<details><summary>Source and reconciliation notes (" + str(len(result["warnings"])) + ")</summary><ul>" + "".join("<li>" + escape_html(w) + "</li>" for w in result["warnings"]) + "</ul></details>"
 	return get_columns(),rows,message,None,summary_cards(result),True
 
 
@@ -42,12 +43,8 @@ def summary_cards(result):
 	m = result.get("tax_measures", {})
 	return [card("Recorded Output VAT",m.get("recorded_output",result["observed"]["sales_vat"]),result.get("scope_incomplete",False)),
 		card("Recorded Net Input VAT",m.get("recorded_input"),result.get("scope_incomplete",False)),
-		card("Recorded Net VAT Movement (credit)",m.get("recorded_net_movement"),result.get("scope_incomplete",False)),
-		card("Output Allocated to Return",boxes["12"]["amount"],pending("12")),
-		card("Output Pending Allocation",m.get("pending_output")),
-		card("Input Pending Verification",m.get("pending_input")),
-		card("Confirmed Non-recoverable Input",m.get("known_nonclaimed")),
 		card("Recoverable Purchase VAT",boxes["13"]["amount"],pending("13")),
+		card("Recorded Input Not Claimed (includes pending)",m.get("input_not_claimed")),
 		card("VAT Adjustments",sum(b["adjustment"] * (-1 if b["box"] in INPUT else 1)
 			for b in result["boxes"] if b["box"] in OUTPUT+INPUT), any(pending(box,"adjustment") for box in OUTPUT+INPUT)),
 		card("Net VAT Payable / Refundable",boxes["14"]["amount"],pending("14"))]
@@ -68,9 +65,12 @@ def period_context(filters):
 @frappe.whitelist()
 def report_context(filters):
 	result = build(filters)
+	return context_for(result)
+
+
+def context_for(result):
 	# Source permissions are checked by the reader; no stored evidence snapshots are returned.
-	context = {key:result.get(key) for key in ("header","status","warnings","details","reconciliation","observed","unallocated_output","review_summary","audit_rows","tax_measures","ledger_summary","recorded_breakdown","measure_labels")}
-	context["can_review"] = bool(set(frappe.get_roles()) & {"Accounts Manager","System Manager"}) and frappe.has_permission("UAE VAT Settings","write")
+	context = {key:result.get(key) for key in ("header","status","calculation_description","return_complete","warnings","details","reconciliation","observed","unallocated_output","review_summary","audit_rows","tax_measures","ledger_summary","recorded_breakdown","measure_labels","settings_name","calculated_at")}
 	return context
 
 
@@ -115,7 +115,7 @@ def export_rows(result):
 		values.setdefault("vat_box",row.get("box"))
 		values.setdefault("display_remarks",row.get("remarks"))
 		rows.append([values.get(k) for k in fields])
-	rows += [["Needs Attention"],["Voucher Type","Voucher","Source Row","Issue","Recorded VAT (VAT-role signs)","Recommended Action","Raw GL VAT (debit - credit)"]]
+	rows += [["Source Notes"],["Voucher Type","Voucher","Source Row","Source limitation","Recorded VAT (VAT-role signs)","Source context","Raw GL VAT (debit - credit)"]]
 	rows += [[r.get("voucher_type"),r.get("voucher_no"),r.get("source_row"),r.get("issue"),r.get("recorded_vat_amount",r.get("raw_vat")),r.get("recommended_action"),
 		flt(r.get("debit"))-flt(r.get("credit")) if "debit" in r else None] for r in result["reviews"]]
 	rows += [["Tax Reconciliation"],["Description","Included VAT","Ledger VAT","Difference","Explanation"]]
@@ -130,7 +130,7 @@ def export_rows(result):
 	breakdown_fields = ("voucher_type","category","raw_debit","raw_credit","recorded_output","recorded_input","claimed_output","claimed_input","pending_output","pending_input","known_nonclaimed","residual_output","residual_input")
 	rows += [["Recorded VAT by Voucher Type"],[key.replace("_"," ").title() for key in breakdown_fields]]
 	rows += [[row.get(key) for key in breakdown_fields] for row in result.get("recorded_breakdown",[])]
-	decision_fields = ("voucher_type","voucher_no","source_row","tax_account","posting_date","tax_date","recovery_source_amount","recovery_percent","recoverable_vat_amount","recovery_status","approved_by","approval_time","reason","supporting_reference")
+	decision_fields = ("voucher_type","voucher_no","source_row","tax_account","posting_date","tax_date","recovery_source_amount","recovery_percent","recoverable_vat_amount","recovery_status","treatment_source","policy_id","policy_name","policy_approved_by","policy_approval_time","approved_by","approval_time","reason","supporting_reference")
 	rows += [["Recovery Decisions"],[key.replace("_"," ").title() for key in decision_fields]]
 	rows += [[row.get(key) for key in decision_fields] for row in result.get("details",[]) if row.get("recovery_status")]
 	rows += [["Recorded source amounts"]]+[[k,v] for k,v in result.get("observed",{}).items()]
@@ -148,7 +148,7 @@ def workbook_bytes(result):
 	workbook = Workbook()
 	precision = frappe.get_precision("GL Entry","debit",currency="AED")
 	pattern = '#,##0' + ('.'+'0'*precision if precision else '')
-	sections = {name:[] for name in ("VAT 201 Summary","Box Component Completeness","Report Totals","Transaction Details","Needs Attention","Tax Reconciliation","Voucher Account Reconciliation","Recorded source amounts","Invoice tax versus GL","Ledger Balances","Recorded Tax Bridge","Recorded VAT by Voucher Type","Recovery Decisions")}
+	sections = {name:[] for name in ("VAT 201 Summary","Box Component Completeness","Report Totals","Transaction Details","Source Notes","Tax Reconciliation","Voucher Account Reconciliation","Recorded source amounts","Invoice tax versus GL","Ledger Balances","Recorded Tax Bridge","Recorded VAT by Voucher Type","Recovery Decisions")}
 	current = None
 	metadata = []
 	for row in export_rows(result):
@@ -171,7 +171,7 @@ def workbook_bytes(result):
 			if state.get("provisional"):
 				main.cell(index,col).fill = PatternFill("solid",fgColor="FFF3CD")
 				main.cell(index,col).comment = Comment("Provisional known subtotal. " + "; ".join(state["reasons"]),"VAT 201")
-	for title, rows in (("Transactions",sections["Transaction Details"]),("Review",sections["Needs Attention"]),
+	for title, rows in (("Transactions",sections["Transaction Details"]),("Source Notes",sections["Source Notes"]),
 		("Completeness",sections["Box Component Completeness"]),("Reconciliation",sections["Tax Reconciliation"]),
 		("Source Ledger Audit",sections["Voucher Account Reconciliation"]),("Invoice GL Checks",sections["Invoice tax versus GL"]),
 		("Taxpayer and Notes",metadata + sections["Recorded source amounts"]),

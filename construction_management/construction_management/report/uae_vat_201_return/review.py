@@ -55,6 +55,7 @@ def enrich_journals(sources):
 		company_doc = frappe.get_cached_doc("Company", company)
 		advance_accounts = {company_doc.get(field) for field in ("default_customer_advance_account", "default_advance_received_account") if company_doc.get(field)}
 		match_journal(doc, matching, account_catalog[company], company_doc.default_currency, advance_accounts)
+	sources[:] = [source for source in sources if not source.get("journal_group_member_of")]
 	companies = {e["document"]["company"] for e in cache.values()}
 	for company in companies:
 		advances = [s for s in sources if s.get("journal_category") == "Customer-advance output VAT" and
@@ -218,7 +219,7 @@ def review_source(filters, voucher_type, voucher_no, source_row, classification_
 	for record in records:
 		# Return fresh permission-checked evidence, not historic manager-only snapshots.
 		record.pop("source_evidence", None)
-	return dict(source=source, records=records, decision_fingerprint=decision_fingerprint(source))
+	return dict(source=source, records=records, decision_fingerprint=decision_fingerprint(source), base_currency=result["header"]["base_currency"])
 
 
 @frappe.whitelist()

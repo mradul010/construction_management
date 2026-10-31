@@ -120,7 +120,7 @@ def source_data(f, rules, candidate_accounts):
 			or_filters.append(["name", "in", dated])
 		doc_filters = {"company": f.company, "docstatus": 1}
 		docs = frappe.get_list(dt, filters=doc_filters, or_filters=or_filters,
-			fields=fields_existing(dt, ["name","modified","posting_date",party,"base_net_total","currency","conversion_rate","is_return","return_against","reverse_charge", "supplier_address", "vat_emirate", "project", "bill_no", "bill_date", "tax_id", "remarks", "ra_bill", "recoverable_standard_rated_expenses", "recoverable_reverse_charge", "custom_vat201_evidence_reference"]), limit_page_length=0)
+			fields=fields_existing(dt, ["name","modified","posting_date",party,"base_net_total","currency","conversion_rate","is_return","return_against","reverse_charge", "supplier_address", "vat_emirate", "project", "bill_no", "bill_date", "tax_id", "remarks", "ra_bill", "recoverable_standard_rated_expenses", "recoverable_reverse_charge", "custom_vat201_evidence_reference", "tax_category", "taxes_and_charges", "outstanding_amount"]), limit_page_length=0)
 		if not docs:
 			continue
 		posted_gl = frappe.get_list("GL Entry", filters={"company":f.company,"voucher_type":dt,"voucher_no":["in",[d.name for d in docs]],"docstatus":1,"is_cancelled":0}, fields=["name","voucher_no","account","debit","credit"],limit_page_length=0)
@@ -134,10 +134,21 @@ def source_data(f, rules, candidate_accounts):
 		if not docs:
 			continue
 		names = [d.name for d in docs]
+		supplier_names = {d.get("supplier") for d in docs if d.get("supplier")} if dt == "Purchase Invoice" else set()
+		suppliers = {r.name:r for r in frappe.get_list("Supplier", filters={"name":["in",list(supplier_names)]},
+			fields=fields_existing("Supplier",["name","tax_id","supplier_primary_address","country"]),limit_page_length=0)} if supplier_names and frappe.has_permission("Supplier","read") else {}
+		for doc in docs:
+			supplier = suppliers.get(doc.get("supplier"), {})
+			if not doc.get("supplier_address") and supplier.get("supplier_primary_address"):
+				doc["supplier_address"] = supplier["supplier_primary_address"]
+				doc["address_evidence_source"] = "Linked Supplier primary address"
+			if not doc.get("tax_id") and supplier.get("tax_id"):
+				doc["tax_id"] = supplier["tax_id"]
+				doc["trn_evidence_source"] = "Linked Supplier tax ID"
 		addresses = {d.get("supplier_address") for d in docs if d.get("supplier_address")} if dt == "Purchase Invoice" else set()
 		countries = {row.name:row.country for row in frappe.get_list("Address",filters={"name":["in",list(addresses)]},fields=["name","country"],limit_page_length=0)} if addresses and frappe.has_permission("Address","read") else {}
-		taxes = frappe.get_all(tax_dt, filters={"parent": ["in", names], "parenttype": dt}, fields=fields_existing(tax_dt,["name","parent","idx","row_id","account_head","charge_type","rate","base_tax_amount_after_discount_amount","base_total","add_deduct_tax","category"]), order_by="idx asc", limit_page_length=0)
-		items = frappe.get_all(item_dt, filters={"parent": ["in", names], "parenttype":dt}, fields=fields_existing(item_dt,["name","parent","base_net_amount","income_account","expense_account","is_zero_rated","is_exempt","description","project","item_code"]), limit_page_length=0)
+		taxes = frappe.get_all(tax_dt, filters={"parent": ["in", names], "parenttype": dt}, fields=fields_existing(tax_dt,["name","parent","idx","row_id","account_head","charge_type","rate","base_tax_amount_after_discount_amount","base_total","add_deduct_tax","category","item_wise_tax_detail"]), order_by="idx asc", limit_page_length=0)
+		items = frappe.get_all(item_dt, filters={"parent": ["in", names], "parenttype":dt}, fields=fields_existing(item_dt,["name","parent","base_net_amount","income_account","expense_account","is_zero_rated","is_exempt","description","project","cost_center","item_code","item_tax_template"]), limit_page_length=0)
 		by_tax, by_item = defaultdict(list), defaultdict(list)
 		for row in taxes:
 			by_tax[row.parent].append(row)
@@ -145,11 +156,18 @@ def source_data(f, rules, candidate_accounts):
 			by_item[row.parent].append(row)
 		for doc in docs:
 			headers[(dt,doc.name)] = doc
+			country = countries.get(doc.get("supplier_address"))
+			if not doc.get("supplier_address") and suppliers.get(doc.get("supplier"), {}).get("country"):
+				country = suppliers[doc.supplier].country
+				doc["address_evidence_source"] = "Saved linked Supplier country (no address link)"
 			evidence = dict(project=doc.get("project"), is_return=doc.get("is_return"), return_against=doc.get("return_against"),
-				purchase_country=countries.get(doc.get("supplier_address")),
-				potential_reverse_charge=bool(dt=="Purchase Invoice" and (doc.get("reverse_charge")=="Y" or countries.get(doc.get("supplier_address")) not in (None,"","United Arab Emirates"))),
+				tax_category=doc.get("tax_category"), tax_template=doc.get("taxes_and_charges"), outstanding_amount=doc.get("outstanding_amount"),
+				purchase_country=country,
+				potential_reverse_charge=bool(dt=="Purchase Invoice" and (doc.get("reverse_charge")=="Y" or country not in (None,"","United Arab Emirates"))),
 				source_emirate=doc.get("vat_emirate"), bill_no=doc.get("bill_no"), bill_date=doc.get("bill_date"),
 				source_tax_id=doc.get("tax_id"), remarks=doc.get("remarks"), ra_bill=doc.get("ra_bill"),
+				address_evidence_source=doc.get("address_evidence_source") or "Saved invoice supplier address",
+				trn_evidence_source=doc.get("trn_evidence_source") or "Saved invoice supplier TRN",
 				recovery_source_amount=doc.get("recoverable_standard_rated_expenses"),
 				reverse_recovery_percent=doc.get("recoverable_reverse_charge"),
 				verification_reference=doc.get("custom_vat201_evidence_reference"),
@@ -167,6 +185,11 @@ def source_data(f, rules, candidate_accounts):
 				# Mixed tax treatments and multiple VAT rows need explicit allocation.
 				if len(vat_taxes) > 1 or any(i.get("is_zero_rated") or i.get("is_exempt") for i in by_item[doc.name]):
 					base = None
+				tax_items = by_item[doc.name]
+				if base is None:
+					base, tax_items = item_tax_base(tax, tax_items, doc.get("conversion_rate"))
+					if base is not None and any(t.name != tax.name and item_tax_codes(t) & {i.get("item_code") for i in tax_items} for t in vat_taxes):
+						base = None  # Overlapping VAT bases need an explicit allocation, not repeated bases.
 				vat = number(tax.base_tax_amount_after_discount_amount)
 				if tax.get("add_deduct_tax") == "Deduct":
 					vat = -vat
@@ -175,7 +198,7 @@ def source_data(f, rules, candidate_accounts):
 				account_tax = sum((number(t.base_tax_amount_after_discount_amount)*(-1 if t.get("add_deduct_tax")=="Deduct" else 1) for t in vat_taxes if t.account_head==tax.account_head), Decimal(0))
 				sources.append(dict(evidence, voucher_type=dt,voucher_no=doc.name,source_row=tax.name,posting_date=doc.posting_date,party=doc.get(party),
 					base=base,raw_vat=vat,tax_rate=tax.rate,tax_account=tax.account_head,account=None,reverse_charge=doc.get("reverse_charge"),currency=doc.currency,
-					gl_evidence=[dict(g) for g in gl_rows], invoice_tax_difference=money(account_tax-gl_tax)))
+					tax_item_evidence=[dict(i) for i in tax_items], gl_evidence=[dict(g) for g in gl_rows], invoice_tax_difference=money(account_tax-gl_tax)))
 			for item in by_item[doc.name]:
 				if vat_taxes and not (item.get("is_zero_rated") or item.get("is_exempt")):
 					continue
@@ -183,6 +206,36 @@ def source_data(f, rules, candidate_accounts):
 					raw_vat=Decimal(0),tax_rate=0,tax_account=None,account=item.get("income_account") or item.get("expense_account"),currency=doc.currency,
 					treatment_hint="Exempt" if item.get("is_exempt") else "Zero Rated" if item.get("is_zero_rated") else "Unclassified"))
 	return sources, headers, warnings
+
+
+def item_tax_base(tax, items, conversion_rate):
+	"""Allocate from saved item amounts only when saved item tax reconciles."""
+	try:
+		if tax.get("charge_type") != "On Net Total":
+			return None, []
+		details = frappe.parse_json(tax.get("item_wise_tax_detail") or "{}")
+		if not isinstance(details, dict) or not details or not conversion_rate:
+			return None, []
+		taxable = {code for code, values in details.items() if isinstance(values, list) and len(values) == 2 and number(values[0]) and number(values[1])}
+		selected = [item for item in items if item.get("item_code") in taxable]
+		if not selected or taxable != {item.get("item_code") for item in selected}:
+			return None, []
+		if any(item.get("is_zero_rated") or item.get("is_exempt") for item in selected):
+			return None, []
+		item_vat = sum((number(details[code][1]) for code in taxable), Decimal(0)) * number(conversion_rate)
+		if money(item_vat - number(tax.get("base_tax_amount_after_discount_amount"))):
+			return None, []
+		return sum((number(item.get("base_net_amount")) for item in selected), Decimal(0)), selected
+	except (ValueError, TypeError, ArithmeticError):
+		return None, []
+
+
+def item_tax_codes(tax):
+	try:
+		details = frappe.parse_json(tax.get("item_wise_tax_detail") or "{}")
+		return {code for code, values in details.items() if isinstance(values, list) and len(values) == 2 and number(values[0]) and number(values[1])} if isinstance(details, dict) else set()
+	except (ValueError, TypeError, ArithmeticError):
+		return set()
 
 
 def apply_rule(source, rule, base_currency, *, source_verified=False):
@@ -247,8 +300,8 @@ def apply_rule(source, rule, base_currency, *, source_verified=False):
 	if box in INPUT:
 		vat *= number(rule.recovery_percent) / 100
 		if box == "9" and source["voucher_type"] == "Purchase Invoice" and source.get("recovery_source_amount") not in (None,"",0,"0"):
-			saved = number(source["recovery_source_amount"])
-			if not saved.is_finite() or (saved and source.get("vat_rows_count") == 1 and money(saved) != money(vat)):
+			saved = number(source.get("recovery_allocated_amount", source["recovery_source_amount"]))
+			if not saved.is_finite() or (saved and (source.get("vat_rows_count") == 1 or "recovery_allocated_amount" in source) and money(saved) != money(vat)):
 				return None, "Approved recovery conflicts with the nonzero saved AED recovery amount; reconcile the source amount and review allocation"
 		if not flt(rule.recovery_percent):
 			base = Decimal(0)
@@ -376,6 +429,12 @@ def build(filters, settings_override=None):
 		source["company"] = f.company
 		key = (source["voucher_type"],source["voucher_no"],source["source_row"])
 		matched = by_source.get(key,[])
+		if source.get("journal_grouped_allocation"):
+			from construction_management.construction_management.report.uae_vat_201_return.journal import group_decision_issue
+			issue = group_decision_issue(source, settings.get("custom_vat201_classifications", []))
+			if issue:
+				reviews.append(dict(source, requires_review=True, review=issue))
+				continue
 		if any(r.box=="Outside VAT" for r in matched) and len(matched)>1:
 			reviews.append(dict(source,review="Outside VAT exclusion conflicts with another classification"))
 			continue

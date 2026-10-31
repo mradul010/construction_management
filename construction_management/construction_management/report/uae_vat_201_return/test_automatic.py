@@ -141,16 +141,16 @@ class TestAutomaticVAT201(unittest.TestCase):
 		self.assertEqual(row["VAT Amount"], 77.88)
 		self.assertIn("Recoverable VAT: AED 0.00", row["Remarks"])
 
-	def test_default_zero_is_pending_without_suppressing_source_amounts(self):
+	def test_saved_zero_is_read_without_suppressing_source_amounts(self):
 		for base, vat in ((1557.5, 77.88), (323, 16.15)):
 			output = self.run_build(self.result([self.purchase(base=base, raw_vat=vat, recovery_source_amount=0)]))
 			self.assertFalse(output["events"])
 			row = output["details"][0]
 			self.assertEqual((row["base"], row["raw_vat"]), (base, vat))
-			self.assertEqual(row["recovery_status"], "Pending verification")
+			self.assertEqual(row["recovery_status"], "Saved source zero")
 			self.assertIsNone(row["vat_box"])
-			self.assertTrue(output["reviews"])
-			self.assertIn("pending accountant approval", row["display_remarks"])
+			self.assertFalse(output["reviews"])
+			self.assertIn("saved invoice recovery amount", row["display_remarks"])
 
 	def test_retained_zero_claim_is_not_included_in_box_nine(self):
 		source = self.purchase(recovery_source_amount=0)
@@ -261,7 +261,7 @@ class TestAutomaticVAT201(unittest.TestCase):
 		self.assertEqual(len(result["events"]), 1)
 		self.assertFalse(result["reviews"])
 		self.assertEqual(result["reconciliation"][0]["difference"], 0)
-		self.assertEqual(result["status"], "Ready for Review")
+		self.assertEqual(result["status"], "Calculated from saved ERPNext records")
 
 	def test_conflicting_legacy_decisions_do_not_double_count(self):
 		source = self.sales(review="Duplicated source event classification")

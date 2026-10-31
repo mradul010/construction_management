@@ -19,6 +19,20 @@ def dimension(row, account):
 	return (account, row.get("project") or "", row.get("cost_center") or "", signed(row) > 0)
 
 
+def group_decision_issue(source, rules):
+	if not source.get("journal_grouped_allocation"):
+		return None
+	group_ids = set(source["journal_group_gl_rows"])
+	for rule in rules:
+		if (rule.get("voucher_type"), rule.get("voucher_no")) != (source["voucher_type"], source["voucher_no"]) or rule.get("source_row") not in group_ids:
+			continue
+		if not (rule.get("approved") or rule.get("requires_review") or rule.get("review_status") in ("Rejected", "Needs Review")):
+			continue
+		if rule.get("source_row") != source["source_row"] or not rule.get("source_fingerprint"):
+			return "Existing row-level journal restrictions/decisions require reconciliation before applying treatment to a grouped source"
+	return None
+
+
 def partition(units, targets, tolerance):
 	"""Return a unique, exhaustive allocation; ambiguous/large searches stay unresolved."""
 	if not units or not targets:
@@ -125,12 +139,39 @@ def match_journal(doc, sources, expense_accounts, company_currency, advance_acco
 			links=[source["voucher_detail_no"]] if source.get("voucher_detail_no") else []) for source in gl_sources]
 		gl_allocation = partition(tax_units, gl_targets, Decimal(0))
 		if allocation is None or gl_allocation is None:
+			# Preserve a fully reconciled expense group without guessing which of
+			# several equivalent bases belongs to each generated tax/GL row.
+			base_ids, tax_ids = {s["name"] for s in specs}, {r["name"] for r in tax_rows}
+			linked_bases = [link for target in targets for link in target["links"]]
+			valid_links = (all(set(t["links"]) <= base_ids for t in targets)
+				and len(linked_bases) == len(set(linked_bases))
+				and all(set(t["links"]) <= tax_ids for t in gl_targets))
+			if valid_links:
+				valid_links = (all(not t["links"] or abs(sum((s["amount"] for s in specs if s["name"] in t["links"]), Decimal(0)) - t["amount"]) <= quantum for t in targets)
+					and all(not t["links"] or sum((r["amount"] for r in tax_units if r["name"] in t["links"]), Decimal(0)) == t["amount"] for t in gl_targets))
+			tax_total = sum((abs(signed(row)) for row in tax_rows), Decimal(0))
+			group_ok = (valid_links and all(s["row"].get("account") in expense_accounts for s in specs)
+				and abs(sum((s["amount"] for s in specs), Decimal(0)) - tax_total) <= quantum
+				and sum((abs(signed(row)) for row in gl_sources), Decimal(0)) == tax_total)
+			if not group_ok:
+				for source in gl_sources:
+					source["journal_match_issue"] = "Generated VAT/base/GL allocation is ambiguous or does not reconcile by account, project and cost center"
+				continue
+			canonical = min(gl_sources, key=lambda source: source["source_row"])
+			canonical["journal_group_gl_rows"] = [source["source_row"] for source in gl_sources]
+			canonical["debit"] = sum((number(s["debit"]) for s in gl_sources), Decimal(0))
+			canonical["credit"] = sum((number(s["credit"]) for s in gl_sources), Decimal(0))
+			canonical["raw_vat"] = signed(canonical)
+			canonical["journal_grouped_allocation"] = True
 			for source in gl_sources:
-				source["journal_match_issue"] = "Generated VAT/base/GL allocation is ambiguous or does not reconcile by account, project and cost center"
-			continue
-		by_tax = {target["name"]: units for target, units in zip(targets, allocation)}
-		for source, matched_tax in zip(gl_sources, gl_allocation):
-			matched = [spec for tax in matched_tax for spec in by_tax[tax["name"]]]
+				if source is not canonical:
+					source["journal_group_member_of"] = canonical["source_row"]
+			assignments = [(canonical, specs, tax_units)]
+		else:
+			by_tax = {target["name"]: units for target, units in zip(targets, allocation)}
+			assignments = [(source, [spec for tax in matched_tax for spec in by_tax[tax["name"]]], matched_tax)
+				for source, matched_tax in zip(gl_sources, gl_allocation)]
+		for source, matched, matched_tax in assignments:
 			base = sum((spec["base"] for spec in matched), Decimal(0))
 			parties = {spec["row"].get("party") for spec in matched if spec["row"].get("party")}
 			refs = [spec["name"] for spec in matched]
@@ -152,6 +193,7 @@ def match_journal(doc, sources, expense_accounts, company_currency, advance_acco
 				party=next(iter(parties)) if len(parties) == 1 else None,
 				journal_category="Recorded purchase VAT" if expense and not invoice_linked else "Unresolved",
 				journal_invoice_linked=invoice_linked, journal_expense=expense,
+				journal_expense_accounts=sorted({spec["row"]["account"] for spec in matched}),
 				journal_match_issue=None,
 				remarks="; ".join(filter(None, (spec["row"].get("user_remark") for spec in matched))))
 			if customer_advance:
@@ -165,6 +207,7 @@ def match_journal(doc, sources, expense_accounts, company_currency, advance_acco
 			if company_currency == "AED":
 				source.update(invoice_taxable_amount=float(source["base"]),
 					recorded_vat_amount=float(-source["raw_vat"] if customer_advance else source["raw_vat"]), currency="AED")
+	sources[:] = [source for source in sources if not source.get("journal_group_member_of")]
 
 
 def link_advance_evidence(sources, invoices, allocations=(), adjustments=()):
