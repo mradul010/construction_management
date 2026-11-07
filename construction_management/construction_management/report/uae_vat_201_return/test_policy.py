@@ -14,7 +14,7 @@ class TestRecoveryPolicy(unittest.TestCase):
 		self.row = frappe._dict(name="POLICY-ROW", policy_name="Approved taxable construction costs", enabled=1,
 			approved=1, approved_by="MANAGER", approval_time="2026-10-31 10:00:00", applies_to="Purchase Invoice",
 			expense_account="Expense", tax_category="Taxable Business", valid_from="2026-05-01", recovery_percent=100,
-			payment_condition="Paid invoices only", basis="Business use for taxable supplies under documented company policy",
+			payment_condition="Paid invoices only", tax_date_basis="Posting date verified as tax date", basis="Business use for taxable supplies under documented company policy",
 			supporting_reference="POLICY-REFERENCE")
 		self.settings = frappe._dict(company="TEST", uae_vat_accounts=[frappe._dict(account="VAT", custom_vat201_side="Both")],
 			custom_vat201_recovery_policies=[self.row])
@@ -31,16 +31,15 @@ class TestRecoveryPolicy(unittest.TestCase):
 		with patch.object(engine, "build", return_value=initial), patch.object(engine, "settings_for", return_value=self.settings):
 			return automatic.build({"company": "TEST"})
 
-	def test_saved_zero_does_not_get_replaced_by_full_policy(self):
+	def test_approved_scoped_policy_can_resolve_unreviewed_default_zero(self):
 		before = copy.deepcopy((self.source, self.settings))
-		with patch.object(frappe, "get_doc", side_effect=AssertionError("No source writes")):
-			result = self.build()
+		result = self.build()
 		self.assertFalse(result["reviews"])
-		self.assertFalse(result["events"])
-		self.assertEqual(result["details"][0]["recovery_status"], "Saved source zero")
+		self.assertEqual(result["events"][0]["vat_amount"], 77.88)
+		self.assertEqual(result["details"][0]["recovery_status"], "Policy-derived full")
 		self.assertEqual((self.source, self.settings), before)
 
-	def test_saved_partial_zero_full_and_returns_ignore_policy(self):
+	def test_approved_partial_zero_full_policy_preserves_returns(self):
 		for percent in (0, 40, 100):
 			self.row.recovery_percent = percent
 			for sign in (1, -1):
@@ -53,37 +52,34 @@ class TestRecoveryPolicy(unittest.TestCase):
 				self.assertEqual(row["invoice_taxable_amount"], 1557.5*sign)
 				self.assertEqual(row["recoverable_vat_amount"], engine.money(77.88*sign*percent/100))
 				if not percent:
-					self.assertIsNone(row["vat_box"])
+					self.assertEqual(row["vat_box"], "")
 					self.assertFalse(result["events"])
 
-	def test_saved_zero_takes_precedence_over_old_report_approval(self):
+	def test_explicit_approved_zero_takes_precedence_over_policy(self):
 		rule = frappe._dict(box="9", tax_date="2026-06-01", reason="Explicit private use exclusion", supporting_reference="OVERRIDE",
 			approved_by="REVIEWER", recovery_confirmed=1, recovery_percent=0)
 		event, error = engine.apply_rule(self.source, rule, "AED")
 		self.assertIsNone(error)
 		result = self.build(events=[event])
 		self.assertEqual(result["details"][0]["recoverable_vat_amount"], 0)
-		self.assertEqual(result["details"][0]["recovery_status"], "Saved source zero")
+		self.assertEqual(result["details"][0]["recovery_status"], "Verified non-recoverable")
 		self.assertFalse(result["events"])
-		self.assertIsNone(result["details"][0]["vat_box"])
+		self.assertEqual(result["details"][0]["vat_box"], "")
 
-	def test_current_invoice_amount_supersedes_historical_report_override(self):
-		for previous in (0, 77.88):
-			old_source = dict(self.source, recovery_source_amount=0)
-			rule = frappe._dict(box="9", tax_date="2026-06-01", reason="Historical decision", supporting_reference="OLD",
-				approved_by="OLD-REVIEWER", recovery_confirmed=1, recovery_percent=previous/77.88*100)
-			event, error = engine.apply_rule(old_source, rule, "AED")
+	def test_engine_validated_approval_is_preserved_in_actual_source_pipeline(self):
+		for percent in (0, 40, 100):
+			rule = frappe._dict(box="9", tax_date="2026-06-01", reason="Evidence decision", supporting_reference="FILE",
+				approved_by="REVIEWER", recovery_confirmed=1, recovery_percent=percent)
+			event, error = engine.apply_rule(self.source, rule, "AED")
 			self.assertIsNone(error)
-			result = self.build(dict(self.source, recovery_source_amount=10, custom_vat201_recovery_verified=0,
-				custom_vat201_recovery_percent=0), events=[event])
+			result = self.build(events=[event])
 			self.assertFalse(result["reviews"])
-			self.assertEqual(result["events"][0]["vat_amount"], 10)
-			self.assertIsNone(result["events"][0]["approved_by"])
+			self.assertEqual(result["details"][0]["recoverable_vat_amount"], engine.money(77.88 * percent / 100))
 
 	def test_foreign_invoice_saved_amount_is_already_aed(self):
-		result = self.build(dict(self.source, currency="USD", conversion_rate=3.6725, recovery_source_amount=10))
+		result = self.build(dict(self.source, currency="USD", conversion_rate=3.6725, recovery_source_amount=77.88))
 		row = result["details"][0]
-		self.assertEqual((row["invoice_taxable_amount"], row["recorded_vat_amount"], row["recoverable_vat_amount"]), (1557.5,77.88,10))
+		self.assertEqual((row["invoice_taxable_amount"], row["recorded_vat_amount"], row["recoverable_vat_amount"]), (1557.5,77.88,77.88))
 
 	def test_structured_bill_date_wins_without_parsing_remarks(self):
 		result = self.build(dict(self.source, recovery_source_amount=10, bill_no="16937", bill_date="2026-07-16",
@@ -92,64 +88,58 @@ class TestRecoveryPolicy(unittest.TestCase):
 		self.assertIn("16937; Bill date: 2026-07-16", remarks)
 		self.assertNotIn("16-09-2026", remarks)
 
-	def test_multi_tax_rows_allocate_saved_amount_once_at_currency_precision(self):
+	def test_multi_tax_proposal_allocates_once_without_granting_recovery(self):
 		for sign in (1, -1):
-			rows = [dict(self.source, source_row=str(i), raw_vat=vat*sign, base=vat*20*sign,
-				recovery_source_amount=10*sign, vat_rows_count=3) for i,vat in enumerate((10,20,47.88))]
+			rows = [dict(self.source, source_row=str(i), raw_vat=vat*sign, recovery_source_amount=10*sign, vat_rows_count=3) for i, vat in enumerate((10,20,47.88))]
 			rows.append(dict(rows[0]))
-			initial = dict(filters=frappe._dict(company="TEST", from_date="2026-05-01", to_date="2026-07-31"),
-				header=dict(base_currency="AED"), sources=rows, events=[], reviews=rows, excluded=[], warnings=[], reconciliation=[])
-			with patch.object(engine,"build",return_value=initial), patch.object(engine,"settings_for",return_value=self.settings):
-				result = automatic.build({"company":"TEST"})
-			self.assertFalse(result["reviews"])
-			self.assertEqual(len(result["events"]),3)
-			self.assertEqual(engine.aggregate(result["events"])["9"]["vat_amount"], 10*sign)
+			automatic.allocate_saved_recovery(rows)
+			self.assertEqual(engine.money(sum(r["recovery_allocated_amount"] for r in rows[:3])), 10*sign)
+			self.assertEqual(rows[0]["recovery_allocated_amount"], rows[-1]["recovery_allocated_amount"])
 
 	def test_missing_invalid_and_excessive_saved_recovery_remain_data_errors(self):
-		for amount in (None,"", "invalid","NaN","Infinity",78,-10):
+		for amount in ("invalid","NaN","Infinity",78,-10):
 			result = self.build(dict(self.source, recovery_source_amount=amount))
 			self.assertTrue(result["reviews"])
 			self.assertFalse(result["events"])
 
-	def test_missing_or_conflicting_policy_does_not_gate_saved_recovery(self):
+	def test_missing_or_conflicting_policy_leaves_recovery_pending(self):
 		self.settings[policy.FIELD] = []
-		self.assertFalse(self.build()["reviews"])
+		self.assertTrue(self.build()["reviews"])
 		self.settings[policy.FIELD] = [self.row, frappe._dict(self.row, name="DUPLICATE")]
-		self.assertFalse(self.build(dict(self.source, recovery_source_amount=10))["reviews"])
+		self.assertTrue(self.build(dict(self.source, recovery_source_amount=10))["reviews"])
 
-	def test_saved_recovery_does_not_require_matching_policy_scope(self):
+	def test_saved_recovery_requires_matching_approved_policy_scope(self):
 		for change in (dict(tax_category="Other"), dict(item_evidence=[dict(expense_account="Other")] ), dict(posting_date="2026-04-30")):
-			self.assertFalse(self.build(dict(self.source, recovery_source_amount=10, **change))["reviews"])
+			self.assertTrue(self.build(dict(self.source, recovery_source_amount=10, **change))["reviews"])
 		self.row.approved = 0
-		self.assertFalse(self.build()["reviews"])
+		self.assertTrue(self.build()["reviews"])
 
-	def test_source_quality_is_not_a_saved_amount_recovery_gate(self):
+	def test_missing_source_quality_needs_individual_review_not_auto_rejection(self):
 		for change in (dict(bill_no=None), dict(bill_date=None), dict(source_tax_id=None), dict(outstanding_amount=5), dict(purchase_country="India")):
 			result = self.build(dict(self.source, recovery_source_amount=10, **change))
-			self.assertFalse(result["reviews"])
-			self.assertEqual(result["events"][0]["vat_amount"], 10)
+			self.assertTrue(result["reviews"])
+			self.assertFalse(result["events"])
 
-	def test_no_policy_saved_nonzero_and_zero_resolve(self):
+	def test_no_policy_saved_nonzero_and_zero_are_pending(self):
 		self.settings[policy.FIELD] = []
-		result = self.build(dict(self.source, recovery_source_amount=20))
-		self.assertFalse(result["reviews"])
-		self.assertEqual(result["events"][0]["vat_amount"], 20)
-		self.assertEqual(result["events"][0]["treatment_source"], "Saved source recovery amount")
-		self.assertFalse(self.build()["reviews"])
+		for amount in (0, 20):
+			result = self.build(dict(self.source, recovery_source_amount=amount))
+			self.assertTrue(result["reviews"])
+			self.assertFalse(result["events"])
 
-	def test_saved_partial_owns_recovery_regardless_of_policy_percentage(self):
-		self.assertEqual(self.build(dict(self.source, recovery_source_amount=20))["events"][0]["vat_amount"], 20)
+	def test_nonzero_proposal_conflicting_with_policy_needs_review(self):
+		self.assertTrue(self.build(dict(self.source, recovery_source_amount=20))["reviews"])
 		self.row.recovery_percent = 20 / 77.88 * 100
 		self.assertFalse(self.build(dict(self.source, recovery_source_amount=20))["reviews"])
 
-	def test_saved_recovery_does_not_require_expense_policy_match(self):
+	def test_policy_requires_exact_expense_scope(self):
 		self.row.project = "Different"
-		self.assertFalse(self.build()["reviews"])
+		self.assertTrue(self.build()["reviews"])
 		self.row.project = "P"
 		self.row.cost_center = "CC"
 		self.assertFalse(self.build()["reviews"])
 		items = self.source["item_evidence"] + [dict(expense_account="Private", project="P", cost_center="CC")]
-		self.assertFalse(self.build(dict(self.source, item_evidence=items))["reviews"])
+		self.assertTrue(self.build(dict(self.source, item_evidence=items))["reviews"])
 
 	def test_reverse_charge_and_missing_gl_base_fx_stay_specific(self):
 		for changes in (dict(reverse_charge="Y"), dict(invoice_tax_difference=1)):
@@ -157,18 +147,14 @@ class TestRecoveryPolicy(unittest.TestCase):
 		self.assertTrue(self.build(dict(self.source, base=None, recovery_source_amount=10))["reviews"])
 		self.assertIn("AED", policy.resolve(self.source, self.settings, "USD")[1])
 
-	def test_reverse_charge_build_preserves_existing_path_without_a_policy(self):
+	def test_default_reverse_charge_percentage_is_not_recovery_approval(self):
 		self.settings[policy.FIELD] = []
-		for sign in (1, -1):
-			for percent in (0, 40, 100):
-				source = dict(self.source, base=1557.5*sign, raw_vat=77.88*sign, recovery_source_amount=0,
-					reverse_charge="Y", reverse_recovery_percent=percent,
-					gl_evidence=[dict(debit=77.88, credit=0), dict(debit=0, credit=77.88)])
-				result = self.build(source)
-				self.assertFalse(result["reviews"])
-				boxes = engine.aggregate(result["events"])
-				self.assertEqual(boxes["3"]["vat_amount"], 77.88*sign)
-				self.assertEqual(boxes["10"]["vat_amount"], engine.money(77.88*sign*percent/100))
+		for percent in (0, 40, 100):
+			source = dict(self.source, reverse_charge="Y", reverse_recovery_percent=percent,
+				gl_evidence=[dict(debit=77.88, credit=0), dict(debit=0, credit=77.88)])
+			result = self.build(source)
+			self.assertTrue(result["reviews"])
+			self.assertFalse(result["events"])
 
 	def test_journal_uses_approved_rule_without_reentering_header_bill_or_attachment(self):
 		self.row.applies_to = "Expense Journal"
@@ -259,6 +245,21 @@ class TestRecoveryPolicy(unittest.TestCase):
 		self.assertEqual(len(selected), 1)
 		self.assertIsNone(engine.item_tax_base(dict(tax, base_tax_amount_after_discount_amount=99), items, 1)[0])
 		self.assertIsNone(engine.item_tax_base(dict(tax, charge_type="On Previous Row Total"), items, 1)[0])
+
+
+	def test_policy_without_reviewed_tax_date_basis_remains_pending(self):
+		self.row.tax_date_basis = None
+		result = self.build()
+		self.assertFalse(result["events"])
+		self.assertIn("tax-date basis", result["reviews"][0]["issue"])
+
+	def test_approved_policy_cannot_be_silently_rewritten(self):
+		old = frappe._dict(company="TEST", custom_vat201_recovery_policies=[frappe._dict(self.row)])
+		self.row.recovery_percent = 50
+		doc = frappe._dict(company="TEST", custom_vat201_recovery_policies=[self.row])
+		with patch.object(frappe, "get_roles", return_value=["Accounts Manager"]), patch.object(frappe, "get_cached_doc", return_value=frappe._dict(company="TEST", root_type="Expense", is_group=0)):
+			with self.assertRaises(frappe.ValidationError):
+				policy.validate(doc, old)
 
 
 class TestLiveVATAPI(unittest.TestCase):

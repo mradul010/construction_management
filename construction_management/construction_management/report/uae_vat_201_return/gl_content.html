@@ -1,0 +1,26 @@
+<style>
+.qatra-vat201-form {max-width:1150px;margin:auto;color:var(--text-color,#30373d);font-size:13px;}
+.qatra-vat201-form table {width:100%;border-collapse:collapse;margin:14px 0;}
+.qatra-vat201-form th,.qatra-vat201-form td {padding:9px;border-bottom:1px solid #ddd;text-align:left;}
+.qatra-vat201-form .number {text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap;}
+.qatra-vat201-form .gl-scroll {overflow-x:auto;}
+.qatra-vat201-form h2 {font-size:18px;margin-top:20px;}
+@media print {.qatra-vat201-form {font-size:10pt;} .qatra-vat201-form tr {page-break-inside:avoid;} .qatra-vat201-form .gl-scroll {overflow:visible;} }
+</style>
+<article class="qatra-vat201-form">
+<h2>VAT per General Ledger</h2>
+<p>{{ result.header.company|e }} · {{ result.header.from_date|e }} to {{ result.header.to_date|e }} · {{ result.get('ledger_summary', {}).get('currency', 'Not Available')|e }}</p>
+<p>Posted movements in configured VAT accounts. No internal recovery approval is needed for these totals. Opening balances are shown separately.</p>
+<table><thead><tr><th>Measure</th><th class="number">Amount ({{ result.get('ledger_summary', {}).get('currency', 'Not Available')|e }})</th></tr></thead><tbody>
+{% for row in rows %}<tr><th>{{ row.description|e }}</th><td class="number">{{ frappe.utils.fmt_money(row.amount, precision=2) if row.amount is not none else 'Not Available' }}</td></tr>{% endfor %}
+</tbody></table>
+<p>Use <strong>View → Internal VAT Review</strong> for recovery decisions and VAT 201 allocations. Net VAT per Books is a ledger balance movement, not the filed return liability.</p>
+{% if result.get('filed_comparison', {}).get('filed_liability') is not none %}
+<h2>Filed Return Comparison</h2><p>Filed liability (AED): {{ frappe.utils.fmt_money(result.filed_comparison.filed_liability, precision=2) }}. GL movement less filed (AED): {{ frappe.utils.fmt_money(result.filed_comparison.gl_less_filed, precision=2) if result.filed_comparison.gl_less_filed is not none else 'Not Available' }}.</p>
+{% endif %}
+{% if result.get('scope_incomplete') %}<p>Source access or report scope is incomplete. Review the detailed audit before relying on these totals.</p>{% endif %}
+<h2>VAT Ledger Entries ({{ entries|length }})</h2>
+<div class="gl-scroll"><table><thead><tr><th>Posting Date</th><th>Voucher</th><th>VAT Account</th><th>GL Entry</th><th class="number">Debit</th><th class="number">Credit</th></tr></thead><tbody>
+{% for row in entries %}<tr><td>{{ row.posting_date|e }}</td><td>{% if interactive %}<a href="{{ row.voucher_url|e }}">{{ row.voucher_no|e }}</a>{% else %}{{ row.voucher_no|e }}{% endif %}<br>{{ row.voucher_type|e }}</td><td>{{ row.account|e }}</td><td>{{ row.name|e }}</td><td class="number">{{ frappe.utils.fmt_money(row.debit, precision=2) }}</td><td class="number">{{ frappe.utils.fmt_money(row.credit, precision=2) }}</td></tr>{% endfor %}
+</tbody></table></div>
+</article>

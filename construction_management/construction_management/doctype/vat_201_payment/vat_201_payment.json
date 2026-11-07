@@ -1,0 +1,131 @@
+{
+  "doctype": "DocType",
+  "name": "VAT 201 Payment",
+  "module": "Construction Management",
+  "engine": "InnoDB",
+  "field_order": [
+    "company",
+    "filing",
+    "payment_date",
+    "payment_reference",
+    "payment_amount",
+    "accounting_voucher_type",
+    "accounting_voucher",
+    "supporting_evidence",
+    "reason",
+    "approved_by",
+    "approved_on"
+  ],
+  "fields": [
+    {
+      "fieldname": "company",
+      "fieldtype": "Link",
+      "label": "Company",
+      "options": "Company",
+      "reqd": 1,
+      "in_list_view": 1
+    },
+    {
+      "fieldname": "filing",
+      "fieldtype": "Link",
+      "label": "Filing",
+      "options": "VAT 201 Filing",
+      "reqd": 1,
+      "in_list_view": 1
+    },
+    {
+      "fieldname": "payment_date",
+      "fieldtype": "Date",
+      "label": "Payment Date",
+      "reqd": 1
+    },
+    {
+      "fieldname": "payment_reference",
+      "fieldtype": "Data",
+      "label": "Payment Reference",
+      "reqd": 1
+    },
+    {
+      "fieldname": "payment_amount",
+      "fieldtype": "Currency",
+      "label": "Payment Amount",
+      "options": "AED",
+      "reqd": 1,
+      "in_list_view": 1
+    },
+    {
+      "fieldname": "accounting_voucher_type",
+      "fieldtype": "Select",
+      "label": "Accounting Voucher Type",
+      "options": "\nPayment Entry\nJournal Entry"
+    },
+    {
+      "fieldname": "accounting_voucher",
+      "fieldtype": "Dynamic Link",
+      "label": "Accounting Voucher",
+      "options": "accounting_voucher_type"
+    },
+    {
+      "fieldname": "supporting_evidence",
+      "fieldtype": "Attach",
+      "label": "Supporting Evidence",
+      "reqd": 1
+    },
+    {
+      "fieldname": "reason",
+      "fieldtype": "Small Text",
+      "label": "Reason",
+      "reqd": 1
+    },
+    {
+      "fieldname": "approved_by",
+      "fieldtype": "Link",
+      "label": "Approved By",
+      "options": "User",
+      "read_only": 1
+    },
+    {
+      "fieldname": "approved_on",
+      "fieldtype": "Datetime",
+      "label": "Approved On",
+      "read_only": 1
+    }
+  ],
+  "permissions": [
+    {
+      "role": "Accounts Manager",
+      "read": 1,
+      "write": 1,
+      "create": 1,
+      "submit": 1,
+      "print": 1,
+      "export": 1
+    },
+    {
+      "role": "System Manager",
+      "read": 1,
+      "write": 1,
+      "create": 1,
+      "submit": 1,
+      "print": 1,
+      "export": 1
+    },
+    {
+      "role": "Accounts User",
+      "read": 1,
+      "print": 1,
+      "export": 1
+    },
+    {
+      "role": "Auditor",
+      "read": 1,
+      "print": 1,
+      "export": 1
+    }
+  ],
+  "autoname": "hash",
+  "is_submittable": 1,
+  "track_changes": 1,
+  "sort_field": "modified",
+  "sort_order": "DESC"
+}

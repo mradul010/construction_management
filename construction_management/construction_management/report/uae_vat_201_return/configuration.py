@@ -12,8 +12,13 @@ def setup_recovery_policy():
 
 
 def setup():
+	from construction_management.construction_management.report.uae_vat_201_return.filing import setup as setup_filing
+	setup_filing()
+	from frappe.custom.doctype.property_setter.property_setter import make_property_setter
+	make_property_setter("UAE VAT Settings", None, "track_changes", 1, "Check", for_doctype=True)
 	for name in ("vat_201_filing_period", "vat_201_classification", "vat_201_recovery_policy"):
 		frappe.reload_doc("construction_management", "doctype", name)
+	create_custom_fields({"UAE VAT Settings": [dict(fieldname="custom_vat201_standard_rate", fieldtype="Percent", label="VAT 201 Standard Rate (%)", default="5", module="Construction Management")]})
 	fields = [
 		("custom_vat201_periods", "Table", "VAT 201 Filing Periods", "VAT 201 Filing Period"),
 		("custom_vat201_classifications", "Table", "VAT 201 Classifications", "VAT 201 Classification"),
@@ -81,17 +86,26 @@ def hide_legacy_purchase_recovery_fields():
 
 
 def validate_settings(doc, method=None):
+	from construction_management.construction_management.report.uae_vat_201_return.engine import standard_rate
+	rate = standard_rate(doc)
+	if not rate.is_finite() or not 0 < rate <= 100:
+		frappe.throw(_("Configure a valid VAT 201 standard rate"))
 	previous = doc.get_doc_before_save()
 	from construction_management.construction_management.report.uae_vat_201_return.policy import validate
 	validate(doc, previous)
 	old = {r.name: r.as_dict() for r in previous.get("custom_vat201_classifications", [])} if previous else {}
 	keys = set()
 	manager = bool(set(frappe.get_roles()) & {"Accounts Manager", "System Manager"})
-	if not manager and any(r.get("approved") and name not in {row.name for row in doc.get("custom_vat201_classifications", [])} for name,r in old.items()):
-		frappe.throw(_("Only Accounts Managers may remove approved VAT classifications"), frappe.PermissionError)
+	if any(r.get("approved") and name not in {row.name for row in doc.get("custom_vat201_classifications", [])} for name,r in old.items()):
+		frappe.throw(_("Revoke approved VAT classifications in a separate reviewed save before removing them"), frappe.PermissionError)
 	for account in doc.uae_vat_accounts:
 		if frappe.get_cached_value("Account", account.account, "company") != doc.company:
 			frappe.throw(_("VAT accounts must belong to the configured Company"))
+	if previous:
+		current_periods = {p.name:p for p in doc.get("custom_vat201_periods", [])}
+		for prior in previous.get("custom_vat201_periods", []):
+			if prior.status == "Filed" and (prior.name not in current_periods or any(current_periods[prior.name].get(k) != prior.get(k) for k in ("from_date", "to_date", "status", "filing_reference", "submission_date"))):
+				frappe.throw(_("Historical filed period references and dates are protected; use a separate correction record"))
 	for period in doc.get("custom_vat201_periods", []):
 		if not period.from_date or not period.to_date or getdate(period.from_date) > getdate(period.to_date):
 			frappe.throw(_("Each VAT filing period requires valid start and end dates"))
@@ -156,9 +170,11 @@ def validate_settings(doc, method=None):
 		keys.add(key)
 		if any(k[:3]==key[:3] and k!=key for k in keys) and (row.box=="Outside VAT" or any(r.approved and r.box=="Outside VAT" and (r.voucher_type,r.voucher_no,r.source_row)==key[:3] for r in doc.get("custom_vat201_classifications", []))):
 			frappe.throw(_("An Outside VAT exclusion cannot coexist with a VAT classification of the same source"))
-		review_fields = ("voucher_type","voucher_no","source_row","box","tax_date","recovery_confirmed","recovery_percent","override_base","taxable_base_aed","aed_exchange_rate","is_adjustment","adjustment_type","reason","supporting_reference","approved","source_fingerprint","source_evidence","journal_treatment")
+		review_fields = ("voucher_type","voucher_no","source_row","box","tax_date","recovery_confirmed","recovery_percent","override_base","taxable_base_aed","aed_exchange_rate","is_adjustment","adjustment_type","reason","supporting_reference","approved","source_fingerprint","source_evidence","journal_treatment","overlap_reviewed","overlap_reference")
 		changed = any(row.get(k) != old.get(row.name, {}).get(k) for k in review_fields)
 		if changed:
+			if old.get(row.name, {}).get("approved"):
+				frappe.throw(_("Revoke this approval in a separate save before changing its tax treatment"))
 			if not manager:
 				frappe.throw(_("Only Accounts Managers may approve or change approved VAT classifications"), frappe.PermissionError)
 			row.approved_by, row.approval_time = frappe.session.user, now_datetime()

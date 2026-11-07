@@ -1,6 +1,6 @@
 """VAT preparation from posted evidence; classification never changes accounting."""
 from collections import defaultdict
-from decimal import Decimal
+from decimal import Decimal, ROUND_HALF_UP
 
 import frappe
 from frappe import _
@@ -27,7 +27,7 @@ def number(value):
 
 
 def money(value):
-	return flt(value, frappe.get_precision("GL Entry", "debit", currency="AED"))
+	return float(number(value).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP))
 
 
 def access(company):
@@ -40,6 +40,14 @@ def access(company):
 def settings_for(company):
 	names = frappe.get_list("UAE VAT Settings", filters={"company": company}, pluck="name", limit_page_length=1)
 	return frappe.get_doc("UAE VAT Settings", names[0]) if names else frappe._dict()
+
+
+def standard_rate(settings=None):
+	value = (settings or {}).get("custom_vat201_standard_rate")
+	if value is None:
+		field = frappe.get_meta("UAE VAT Settings").get_field("custom_vat201_standard_rate")
+		value = field.default if field else None
+	return number(value)
 
 
 def normalize(filters, settings):
@@ -253,12 +261,14 @@ def apply_rule(source, rule, base_currency, *, source_verified=False):
 		from construction_management.construction_management.report.uae_vat_201_return.review import fingerprint, decision_fingerprint
 		if rule.source_fingerprint not in (fingerprint(source), decision_fingerprint(source)):
 			return None, "Source evidence changed since review; approval must be renewed"
+	if not rule.get("tax_date"):
+		return None, "Reviewed tax date is required"
 	if box=="Outside VAT":
 		return dict(source,box=box,amount=0,vat_amount=0,adjustment=0,tax_date=str(rule.tax_date),reason=rule.reason,supporting_reference=rule.supporting_reference,classification="Outside VAT scope",company=source.get("company")),None
 	if box in INPUT and (not rule.get("recovery_confirmed") or not 0 <= flt(rule.recovery_percent) <= 100):
 		return None, "Input VAT recoverability has not been explicitly reviewed"
 	rate = Decimal(1) if base_currency == "AED" else number(rule.get("aed_exchange_rate"))
-	if rate <= 0:
+	if not rate.is_finite() or rate <= 0:
 		return None, "Approved tax-point AED exchange rate is missing"
 	raw_base_aed = number(source["base"]) * rate if source.get("base") is not None else None
 	if raw_base_aed is not None and "debit" in source and box in OUTPUT and source.get("journal_vat_role") != "Output":
@@ -282,7 +292,9 @@ def apply_rule(source, rule, base_currency, *, source_verified=False):
 	if source.get("journal_vat_role") == "Input" and box in OUTPUT[:7]:
 		return None, "Recorded expense input VAT cannot be reported as ordinary output VAT"
 	if source.get("journal_duplicate_risk"):
-		return None, source["journal_duplicate_risk"]
+		from construction_management.construction_management.report.uae_vat_201_return.review import decision_fingerprint
+		if source_verified or not (rule.get("overlap_reviewed") and rule.get("overlap_reference") and rule.get("source_fingerprint") == decision_fingerprint(source)):
+			return None, source["journal_duplicate_risk"]
 	if box=="2" and (vat>0 or base>0):
 		return None, "Tourist refunds require negative posted tax corrections"
 	if box in ("3","10") and source["voucher_type"] == "Purchase Invoice" and source.get("reverse_charge") != "Y":
@@ -299,10 +311,6 @@ def apply_rule(source, rule, base_currency, *, source_verified=False):
 	source_base = base
 	if box in INPUT:
 		vat *= number(rule.recovery_percent) / 100
-		if box == "9" and source["voucher_type"] == "Purchase Invoice" and source.get("recovery_source_amount") not in (None,"",0,"0"):
-			saved = number(source.get("recovery_allocated_amount", source["recovery_source_amount"]))
-			if not saved.is_finite() or (saved and (source.get("vat_rows_count") == 1 or "recovery_allocated_amount" in source) and money(saved) != money(vat)):
-				return None, "Approved recovery conflicts with the nonzero saved AED recovery amount; reconcile the source amount and review allocation"
 		if not flt(rule.recovery_percent):
 			base = Decimal(0)
 	event = dict(source, box=box, amount=money(base),vat_amount=0 if rule.get("is_adjustment") else money(vat),
@@ -427,6 +435,7 @@ def build(filters, settings_override=None):
 	seen = set()
 	for source in sources:
 		source["company"] = f.company
+		source["configured_standard_rate"] = standard_rate(settings)
 		key = (source["voucher_type"],source["voucher_no"],source["source_row"])
 		matched = by_source.get(key,[])
 		if source.get("journal_grouped_allocation"):

@@ -29,7 +29,9 @@
     "supporting_reference",
     "approved",
     "approved_by",
-    "approval_time"
+    "approval_time",
+    "overlap_reviewed",
+    "overlap_reference"
   ],
   "fields": [
     {"fieldname": "origin", "label": "Classification Origin", "fieldtype": "Select", "options": "Manual\nSystem Derived", "read_only": 1},
@@ -136,7 +138,9 @@
       "fieldtype": "Datetime",
       "label": "Approval Time",
       "read_only": 1
-    }
+    },
+    {"fieldname": "overlap_reviewed", "label": "Advance / Invoice VAT Overlap Reconciled", "fieldtype": "Check"},
+    {"fieldname": "overlap_reference", "label": "Overlap Reconciliation Evidence Reference", "fieldtype": "Data"}
   ],
   "permissions": []
 }

@@ -9,13 +9,15 @@ from construction_management.construction_management.report.uae_vat_201_return i
 
 FIELD = "custom_vat201_recovery_policies"
 POLICY_FIELDS = ("policy_name", "enabled", "applies_to", "expense_account", "tax_category", "tax_template",
-	"project", "cost_center", "valid_from", "valid_to", "recovery_percent", "payment_condition", "basis", "supporting_reference", "approved")
+	"project", "cost_center", "valid_from", "valid_to", "recovery_percent", "payment_condition", "tax_date_basis", "basis", "supporting_reference", "approved")
 
 
 def validate(doc, previous=None):
 	old = {r.name: r for r in previous.get(FIELD, [])} if previous else {}
 	rows = doc.get(FIELD, [])
 	manager = bool(set(frappe.get_roles()) & {"Accounts Manager", "System Manager"})
+	if any(row.get("approved") and name not in {r.name for r in rows} for name, row in old.items()):
+		frappe.throw(_("Revoke an approved recovery policy before removing it"), frappe.PermissionError)
 	if not manager and set(old) != {r.name for r in rows}:
 		frappe.throw(_("Only Accounts Managers may change VAT recovery policies"), frappe.PermissionError)
 	for row in rows:
@@ -46,6 +48,10 @@ def validate(doc, previous=None):
 			if row.get(key) and frappe.get_cached_value(dt, row.get(key), "company") != doc.company:
 				frappe.throw(_("Policy scope must belong to the configured Company"))
 		if row.approved:
+			if changed and prior and prior.approved:
+				frappe.throw(_("Revoke the approved recovery policy in a separate save before changing it"))
+			if changed and row.get("tax_date_basis") != "Posting date verified as tax date":
+				frappe.throw(_("Policy approval requires an explicit reviewed tax-date basis"))
 			if not row.basis or not row.supporting_reference:
 				frappe.throw(_("Policy approval requires business-use basis and supporting policy evidence"))
 			row.approved_by = frappe.session.user if changed else prior.approved_by
@@ -107,10 +113,12 @@ def resolve(source, settings, base_currency):
 	vat = engine.number(source["raw_vat"])
 	if saved and (saved * vat < 0 or abs(saved) > abs(vat) or source.get("vat_rows_count") != 1):
 		return None, "Saved recovery amount has conflicting sign, limit or multi-row allocation"
-	if not row and not saved:
+	if not row:
 		if type_name == "Expense Journal":
 			return None, "Recovery not specified in source."
 		return None, "No approved recovery policy matches the source expense/tax classification; default zero is not an explicit recovery decision"
+	if row.get("tax_date_basis") != "Posting date verified as tax date":
+		return None, "Approved policy has no reviewed tax-date basis; verify the source tax point individually"
 	try:
 		percent = engine.number(row.recovery_percent) if row else saved / vat * 100
 	except (InvalidOperation, ValueError, TypeError):
@@ -131,10 +139,6 @@ def resolve(source, settings, base_currency):
 		# expense group need not repeat it in per-journal bill/attachment fields.
 		if row.payment_condition == "Paid invoices only":
 			return None, "Journal payment condition requires an explicit supported decision; invoice paid status is not available"
-	if not row:
-		return frappe._dict(box="9", tax_date=source["posting_date"], reason="Explicit saved AED recovery amount on the submitted invoice",
-			supporting_reference=source["voucher_no"], recovery_confirmed=1, recovery_percent=float(percent), override_base=0, is_adjustment=0,
-			treatment_source="Saved source recovery amount"), None
 	return frappe._dict(box="9", tax_date=source["posting_date"], reason=row.basis, supporting_reference=row.supporting_reference,
 		recovery_confirmed=1, recovery_percent=float(percent), override_base=0, is_adjustment=0,
 		treatment_source="Company-approved policy", policy_id=row.name, policy_name=row.policy_name, policy_approved_by=row.approved_by, policy_approval_time=row.approval_time), None

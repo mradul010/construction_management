@@ -20,13 +20,16 @@ def form_data(result):
 			for field in ("amount", "vat_amount", "adjustment")]
 		return dict(box=key, description=box["description"], cells=cells, total=key in ("8", "11", "14"))
 	h = result["header"]
-	return dict(header=h, status=result["status"], outputs=[row(key) for key in OUTPUT_KEYS],
+	return dict(header=h, status=result["status"], filed_comparison=result.get("filed_comparison", {}), outputs=[row(key) for key in OUTPUT_KEYS],
 		inputs=[row(key) for key in INPUT_KEYS], net=[row(key) for key in NET_KEYS],
 		provisional=any(box.get("completeness", {}).get(field, {}).get("provisional")
 			for box in boxes.values() for field in ("amount", "vat_amount", "adjustment")))
 
 
 def form_html(result, interactive=False):
+	from construction_management.construction_management.report.uae_vat_201_return import gl_view
+	if gl_view.enabled(result):
+		return gl_view.html(result, interactive)
 	return frappe.render_template("construction_management/report/uae_vat_201_return/form_content.html",
 		dict(form=form_data(result), interactive=interactive))
 
@@ -129,7 +132,11 @@ def workbook_bytes(result, audit=False, audit_bytes=None):
 	workbook = load_workbook(io.BytesIO(audit_bytes)) if audit else Workbook()
 	if not audit:
 		workbook.remove(workbook.active)
-	form_sheet(workbook, result)
+	from construction_management.construction_management.report.uae_vat_201_return import gl_view
+	if gl_view.enabled(result):
+		gl_view.sheets(workbook, result)
+	else:
+		form_sheet(workbook, result)
 	workbook.active = 0
 	output = io.BytesIO()
 	workbook.save(output)

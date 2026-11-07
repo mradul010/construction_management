@@ -21,7 +21,7 @@ def explain(result):
 	exclusions = recovery_exclusions(result)
 	for row in result["reconciliation"]:
 		if row["description"] == "Input VAT":
-			row["explanation"] = "Saved/reviewed recovery exclusions: AED " + str(exclusions) + ". Recorded ledger VAT is not automatically recoverable. Unknown journal recovery and tax-date timing are separate; see the voucher/account reconciliation register."
+			row["explanation"] = "Approved recovery exclusions: AED " + str(exclusions) + ". Recorded ledger VAT is not automatically recoverable. Unknown journal recovery and tax-date timing are separate; see the voucher/account reconciliation register."
 		elif row["description"] == "Output VAT":
 			row["explanation"] = "Known return subtotal versus recorded output VAT (credit minus debit). Unallocated output and tax-date differences remain separate; see voucher/account references."
 		elif not row.get("explanation"):
@@ -175,9 +175,9 @@ def bridge(result):
 		"pending_output", "pending_input", "known_nonclaimed", "timing_output", "timing_input", "residual_output", "residual_input", "classification_difference")}
 	m = result["tax_measures"]
 	result["measure_labels"] = dict(recorded_output="Recorded Output VAT", recorded_input="Recorded Net Input VAT",
-		claimed_output="Output Allocated to Return", claimed_input="Recoverable Input VAT from Saved Sources / Supported Journal Treatment",
+		claimed_output="Output Allocated to Return", claimed_input="Approved Recorded Input VAT Allocated to Return",
 		pending_output="Output Pending Return Allocation", pending_input="Input Pending Recovery Verification",
-		known_nonclaimed="Input VAT Unclaimed per Saved Recovery / Supported Decisions", input_not_claimed="Recorded Input VAT Less Current Return Claim (includes pending items)",
+		known_nonclaimed="Recorded Input VAT Excluded by Approved Recovery Decisions", input_not_claimed="Recorded Input VAT Less Current Return Claim (includes pending items)",
 		timing_output="Output Tax-date Timing Difference",timing_input="Input Tax-date Timing Difference",
 		residual_output="Unexplained Output Residual",residual_input="Unexplained Input Residual",classification_difference="GL-to-recorded-tax Unexplained Residual",
 		recorded_net_movement="Recorded Output Less Net Input (credit movement)")

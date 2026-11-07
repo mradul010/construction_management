@@ -59,9 +59,10 @@ def sales_emirate_box(source):
 	return "1" + chr(97 + engine.get_emirates().index(emirate)), None
 
 
-def source_rule(source, base_currency):
+def source_rule(source, base_currency, standard_rate=None):
 	"""Return a calculation adapter only when source evidence establishes treatment."""
 	dt = source["voucher_type"]
+	standard_rate = engine.standard_rate() if standard_rate is None else engine.number(standard_rate)
 	box, recovery = None, None
 	evidence = (source.get("verification_reference") or "").strip()
 	if source.get("invoice_tax_difference") and source.get("reverse_charge") != "Y":
@@ -70,7 +71,7 @@ def source_rule(source, base_currency):
 		if source.get("treatment_hint") in ("Zero Rated", "Exempt") and not source.get("raw_vat"):
 			box = "4" if source["treatment_hint"] == "Zero Rated" else "5"
 			evidence = "Explicit saved source-item tax treatment: " + source["source_row"]
-		elif source.get("tax_account") and flt(source.get("tax_rate")) == 5:
+		elif source.get("tax_account") and standard_rate > 0 and engine.number(source.get("tax_rate")) == standard_rate:
 			box, error = sales_emirate_box(source)
 			if error:
 				return None, error
@@ -131,9 +132,9 @@ def source_rule(source, base_currency):
 				box, error = sales_emirate_box(source)
 				if error:
 					return None, "Customer-advance output VAT: reporting VAT Emirate is missing or invalid on the transaction or an authoritative linked document"
-				if flt(source.get("tax_rate")) != 5:
+				if standard_rate <= 0 or engine.number(source.get("tax_rate")) != standard_rate:
 					return None, "Customer-advance output VAT rate does not establish standard-rated Emirate reporting"
-				evidence = "Saved customer-advance base/generated VAT/receivable reconciliation: " + source["base_row_reference"]
+				return None, "Customer-advance VAT requires approved supply allocation, tax date and supporting evidence"
 			elif source.get("journal_invoice_linked"):
 				return None, "Invoice-linked journal VAT is not an additional expense claim; verify settlement or duplicate invoice VAT"
 			elif source.get("journal_match_issue"):
@@ -158,13 +159,7 @@ def build(filters=None, settings_override=None):
 	# The existing reader enforces source permissions, dates, signs and active GL.
 	# Existing valid verified decisions remain usable; no review rows are written.
 	result = engine.build(filters, settings_override=settings_override)
-	# Saved source recovery supersedes historical report-only purchase approvals.
-	# Keep those audit records intact; only replace their calculated contributions.
-	if "sources" in result:
-		for field in ("events", "reviews", "excluded", "timing_events"):
-			result[field] = [row for row in result.get(field, []) if not standard_purchase(row)]
-		result["reviews"].extend(dict(row) for row in result["sources"] if standard_purchase(row)
-			and getdate(result["filters"].from_date) <= getdate(row["posting_date"]) <= getdate(result["filters"].to_date))
+	result["report_view"] = (frappe.parse_json(filters) or {}).get("report_view") or "General Ledger"
 	settings = settings_override if settings_override is not None else engine.settings_for(result["filters"].company)
 	result["settings_name"] = settings.get("name")
 	result["calculated_at"] = str(frappe.utils.now_datetime())
@@ -197,15 +192,17 @@ def build(filters=None, settings_override=None):
 			continue
 		seen.add(key)
 		row = dict(source, currency=result["header"]["base_currency"], vat_box=None)
-		if not standard_purchase(source) and (source.get("classification_status") in ("Rejected", "Needs Review") or source.get("requires_review") or source.get("review", "").startswith(("Duplicated", "Source evidence changed", "Outside VAT exclusion conflicts"))):
+		if (source.get("classification_status") in ("Rejected", "Needs Review") or source.get("requires_review") or source.get("review", "").startswith(("Duplicated", "Source evidence changed", "Outside VAT exclusion conflicts"))):
 			rule, problem = None, "Previous source verification is rejected, conflicting or no longer valid; verify source evidence"
 			events = [e for e in events if tuple(e[k] for k in ("voucher_type", "voucher_no", "source_row")) != key]
 		else:
-			if source.get("journal_category") == "Recorded purchase VAT":
+			if source["voucher_type"] == "Purchase Invoice" and source.get("reverse_charge") == "Y":
+				rule, problem = None, "Reverse-charge output and recovery require approved tax treatment and tax date"
+			elif standard_purchase(source) or source.get("journal_category") == "Recorded purchase VAT":
 				from construction_management.construction_management.report.uae_vat_201_return.policy import resolve
 				rule, problem = resolve(source, settings, result["header"]["base_currency"])
 			else:
-				rule, problem = source_rule(source, result["header"]["base_currency"])
+				rule, problem = source_rule(source, result["header"]["base_currency"], engine.standard_rate(settings))
 		if rule:
 			side = "Input" if rule.box in engine.INPUT else "Output"
 			if source.get("tax_account") and mappings.get(source["tax_account"]) not in (side,"Both"):
@@ -266,6 +263,8 @@ def build(filters=None, settings_override=None):
 			treatment = source.get("treatment_hint")
 			row.update(treatment=(treatment + " purchase - no input claim") if treatment in ("Zero Rated", "Exempt") else "No recorded VAT - no input claim", vat_amount=0)
 			details.append(row)
+	from construction_management.construction_management.report.uae_vat_201_return.tax_evidence import load as documentary_events
+	events.extend(documentary_events(result))
 	for event in events:
 		event["treatment"] = transaction_label(event)
 		details.append(dict(event, vat_box=event["box"], treatment=event.get("treatment") or event.get("recovery_basis") or "Preserved verified source treatment"))
@@ -276,6 +275,8 @@ def build(filters=None, settings_override=None):
 			remarks="Approved tax/reporting date: " + str(event.get("tax_date")) + "; not included in this period's claim"))
 	details.extend(issues)
 	for row in details:
+		if row["voucher_type"] == "Purchase Invoice" and row.get("raw_vat"):
+			row["source_quality_warnings"] = [label for key, label in (("bill_no", "Supplier invoice number missing"), ("bill_date", "Supplier invoice date missing"), ("source_tax_id", "Supplier TRN missing")) if not row.get(key)]
 		if row.get("recoverable_vat_amount") is not None:
 			full = engine.number(row.get("recorded_vat_amount"))
 			claim = engine.number(row["recoverable_vat_amount"])
@@ -304,6 +305,10 @@ def build(filters=None, settings_override=None):
 	result.update(events=events, boxes=list(boxes.values()), reviews=issues, details=details, warnings=warnings)
 	from construction_management.construction_management.report.uae_vat_201_return import reconciliation, calendar
 	reconciliation.apply(result, settings)
+	for side, boxes in (("Output", engine.OUTPUT), ("Input", engine.INPUT)):
+		amount = engine.money(sum((engine.number(e["vat_amount"]) for e in events if e.get("recorded_in_gl") is False and e["box"] in boxes), engine.number(0)))
+		if amount:
+			result["reconciliation"].append(dict(description="Documentary " + side + " VAT outside GL", report_amount=amount, ledger_amount=None, difference=None, currency="AED", explanation="Approved documentary source amounts; see VAT 201 Tax Evidence. These do not change recorded GL VAT."))
 	from construction_management.construction_management.report.uae_vat_201_return.completeness import apply
 	apply(result, settings)
 	result["calendar_issues"] = calendar.validate(result["header"], settings) if result["header"].get("from_date") else []
@@ -319,6 +324,8 @@ def build(filters=None, settings_override=None):
 	result["calculation_description"] = "Calculated from saved ERPNext records"
 	result["return_complete"] = not issues and not result.get("scope_incomplete") and not result["warnings"]
 	result["status"] = PRELIMINARY if not result["return_complete"] else result["calculation_description"]
+	from construction_management.construction_management.report.uae_vat_201_return.filing import attach_comparison
+	attach_comparison(result)
 	return result
 
 
@@ -353,6 +360,8 @@ def zero_claim_detail(source):
 
 def detail_remarks(row):
 	parts = [row.get("remarks") or (row.get("reason") if row.get("recoverable_vat_amount") is None else "") or ""]
+	if row.get("recorded_in_gl") is False:
+		parts.append("Documentary VAT outside GL; source: " + str(row.get("source_reference") or "") + "; evidence: " + str(row.get("supporting_reference") or ""))
 	if row.get("voucher_type") == "Journal Entry" and row.get("journal_category") == "Recorded purchase VAT":
 		parts.extend(["Project: " + str(row.get("project") or "not saved"),
 			"Cost Center: " + str(row.get("cost_center") or "not saved")])

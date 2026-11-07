@@ -202,8 +202,9 @@ class TestJournalVAT(unittest.TestCase):
 			source, doc = self.advance(reversal=reversal, emirate="Ras Al Khaimah")
 			journal.link_advance_evidence([source], [])
 			rule, error = automatic.source_rule(source, "AED")
-			self.assertIsNone(error)
-			event, error = engine.apply_rule(source, rule, "AED", source_verified=True)
+			self.assertIn("approved", error)
+			rule = frappe._dict(box="1f", tax_date=source["posting_date"], approved_by="Reviewer", reason="Advance tax invoice", supporting_reference="EVIDENCE")
+			event, error = engine.apply_rule(source, rule, "AED")
 			self.assertIsNone(error)
 			sign = -1 if reversal else 1
 			self.assertEqual(event["box"], "1f")
@@ -265,7 +266,7 @@ class TestJournalVAT(unittest.TestCase):
 
 	def test_prepared_advance_and_reversal_contribute_to_correct_output_summary(self):
 		sources = [self.advance(emirate="Ras Al Khaimah")[0], self.advance(reversal=True, emirate="Ras Al Khaimah", source_row="REVERSAL-GL")[0]]
-		result = dict(filters=frappe._dict(company="TEST"), header=dict(base_currency="AED"), events=[], reviews=sources,
+		result = dict(filters=frappe._dict(company="TEST"), header=dict(base_currency="AED"), events=[engine.apply_rule(s, frappe._dict(box="1f", tax_date=s["posting_date"], approved_by="Reviewer", reason="Advance tax invoice", supporting_reference="EVIDENCE"), "AED")[0] for s in sources], reviews=[],
 			excluded=[], warnings=[], reconciliation=[])
 		settings = {"uae_vat_accounts":[frappe._dict(account="VAT", custom_vat201_side="Both")]}
 		with patch.object(engine, "build", return_value=result), patch.object(engine, "settings_for", return_value=settings):

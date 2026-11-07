@@ -63,14 +63,14 @@ class TestRecordedBridge(unittest.TestCase):
 		self.assertNotEqual(review.decision_fingerprint(s),review.decision_fingerprint(dict(s,recovery_source_amount=10)))
 		self.assertNotEqual(review.decision_fingerprint(s),review.decision_fingerprint(dict(s,voucher_no='PI-1')))
 
-	def test_saved_zero_is_not_pending_in_actual_pipeline(self):
+	def test_saved_zero_is_pending_in_actual_pipeline(self):
 		s = dict(voucher_type='Purchase Invoice',voucher_no='PI',source_row='TAX',posting_date='2026-06-01',
 			tax_account='VAT',base=1000,raw_vat=50,recovery_source_amount=0,vat_rows_count=1)
 		r = dict(filters=frappe._dict(company='TEST'),header=dict(base_currency='AED'),events=[],reviews=[s],excluded=[],warnings=[],reconciliation=[])
 		with patch.object(engine,'build',return_value=r), patch.object(engine,'settings_for',return_value=self.settings):
 			output = automatic.build({'company':'TEST'})
-		self.assertEqual(output['details'][0]['recovery_status'],'Saved source zero')
-		self.assertFalse(output['reviews'])
+		self.assertEqual(output['details'][0]['recovery_status'],'Not specified in source')
+		self.assertTrue(output['reviews'])
 		self.assertFalse(output['events'])
 
 	def test_authorized_review_preserves_zero_approval_without_invoice_change(self):
@@ -95,7 +95,7 @@ class TestRecordedBridge(unittest.TestCase):
 			tax_account='VAT',base=1000,raw_vat=50,recovery_source_amount=20,vat_rows_count=1)
 		rule = frappe._dict(box='9',tax_date='2026-06-01',reason='TEST',supporting_reference='TEST',approved_by='Reviewer',
 			recovery_confirmed=1,recovery_percent=100)
-		self.assertIn('conflicts',engine.apply_rule(s,rule,'AED')[1])
+		self.assertIsNone(engine.apply_rule(s,rule,'AED')[1])
 		rule.recovery_percent = 40
 		self.assertIsNone(engine.apply_rule(s,rule,'AED')[1])
 

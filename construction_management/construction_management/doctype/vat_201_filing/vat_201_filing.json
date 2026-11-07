@@ -1,0 +1,172 @@
+{
+  "doctype": "DocType",
+  "name": "VAT 201 Filing",
+  "module": "Construction Management",
+  "engine": "InnoDB",
+  "field_order": [
+    "company",
+    "from_date",
+    "to_date",
+    "fta_reference",
+    "submission_date",
+    "filed_liability_known",
+    "filed_liability",
+    "amount_due_known",
+    "amount_due",
+    "filed_values",
+    "correction_of",
+    "calculation_snapshot",
+    "notes",
+    "supporting_evidence",
+    "reason",
+    "approved_by",
+    "approved_on"
+  ],
+  "fields": [
+    {
+      "fieldname": "company",
+      "fieldtype": "Link",
+      "label": "Company",
+      "options": "Company",
+      "reqd": 1,
+      "in_list_view": 1
+    },
+    {
+      "fieldname": "from_date",
+      "fieldtype": "Date",
+      "label": "From Date",
+      "reqd": 1,
+      "in_list_view": 1
+    },
+    {
+      "fieldname": "to_date",
+      "fieldtype": "Date",
+      "label": "To Date",
+      "reqd": 1,
+      "in_list_view": 1
+    },
+    {
+      "fieldname": "fta_reference",
+      "fieldtype": "Data",
+      "label": "Fta Reference",
+      "reqd": 1,
+      "in_list_view": 1
+    },
+    {
+      "fieldname": "submission_date",
+      "fieldtype": "Date",
+      "label": "Submission Date",
+      "reqd": 1
+    },
+    {
+      "fieldname": "filed_liability_known",
+      "fieldtype": "Check",
+      "label": "Filed Box 14 Known",
+      "default": "0"
+    },
+    {
+      "fieldname": "filed_liability",
+      "fieldtype": "Currency",
+      "label": "Filed Box 14 (AED)",
+      "options": "AED"
+    },
+    {
+      "fieldname": "amount_due_known",
+      "fieldtype": "Check",
+      "label": "Amount Due Known",
+      "default": "0"
+    },
+    {
+      "fieldname": "amount_due",
+      "fieldtype": "Currency",
+      "label": "Amount Due",
+      "options": "AED"
+    },
+    {
+      "fieldname": "filed_values",
+      "fieldtype": "Table",
+      "label": "Known Filed Values Only (Omitted Values Are Unknown)",
+      "options": "VAT 201 Filed Value"
+    },
+    {
+      "fieldname": "correction_of",
+      "fieldtype": "Link",
+      "label": "Correction Of",
+      "options": "VAT 201 Filing"
+    },
+    {
+      "fieldname": "calculation_snapshot",
+      "fieldtype": "Code",
+      "label": "Calculation Snapshot",
+      "options": "JSON",
+      "read_only": 1
+    },
+    {
+      "fieldname": "notes",
+      "fieldtype": "Small Text",
+      "label": "Notes"
+    },
+    {
+      "fieldname": "supporting_evidence",
+      "fieldtype": "Attach",
+      "label": "Supporting Evidence",
+      "reqd": 1
+    },
+    {
+      "fieldname": "reason",
+      "fieldtype": "Small Text",
+      "label": "Reason",
+      "reqd": 1
+    },
+    {
+      "fieldname": "approved_by",
+      "fieldtype": "Link",
+      "label": "Approved By",
+      "options": "User",
+      "read_only": 1
+    },
+    {
+      "fieldname": "approved_on",
+      "fieldtype": "Datetime",
+      "label": "Approved On",
+      "read_only": 1
+    }
+  ],
+  "permissions": [
+    {
+      "role": "Accounts Manager",
+      "read": 1,
+      "write": 1,
+      "create": 1,
+      "submit": 1,
+      "print": 1,
+      "export": 1
+    },
+    {
+      "role": "System Manager",
+      "read": 1,
+      "write": 1,
+      "create": 1,
+      "submit": 1,
+      "print": 1,
+      "export": 1
+    },
+    {
+      "role": "Accounts User",
+      "read": 1,
+      "print": 1,
+      "export": 1
+    },
+    {
+      "role": "Auditor",
+      "read": 1,
+      "print": 1,
+      "export": 1
+    }
+  ],
+  "autoname": "hash",
+  "is_submittable": 1,
+  "track_changes": 1,
+  "sort_field": "modified",
+  "sort_order": "DESC"
+}

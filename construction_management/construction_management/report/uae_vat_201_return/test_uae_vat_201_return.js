@@ -36,12 +36,13 @@ function setup() {
 	return { report: frappe.query_reports["UAE VAT 201 Return"], frappe, calls };
 }
 
-test("filters stay unchanged and all report approval actions are removed", () => {
+test("GL view defaults without removing internal review actions", () => {
 	const { report } = setup();
 	assert.deepEqual(
 		Array.from(report.filters, (f) => f.fieldname),
-		["company", "filing_period", "from_date", "to_date"]
+		["report_view", "company", "filing_period", "from_date", "to_date"]
 	);
+	assert.equal(report.filters[0].default, "General Ledger");
 	const source = fs.readFileSync(`${__dirname}/uae_vat_201_return.js`, "utf8");
 	for (const text of [
 		"open_review",
@@ -60,12 +61,11 @@ test("filters stay unchanged and all report approval actions are removed", () =>
 		assert.ok(source.includes(`"${tab}"`));
 });
 
-test("no recovery or policy workflow is registered in the report", () => {
-	const { report } = setup();
-	assert.equal(report.get_review_fields, undefined);
-	const source = fs.readFileSync(`${__dirname}/uae_vat_201_return.js`, "utf8");
-	for (const field of ["recovery_percent", "supporting_reference\", label", "Journal Recovery Rules", "Recovery Policies", "primary_action_label"])
-		assert.ok(!source.includes(field));
+test("recovery workflow and filing register are limited to accounting managers", () => {
+ const source = fs.readFileSync(`${__dirname}/uae_vat_201_return.js`, "utf8");
+ for (const field of ["recovery_percent", "supporting_reference", "expected_fingerprint", "Review VAT Treatment", "VAT 201 Filing", "VAT 201 Payment"])
+  assert.ok(source.includes(field));
+ assert.ok(source.includes('["Accounts Manager", "System Manager"].includes(role)'));
 });
 
 test("formatter preserves numeric values and distinguishes pending from nil", () => {
@@ -311,4 +311,37 @@ test("unknown source base is not replaced with a reviewed claim allocation", asy
 	assert.equal(cells[6], "9");
 	assert.equal(cells.length, 8);
 	assert.ok(!html.includes("AED 1000"));
+});
+
+test("manager review calls the correct backend and preserves explicit zero recovery", async () => {
+	const { report, frappe } = setup();
+	const buttons = new Map();
+	const dialogs = [];
+	const calls = [];
+	frappe.user_roles = ["Accounts Manager"];
+	frappe.ui.Dialog = class {
+		constructor(options) { this.options = options; dialogs.push(this); }
+		show() {}
+		hide() {}
+		set_values() {}
+		set_secondary_action() {}
+		set_secondary_action_label() {}
+		get_values() { return {box: "9", tax_date: "2026-06-01", recovery_confirmed: 1, recovery_percent: 0, reason: "Reviewed exclusion", supporting_reference: "TEST"}; }
+	};
+	frappe.call = async (args) => {
+		calls.push(args);
+		if (args.method.endsWith("report_context")) return {message: {details: [{voucher_type: "Purchase Invoice", voucher_no: "TEST-PI", source_row: "TEST-TAX", raw_vat: 50}]}};
+		if (args.method.endsWith("review_source")) return {message: {records: [], decision_fingerprint: "CURRENT-EVIDENCE"}};
+		return {message: {status: "Approved"}};
+	};
+	const view = {page: {add_inner_button: (label, action) => buttons.set(label, action)}, get_filter_value: () => null, get_filter_values: () => ({company: "TEST"}), refresh() {}};
+	await report.onload(view);
+	await buttons.get("Review VAT Treatment")();
+	await dialogs[0].options.primary_action({source: "0"});
+	await dialogs[1].options.primary_action();
+	const decision = calls.at(-1);
+	assert.equal(decision.method, "construction_management.construction_management.report.uae_vat_201_return.review.decide");
+	assert.equal(decision.args.values.recovery_percent, 0);
+	assert.equal(decision.args.expected_fingerprint, "CURRENT-EVIDENCE");
+	assert.equal(decision.args.action, "Approve");
 });

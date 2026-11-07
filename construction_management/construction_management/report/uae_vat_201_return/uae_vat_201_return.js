@@ -131,6 +131,7 @@
 			.join("")}</ul><div class="vat201-tab-content mt-3"></div>`;
 		if (message.warnings?.length) panel.insertAdjacentHTML("afterbegin", `<details><summary>${__("Source and completeness notes")}</summary><ul>${message.warnings.map(note=>`<li>${esc(note)}</li>`).join("")}</ul></details>`);
 		const reconciliation = message.reconciliation || [];
+		if (message.filed_comparison) panel.insertAdjacentHTML("beforeend", `<details class="mt-3"><summary>${__("Submitted FTA Return Comparison")}</summary><table class="table table-bordered"><tbody>${Object.entries(message.filed_comparison).filter(([,value]) => !Array.isArray(value)).map(([key,value]) => `<tr><th>${esc(key.replaceAll("_", " "))}</th><td>${typeof value === "number" ? money(value) : esc(value ?? __("Unknown"))}</td></tr>`).join("")}</tbody></table></details>`);
 		for (const [title, values, currency] of [["Ledger Balances",message.ledger_summary,message.ledger_summary?.currency], ["Recorded Tax and Return Bridge",message.tax_measures,"AED"]]) {
 			if (values) panel.insertAdjacentHTML("beforeend", `<details class="mt-3"><summary>${__(title)}</summary><div class="table-responsive"><table class="table table-bordered"><tbody>${Object.entries(values).filter(([key]) => key !== "currency").map(([key,value])=>`<tr><td>${esc(__(message.measure_labels?.[key] || key.replaceAll("_"," ")))}</td><td class="text-right">${money(value,currency)}</td></tr>`).join("")}</tbody></table></div></details>`);
 		}
@@ -167,11 +168,64 @@
 		dialog.show();
 	}
 
+	async function review_transaction(report) {
+		const { message: context } = await frappe.call({method: endpoint + "report_context", args: {filters: report.get_filter_values()}});
+		const rows = (context.details || []).filter(row => row.voucher_type !== "VAT 201 Tax Evidence");
+		const pick = new frappe.ui.Dialog({title: __("Review VAT Treatment"), fields: [{fieldname: "source", fieldtype: "Select", label: __("Source transaction"), reqd: 1, options: rows.map((r, i) => ({value: String(i), label: `${r.voucher_no} / ${r.source_row} — ${r.recovery_status || r.issue || r.treatment}`}))}], primary_action_label: __("Review"), primary_action: async (v) => {
+			pick.hide();
+			const row = rows[Number(v.source)];
+			if (!row) return;
+			const method = endpoint.slice(0, -"uae_vat_201_return.".length) + "review.";
+			const args = {filters: report.get_filter_values(), voucher_type: row.voucher_type, voucher_no: row.voucher_no, source_row: row.source_row};
+			const {message: evidence} = await frappe.call({method: method + "review_source", args});
+			if (evidence.records.length > 1) {
+				frappe.msgprint(__("This source has multiple tax-side decisions. Review the classifications in UAE VAT Settings."));
+				return;
+			}
+			const saved = evidence.records[0] || {};
+			const fields = [
+				{fieldname: "source_notes", fieldtype: "HTML", options: `<p>${esc(row.issue || row.system_reason || "")}</p><p>${esc((row.source_quality_warnings || []).join("; "))}</p><p>${__("Source recorded VAT")}: ${money(row.recorded_vat_amount ?? row.raw_vat)}</p>`},
+				{fieldname: "box", fieldtype: "Select", label: __("VAT Box / Emirate Allocation"), options: ["", "1a", "1b", "1c", "1d", "1e", "1f", "1g", "2", "3", "4", "5", "6", "7", "9", "10", "Outside VAT"], reqd: 1},
+				{fieldname: "tax_date", fieldtype: "Date", label: __("Reviewed Tax Date"), reqd: 1},
+				{fieldname: "recovery_confirmed", fieldtype: "Check", label: __("Recovery Eligibility Reviewed")},
+				{fieldname: "recovery_percent", fieldtype: "Percent", label: __("Recoverable VAT Percent (explicit zero permitted)")},
+				{fieldname: "override_base", fieldtype: "Check", label: __("Use Reviewed Taxable Base")},
+				{fieldname: "taxable_base_aed", fieldtype: "Currency", options: "AED", label: __("Reviewed Taxable Base")},
+				{fieldname: "aed_exchange_rate", fieldtype: "Float", label: __("AED per Company Currency")},
+				{fieldname: "journal_treatment", fieldtype: "Select", label: __("Journal Treatment"), options: "\nUnresolved\nVAT settlement\nVAT payment\nVAT reclassification\nVAT correction\nTaxable adjustment\nReverse-charge adjustment"},
+				{fieldname: "is_adjustment", fieldtype: "Check", label: __("FTA Adjustment Column")},
+				{fieldname: "adjustment_type", fieldtype: "Select", label: __("Adjustment Type"), options: "\nBad Debt Relief\nCommercial Property Tax Paid by Buyer\nAnnual Input Tax Apportionment\nCapital Assets Scheme"},
+				{fieldname: "overlap_reviewed", fieldtype: "Check", label: __("Advance / Invoice VAT Overlap Reconciled")},
+				{fieldname: "overlap_reference", fieldtype: "Data", label: __("Overlap Reconciliation Evidence Reference")},
+				{fieldname: "reason", fieldtype: "Small Text", label: __("Recovery / Tax Date / Place of Supply Basis"), reqd: 1},
+				{fieldname: "supporting_reference", fieldtype: "Data", label: __("Supporting Tax Invoice / Evidence Reference"), reqd: 1},
+				{fieldname: "review_remarks", fieldtype: "Small Text", label: __("Review Remarks")},
+			];
+			const d = new frappe.ui.Dialog({title: row.voucher_no + " / " + row.source_row, size: "large", fields, primary_action_label: saved.approved ? __("Revoke Approval for Revision") : __("Approve"), primary_action: async () => save(saved.approved ? "Save" : "Approve")});
+			async function save(action) {
+				const values = d.get_values();
+				if (!values) return;
+				await frappe.call({method: method + "decide", args: {...args, values, action, classification_id: saved.name, expected_fingerprint: evidence.decision_fingerprint}});
+				d.hide(); report.refresh();
+			}
+			d.set_values(saved);
+			if (!saved.approved) d.set_secondary_action(() => save("Save"));
+			if (!saved.approved) d.set_secondary_action_label(__("Save Pending Review"));
+			d.show();
+		}});
+		pick.show();
+	}
+
 	frappe.query_reports["UAE VAT 201 Return"] = {
 		html_format: "<div>{%= report.raw_data.vat201_context.form_print_html %}</div>",
 		async onload(report) {
 			report.ignore_prepared_report = true;
 			report.page.add_inner_button(__("View Details"), () => details(report));
+			if ((frappe.user_roles || []).some(role => ["Accounts Manager", "System Manager"].includes(role))) {
+				report.page.add_inner_button(__("Review VAT Treatment"), () => review_transaction(report));
+				for (const doctype of ["VAT 201 Filing", "VAT 201 Payment", "VAT 201 Filed Difference", "VAT 201 Tax Evidence"])
+					report.page.add_inner_button(__(doctype), () => { frappe.route_options = {company: report.get_filter_value("company")}; frappe.set_route("List", doctype); }, __("Filing Evidence"));
+			}
 			for (const [type, label, detailed = 0] of [
 				["xlsx", "Excel"],
 				["pdf", "PDF"],
@@ -209,6 +263,8 @@
 			}
 		},
 		filters: [
+			{fieldname: "report_view", label: __("View"), fieldtype: "Select",
+				options: "General Ledger\nInternal VAT Review", default: "General Ledger"},
 			{
 				fieldname: "company",
 				label: __("Company"),

@@ -117,9 +117,9 @@ class TestUAEVAT201Return(unittest.TestCase):
 		self.assertEqual((f.from_date,f.to_date),(date(2026,5,10),date(2026,6,9)))
 		self.assertTrue(all(b["amount"]==0 and b["vat_amount"]==0 for b in engine.aggregate([]).values()))
 
-	def test_three_decimal_precision(self):
+	def test_aed_is_presented_at_two_decimal_precision(self):
 		with patch.object(engine.frappe,"get_precision",return_value=3):
-			self.assertEqual(self.event(self.source(raw_vat="1.2344"))["vat_amount"],1.234)
+			self.assertEqual(self.event(self.source(raw_vat="1.2344"))["vat_amount"],1.23)
 
 	def test_actual_vat_is_never_recomputed_as_five_percent(self):
 		self.assertEqual(self.event(self.source(raw_vat="39.14",tax_rate=0))["vat_amount"],39.14)

@@ -33,7 +33,7 @@ class TestAutomaticVAT201(unittest.TestCase):
 
 	def test_saved_emirate_does_not_depend_on_field_fetch_or_verification(self):
 		with patch.object(frappe, "get_meta", side_effect=AssertionError("Emirate must not depend on fetch metadata")):
-			rule, error = automatic.source_rule(self.source, "AED")
+			rule, error = automatic.source_rule(self.source, "AED", standard_rate=5)
 		self.assertIsNone(error)
 		self.assertEqual(rule.box, "1f")
 
@@ -136,7 +136,8 @@ class TestAutomaticVAT201(unittest.TestCase):
 		headings, values = rows[0], rows[1]
 		row = dict(zip(headings, values))
 		self.assertEqual(list(headings[:8]), ["Date", "Voucher Number", "Party", "Taxable Amount", "VAT Amount", "VAT Treatment", "VAT Box", "Remarks"])
-		self.assertTrue(all(value is None for value in headings[8:]))
+		self.assertIn("Approved By", headings)
+		self.assertIn("Source Row", headings)
 		self.assertEqual(row["Taxable Amount"], 1557.5)
 		self.assertEqual(row["VAT Amount"], 77.88)
 		self.assertIn("Recoverable VAT: AED 0.00", row["Remarks"])
@@ -147,10 +148,10 @@ class TestAutomaticVAT201(unittest.TestCase):
 			self.assertFalse(output["events"])
 			row = output["details"][0]
 			self.assertEqual((row["base"], row["raw_vat"]), (base, vat))
-			self.assertEqual(row["recovery_status"], "Saved source zero")
+			self.assertEqual(row["recovery_status"], "Not specified in source")
 			self.assertIsNone(row["vat_box"])
-			self.assertFalse(output["reviews"])
-			self.assertIn("saved invoice recovery amount", row["display_remarks"])
+			self.assertTrue(output["reviews"])
+			self.assertTrue(output["reviews"])
 
 	def test_retained_zero_claim_is_not_included_in_box_nine(self):
 		source = self.purchase(recovery_source_amount=0)

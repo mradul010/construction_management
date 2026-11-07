@@ -1,0 +1,47 @@
+{
+  "doctype": "DocType",
+  "name": "VAT 201 Filed Value",
+  "module": "Construction Management",
+  "engine": "InnoDB",
+  "field_order": [
+    "box",
+    "component",
+    "value",
+    "evidence_reference"
+  ],
+  "fields": [
+    {
+      "fieldname": "box",
+      "fieldtype": "Select",
+      "label": "Box",
+      "options": "1a\n1b\n1c\n1d\n1e\n1f\n1g\n2\n3\n4\n5\n6\n7\n8\n9\n10\n11\n12\n13\n14",
+      "reqd": 1,
+      "in_list_view": 1
+    },
+    {
+      "fieldname": "component",
+      "fieldtype": "Select",
+      "label": "Component",
+      "options": "amount\nvat_amount\nadjustment",
+      "reqd": 1,
+      "in_list_view": 1
+    },
+    {
+      "fieldname": "value",
+      "fieldtype": "Currency",
+      "label": "Value",
+      "options": "AED",
+      "reqd": 1,
+      "in_list_view": 1
+    },
+    {
+      "fieldname": "evidence_reference",
+      "fieldtype": "Data",
+      "label": "Evidence Reference",
+      "reqd": 1
+    }
+  ],
+  "permissions": [],
+  "istable": 1,
+  "editable_grid": 1
+}

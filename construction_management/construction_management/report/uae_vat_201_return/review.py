@@ -22,24 +22,41 @@ def fingerprint(source):
 def decision_fingerprint(source):
 	"""Bind new approvals to recovery proposals and the exact amended document."""
 	return hashlib.sha256((fingerprint(source) + json.dumps({key: source.get(key) for key in
-		("recovery_source_amount", "reverse_recovery_percent")}, sort_keys=True, default=str)).encode()).hexdigest()
+		("recovery_source_amount", "reverse_recovery_percent", "linked_sales_invoices", "linked_advance_adjustments", "journal_duplicate_risk", "advance_allocation_evidence", "linked_invoice_evidence", "linked_adjustment_evidence")}, sort_keys=True, default=str)).encode()).hexdigest()
 
 
 def enrich_journals(sources):
 	from construction_management.construction_management.report.uae_vat_201_return.journal import match_journal, link_advance_evidence
 	cache = {}
 	account_catalog = {}
+	# Parent permissions constrain every bulk child/File read. Avoid one DB read
+	# per voucher while retaining field-level filtering of the evidence snapshot.
+	for dt in ("Journal Entry", "Payment Entry"):
+		names = sorted({source["voucher_no"] for source in sources if source["voucher_type"] == dt})
+		if not names:
+			continue
+		headers = frappe.get_list(dt, filters={"name": ["in", names], "docstatus": 1}, fields=["*"], limit_page_length=0)
+		allowed = [header.name for header in headers]
+		children = {}
+		for field in frappe.get_meta(dt).get_table_fields():
+			by_parent = {}
+			for row in frappe.get_all(field.options, filters={"parent": ["in", allowed], "parenttype": dt, "parentfield": field.fieldname}, fields=["*"], limit_page_length=0) if allowed else []:
+				by_parent.setdefault(row.parent, []).append(row)
+			children[field.fieldname] = by_parent
+		files = frappe.get_list("File", filters={"attached_to_doctype": dt, "attached_to_name": ["in", allowed]},
+			fields=["name", "file_name", "file_url", "attached_to_name"], limit_page_length=0) if allowed and frappe.has_permission("File", "read") else []
+		for header in headers:
+			doc = frappe.get_doc(dict(header, doctype=dt, **{field: sorted(by_parent.get(header.name, []), key=lambda row: row.idx) for field, by_parent in children.items()}))
+			doc.check_permission("read")
+			doc.apply_fieldlevel_read_permissions()
+			cache[(dt, header.name)] = dict(document=doc.as_dict(), attachments=[dict(f) for f in files if f.attached_to_name == header.name])
 	for source in sources:
 		if source["voucher_type"] not in ("Journal Entry", "Payment Entry"):
 			continue
 		key = (source["voucher_type"], source["voucher_no"])
 		if key not in cache:
-			doc = frappe.get_doc(*key)
-			doc.check_permission("read")
-			doc.apply_fieldlevel_read_permissions()
-			files = frappe.get_list("File", filters={"attached_to_doctype": key[0], "attached_to_name": key[1]},
-				fields=["name", "file_name", "file_url"], limit_page_length=0) if frappe.has_permission("File", "read") else []
-			cache[key] = dict(document=doc.as_dict(), attachments=[dict(f) for f in files])
+			source["journal_match_issue"] = "Journal source is no longer accessible or submitted"
+			continue
 		source["journal_evidence"] = cache[key]
 		doc = cache[key]["document"]
 		source["remarks"] = doc.get("remark") or doc.get("remarks") or doc.get("user_remark")
@@ -64,7 +81,7 @@ def enrich_journals(sources):
 			continue
 		can_check_invoices = frappe.has_permission("Sales Invoice", "read")
 		invoices = frappe.get_list("Sales Invoice", filters={"company":company,"docstatus":1},
-			fields=["name","company","customer","vat_emirate"], limit_page_length=0) if can_check_invoices else []
+			fields=["name","company","customer","vat_emirate","modified","posting_date","base_net_total","base_total_taxes_and_charges"], limit_page_length=0) if can_check_invoices else []
 		parents = [invoice.name for invoice in invoices]
 		names = list({source["voucher_no"] for source in advances})
 		allocations = frappe.get_all("Sales Invoice Advance", filters={"parent":["in",parents],"parenttype":"Sales Invoice",
@@ -72,7 +89,7 @@ def enrich_journals(sources):
 			fields=["parent","reference_type","reference_name","allocated_amount"],limit_page_length=0) if parents else []
 		journals = frappe.get_list("Journal Entry", filters={"company":company,"docstatus":1}, pluck="name",limit_page_length=0)
 		adjustments = frappe.get_all("Journal Entry Account", filters={"parent":["in",journals],"parenttype":"Journal Entry",
-			"reference_type":"Journal Entry","reference_name":["in",names]}, fields=["parent","reference_name"],limit_page_length=0) if journals else []
+			"reference_type":"Journal Entry","reference_name":["in",names]}, fields=["parent","reference_name","debit","credit","account","modified"],limit_page_length=0) if journals else []
 		link_advance_evidence(advances, invoices, allocations, adjustments)
 		if not can_check_invoices:
 			for source in advances:
@@ -81,6 +98,9 @@ def enrich_journals(sources):
 
 def suggest(source, mappings, rules=()):
 	"""A suggested box is not an approval or proof of input-tax entitlement."""
+	from construction_management.construction_management.report.uae_vat_201_return.engine import standard_rate
+	rate = source.get("configured_standard_rate")
+	rate = standard_rate() if rate is None else rate
 	dt = source["voucher_type"]
 	box, reasons = None, []
 	if dt not in ("Sales Invoice", "POS Invoice", "Purchase Invoice"):
@@ -105,10 +125,10 @@ def suggest(source, mappings, rules=()):
 		if source.get("treatment_hint") in ("Zero Rated", "Exempt") and not source.get("raw_vat"):
 			box = "4" if source["treatment_hint"] == "Zero Rated" else "5"
 			reasons.append("Source item explicitly marked " + source["treatment_hint"] + "; confirm supporting treatment and tax point")
-		elif source.get("tax_account") and source.get("source_emirate") in get_emirates() and flt(source.get("tax_rate")) == 5:
+		elif source.get("tax_account") and source.get("source_emirate") in get_emirates() and flt(rate) > 0 and flt(source.get("tax_rate")) == flt(rate):
 			box = "1" + chr(97 + get_emirates().index(source["source_emirate"]))
 			reasons.append("Emirate box uses the saved invoice VAT Emirate")
-		elif source.get("tax_account") and flt(source.get("tax_rate")) == 5:
+		elif source.get("tax_account") and flt(rate) > 0 and flt(source.get("tax_rate")) == flt(rate):
 			reasons.append("VAT Emirate is missing or invalid; select a valid UAE Emirate on the source invoice")
 		else:
 			reasons.append("No sufficient standard-rated/zero/exempt supply evidence")
@@ -131,7 +151,7 @@ def suggest(source, mappings, rules=()):
 	if source.get("is_return"):
 		reasons.append("Return preserves signed source tax; verify original treatment: " + (source.get("return_against") or "original voucher not linked"))
 		original = [r for r in rules if r.get("approved") and r.voucher_type == dt and r.voucher_no == source.get("return_against")]
-		if len({r.box for r in original}) == 1 and not (dt in ("Sales Invoice", "POS Invoice") and source.get("tax_account") and flt(source.get("tax_rate")) == 5):
+		if len({r.box for r in original}) == 1 and not (dt in ("Sales Invoice", "POS Invoice") and source.get("tax_account") and flt(rate) > 0 and flt(source.get("tax_rate")) == flt(rate)):
 			box = original[0].box
 			reasons.append("Suggested box inherited from approved original voucher; confirm matching tax line")
 	return box, "; ".join(reasons)
@@ -243,7 +263,7 @@ def decide(filters, voucher_type, voucher_no, source_row, action, values=None, c
 		record = doc.append("custom_vat201_classifications", dict(voucher_type=voucher_type,voucher_no=voucher_no,source_row=source_row,origin="Manual"))
 	values = frappe._dict(frappe.parse_json(values) or {})
 	allowed = ("box","tax_date","recovery_confirmed","recovery_percent","override_base","taxable_base_aed",
-		"aed_exchange_rate","is_adjustment","adjustment_type","reason","supporting_reference","review_remarks","journal_treatment")
+		"aed_exchange_rate","is_adjustment","adjustment_type","reason","supporting_reference","review_remarks","journal_treatment","overlap_reviewed","overlap_reference")
 	for field in allowed:
 		if field in values:
 			record.set(field, values[field])

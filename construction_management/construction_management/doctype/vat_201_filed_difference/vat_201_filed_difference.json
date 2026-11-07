@@ -1,0 +1,177 @@
+{
+  "doctype": "DocType",
+  "name": "VAT 201 Filed Difference",
+  "module": "Construction Management",
+  "engine": "InnoDB",
+  "field_order": [
+    "company",
+    "filing",
+    "voucher_type",
+    "voucher_no",
+    "gl_entry",
+    "posting_date",
+    "tax_date",
+    "category",
+    "taxable_base",
+    "vat_amount",
+    "return_treatment",
+    "filing_treatment",
+    "difference",
+    "supporting_evidence",
+    "reason",
+    "approved_by",
+    "approved_on"
+  ],
+  "fields": [
+    {
+      "fieldname": "company",
+      "fieldtype": "Link",
+      "label": "Company",
+      "options": "Company",
+      "reqd": 1,
+      "in_list_view": 1
+    },
+    {
+      "fieldname": "filing",
+      "fieldtype": "Link",
+      "label": "Filing",
+      "options": "VAT 201 Filing",
+      "reqd": 1,
+      "in_list_view": 1
+    },
+    {
+      "fieldname": "voucher_type",
+      "fieldtype": "Select",
+      "label": "Voucher Type",
+      "options": "Sales Invoice\nPurchase Invoice\nPOS Invoice\nJournal Entry\nPayment Entry",
+      "reqd": 1
+    },
+    {
+      "fieldname": "voucher_no",
+      "fieldtype": "Dynamic Link",
+      "label": "Voucher No",
+      "options": "voucher_type",
+      "reqd": 1
+    },
+    {
+      "fieldname": "gl_entry",
+      "fieldtype": "Link",
+      "label": "Gl Entry",
+      "options": "GL Entry",
+      "reqd": 1
+    },
+    {
+      "fieldname": "posting_date",
+      "fieldtype": "Date",
+      "label": "Posting Date",
+      "read_only": 1
+    },
+    {
+      "fieldname": "tax_date",
+      "fieldtype": "Date",
+      "label": "Tax Date",
+      "reqd": 1
+    },
+    {
+      "fieldname": "category",
+      "fieldtype": "Select",
+      "label": "Category",
+      "options": "Timing\nRecovery\nOutput allocation\nSettlement\nMigration\nOther documented difference",
+      "reqd": 1
+    },
+    {
+      "fieldname": "taxable_base",
+      "fieldtype": "Currency",
+      "label": "Taxable Base",
+      "options": "AED"
+    },
+    {
+      "fieldname": "vat_amount",
+      "fieldtype": "Currency",
+      "label": "Vat Amount",
+      "options": "AED",
+      "reqd": 1
+    },
+    {
+      "fieldname": "return_treatment",
+      "fieldtype": "Small Text",
+      "label": "Return Treatment",
+      "reqd": 1
+    },
+    {
+      "fieldname": "filing_treatment",
+      "fieldtype": "Small Text",
+      "label": "Filing Treatment",
+      "reqd": 1
+    },
+    {
+      "fieldname": "difference",
+      "fieldtype": "Currency",
+      "label": "Explained GL Less Filed Difference (AED)",
+      "options": "AED",
+      "reqd": 1
+    },
+    {
+      "fieldname": "supporting_evidence",
+      "fieldtype": "Attach",
+      "label": "Supporting Evidence",
+      "reqd": 1
+    },
+    {
+      "fieldname": "reason",
+      "fieldtype": "Small Text",
+      "label": "Reason",
+      "reqd": 1
+    },
+    {
+      "fieldname": "approved_by",
+      "fieldtype": "Link",
+      "label": "Approved By",
+      "options": "User",
+      "read_only": 1
+    },
+    {
+      "fieldname": "approved_on",
+      "fieldtype": "Datetime",
+      "label": "Approved On",
+      "read_only": 1
+    }
+  ],
+  "permissions": [
+    {
+      "role": "Accounts Manager",
+      "read": 1,
+      "write": 1,
+      "create": 1,
+      "submit": 1,
+      "print": 1,
+      "export": 1
+    },
+    {
+      "role": "System Manager",
+      "read": 1,
+      "write": 1,
+      "create": 1,
+      "submit": 1,
+      "print": 1,
+      "export": 1
+    },
+    {
+      "role": "Accounts User",
+      "read": 1,
+      "print": 1,
+      "export": 1
+    },
+    {
+      "role": "Auditor",
+      "read": 1,
+      "print": 1,
+      "export": 1
+    }
+  ],
+  "autoname": "hash",
+  "is_submittable": 1,
+  "track_changes": 1,
+  "sort_field": "modified",
+  "sort_order": "DESC"
+}

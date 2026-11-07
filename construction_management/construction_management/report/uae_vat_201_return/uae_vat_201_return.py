@@ -22,12 +22,18 @@ def execute(filters=None):
 	result = build(filters)
 	frappe.local.vat201_current_result = result
 	rows = [dict(box,_box=True) for box in result["boxes"]]
+	from construction_management.construction_management.report.uae_vat_201_return import gl_view
+	if gl_view.enabled(result):
+		rows = gl_view.summary_rows(result)
 	from construction_management.construction_management.report.uae_vat_201_return.form_layout import form_html
 	message = form_html(result, interactive=True)
-	return get_columns(),rows,message,None,summary_cards(result),True
+	return (gl_view.columns() if gl_view.enabled(result) else get_columns()),rows,message,None,summary_cards(result),True
 
 
 def summary_cards(result):
+	from construction_management.construction_management.report.uae_vat_201_return import gl_view
+	if gl_view.enabled(result):
+		return gl_view.cards(result)
 	boxes = {b["box"]:b for b in result["boxes"]}
 	def pending(box, field="amount"):
 		return boxes[box].get("completeness", {}).get(field, {}).get("provisional", False)
@@ -60,7 +66,7 @@ def report_context(filters):
 
 def context_for(result):
 	# Source permissions are checked by the reader; no stored evidence snapshots are returned.
-	context = {key:result.get(key) for key in ("header","status","calculation_description","return_complete","warnings","details","reconciliation","observed","unallocated_output","review_summary","audit_rows","tax_measures","ledger_summary","recorded_breakdown","measure_labels","settings_name","calculated_at")}
+	context = {key:result.get(key) for key in ("header","status","calculation_description","return_complete","warnings","details","reconciliation","observed","unallocated_output","review_summary","audit_rows","tax_measures","ledger_summary","recorded_breakdown","measure_labels","settings_name","calculated_at","filed_comparison")}
 	from construction_management.construction_management.report.uae_vat_201_return.form_layout import form_html
 	context["form_print_html"] = form_html(result)
 	return context
@@ -98,15 +104,16 @@ def export_rows(result):
 	if result.get("observed"):
 		rows += [["Report Totals"],["Description","Amount (AED)","Status"]]
 		rows += [[card["label"],card["value"],"Provisional known subtotal" if card["provisional"] else "Complete" if card["datatype"]=="Currency" else "Unavailable"] for card in summary_cards(result)]
-	fields = ("posting_date","voucher_no","party","invoice_taxable_amount","recorded_vat_amount","treatment","vat_box","display_remarks")
-	rows += [["Transaction Details"],["Date","Voucher Number","Party","Taxable Amount","VAT Amount","VAT Treatment","VAT Box","Remarks"]]
+	fields = ("posting_date","voucher_no","party","invoice_taxable_amount","recorded_vat_amount","treatment","vat_box","display_remarks","company","tax_date","voucher_type","source_row","tax_account","project","cost_center","tax_rate","recoverable_vat_amount","nonrecoverable","recovery_status","approved_by","approval_time","supporting_reference","source_quality_warnings","bill_date","bill_no","source_tax_id","return_against","gl_entry_ids")
+	rows += [["Transaction Details"],["Date","Voucher Number","Party","Taxable Amount","VAT Amount","VAT Treatment","VAT Box","Remarks","Company","Tax Date","Voucher Type","Source Row","VAT Account","Project","Cost Center","VAT Rate","Recoverable VAT","Non-Recoverable VAT","Recovery Status","Approved By","Approval Time","Supporting Evidence","Source Quality Warnings","Supplier Invoice Date","Supplier Invoice Number","Supplier TRN","Original Invoice","GL Entry IDs"]]
 	for row in result.get("details",result["events"]):
 		values = dict(row)
 		values.setdefault("invoice_taxable_amount",row.get("base"))
 		values.setdefault("recorded_vat_amount",row.get("raw_vat"))
 		values.setdefault("vat_box",row.get("box"))
 		values.setdefault("display_remarks",row.get("remarks"))
-		rows.append([values.get(k) for k in fields])
+		values["gl_entry_ids"] = ", ".join(row.get("journal_group_gl_rows") or [g["name"] for g in row.get("gl_evidence", [])] or ([row["source_row"]] if "debit" in row else []))
+		rows.append(["; ".join(map(str, values[k])) if isinstance(values.get(k), list) else values.get(k) for k in fields])
 	rows += [["Source Notes"],["Voucher Type","Voucher","Source Row","Source limitation","Recorded VAT (VAT-role signs)","Source context","Raw GL VAT (debit - credit)"]]
 	rows += [[r.get("voucher_type"),r.get("voucher_no"),r.get("source_row"),r.get("issue"),r.get("recorded_vat_amount",r.get("raw_vat")),r.get("recommended_action"),
 		flt(r.get("debit"))-flt(r.get("credit")) if "debit" in r else None] for r in result["reviews"]]
@@ -129,6 +136,23 @@ def export_rows(result):
 	rows += [["VAT Control Movement (debit - credit)",result.get("control_movement")]]
 	rows += [["Invoice tax versus GL"],["Voucher Type","Voucher","VAT Account","Difference","Currency"]]
 	rows += [[r.get(k) for k in ("voucher_type","voucher_no","tax_account","difference","currency")] for r in result.get("invoice_checks",[])]
+	comparison = result.get("filed_comparison", {})
+	rows += [["Submitted FTA Return Comparison"], ["Measure", "Value"]]
+	rows += [[key.replace("_", " ").title(), value if value is not None else "Unknown"] for key, value in comparison.items() if key not in ("known_values", "explanations")]
+	rows += [["Box", "Component", "Calculated (AED)", "Filed (AED)", "Calculated Less Filed (AED)"]]
+	rows += [[r["box"], r["component"], r["calculated"], r["filed"] if r["filed"] is not None else "Unknown", r["difference"]] for r in comparison.get("known_values", [])]
+	rows += [["Filed Difference Register"], ["Voucher Type", "Voucher", "GL Entry", "Posting Date", "Tax Date", "Category", "Taxable Base", "VAT", "Return Treatment", "Filing Treatment", "Difference", "Explanation", "Supporting Document", "Reviewer"]]
+	rows += [[r.get(k) for k in ("voucher_type", "voucher_no", "gl_entry", "posting_date", "tax_date", "category", "taxable_base", "vat_amount", "return_treatment", "filing_treatment", "difference", "reason", "supporting_evidence", "approved_by")] for r in comparison.get("explanations", [])]
+	rows += [["Customer Advance VAT Details"], ["Voucher", "GL Rows", "Base", "Recorded VAT", "Tax Date", "Emirate", "Project", "Customer", "Linked Invoices", "Linked Adjustments", "Review", "Evidence"]]
+	rows += [[r.get("voucher_no"), ", ".join(r.get("journal_group_gl_rows", [r.get("source_row", "")])), r.get("base"), r.get("recorded_vat_amount"), r.get("tax_date"), r.get("emirate") or r.get("source_emirate"), r.get("project"), r.get("party"), ", ".join(r.get("linked_sales_invoices", [])), ", ".join(r.get("linked_advance_adjustments", [])), r.get("issue") or r.get("classification_status"), r.get("supporting_reference")] for r in result.get("details", []) if r.get("journal_category") == "Customer-advance output VAT"]
+	rows += [["GL Line Coverage"], ["GL Entry", "Posting Date", "Voucher Type", "Voucher", "VAT Account", "Voucher Detail Row", "Project", "Cost Center", "Debit", "Credit", "Reconciliation Category", "Issue"]]
+	by_gl = {name: audit for audit in result.get("audit_rows", []) for name in audit.get("gl_rows", "").split(", ")}
+	for entry in result.get("ledger_entries", []):
+		audit = by_gl.get(entry["name"], {})
+		rows.append([entry.get(k) for k in ("name", "posting_date", "voucher_type", "voucher_no", "account", "voucher_detail_no", "project", "cost_center", "debit", "credit")] + [audit.get("category", "Unclassified / unmapped tax account"), audit.get("issue")])
+	from construction_management.construction_management.report.uae_vat_201_return import gl_view
+	if gl_view.enabled(result):
+		rows = gl_view.export_rows(result) + [["Internal VAT Review and Audit"]] + rows
 	return [[("'"+v if v.startswith(("=","+","-","@")) else v) if isinstance(v,str) else v for v in row] for row in rows]
 
 
@@ -140,7 +164,7 @@ def audit_workbook_bytes(result):
 	workbook = Workbook()
 	precision = frappe.get_precision("GL Entry","debit",currency="AED")
 	pattern = '#,##0' + ('.'+'0'*precision if precision else '')
-	sections = {name:[] for name in ("VAT 201 Summary","Box Component Completeness","Report Totals","Transaction Details","Source Notes","Tax Reconciliation","Voucher Account Reconciliation","Recorded source amounts","Invoice tax versus GL","Ledger Balances","Recorded Tax Bridge","Recorded VAT by Voucher Type","Recovery Decisions")}
+	sections = {name:[] for name in ("VAT 201 Summary","Box Component Completeness","Report Totals","Transaction Details","Source Notes","Tax Reconciliation","Voucher Account Reconciliation","Recorded source amounts","Invoice tax versus GL","Ledger Balances","Recorded Tax Bridge","Recorded VAT by Voucher Type","Recovery Decisions","Submitted FTA Return Comparison","Filed Difference Register","Customer Advance VAT Details","GL Line Coverage")}
 	current = None
 	metadata = []
 	for row in export_rows(result):
@@ -168,7 +192,7 @@ def audit_workbook_bytes(result):
 		("Source Ledger Audit",sections["Voucher Account Reconciliation"]),("Invoice GL Checks",sections["Invoice tax versus GL"]),
 		("Taxpayer and Notes",metadata + sections["Recorded source amounts"]),
 		("Ledger Balances",sections["Ledger Balances"]),("Recorded Tax Bridge",sections["Recorded Tax Bridge"]),
-		("VAT by Voucher Type",sections["Recorded VAT by Voucher Type"]),("Recovery Decisions",sections["Recovery Decisions"])):
+		("VAT by Voucher Type",sections["Recorded VAT by Voucher Type"]),("Recovery Decisions",sections["Recovery Decisions"]),("Submitted FTA Return Comparison",sections["Submitted FTA Return Comparison"]),("Filed Difference Register",sections["Filed Difference Register"]),("Customer Advance VAT Details",sections["Customer Advance VAT Details"]),("GL Line Coverage",sections["GL Line Coverage"])):
 		sheet = workbook.create_sheet(title)
 		for row in rows:
 			sheet.append(row)

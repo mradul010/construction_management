@@ -1,0 +1,5 @@
+from construction_management.construction_management.report.uae_vat_201_return.tax_evidence import TaxEvidenceRecord
+
+
+class VAT201TaxEvidence(TaxEvidenceRecord):
+	pass

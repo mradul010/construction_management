@@ -188,7 +188,7 @@ def match_journal(doc, sources, expense_accounts, company_currency, advance_acco
 					row.get("party_type") == "Customer" and row.get("party") == party and
 					(row.get("project") or "") == key[1]), Decimal(0))
 				customer_advance = bool(receivable) and abs(receivable + base + signed(source)) <= quantum
-			source.update(base=base, derived_base=base, base_row_reference=", ".join(refs),
+			source.update(base=base, derived_base=base, tax_rate=float(matched[0]["rate"]) if len({spec["rate"] for spec in matched}) == 1 else None, base_row_reference=", ".join(refs),
 				base_row_references=refs, generated_tax_rows=[tax["name"] for tax in matched_tax],
 				party=next(iter(parties)) if len(parties) == 1 else None,
 				journal_category="Recorded purchase VAT" if expense and not invoice_linked else "Unresolved",
@@ -223,6 +223,9 @@ def link_advance_evidence(sources, invoices, allocations=(), adjustments=()):
 			row.get("reference_name") == source["voucher_no"] and number(row.get("allocated_amount"))}
 		linked = direct | allocated
 		adjusted = {row["parent"] for row in adjustments if row.get("reference_name") == source["voucher_no"]}
+		source["advance_allocation_evidence"] = [dict(row) for row in allocations if row.get("parent") in linked and row.get("reference_name") == source["voucher_no"]]
+		source["linked_invoice_evidence"] = [dict(by_name[name]) for name in sorted(linked) if name in by_name]
+		source["linked_adjustment_evidence"] = [dict(row) for row in adjustments if row.get("reference_name") == source["voucher_no"]]
 		source["linked_sales_invoices"] = sorted(linked)
 		source["linked_advance_adjustments"] = sorted(adjusted)
 		emirates = {source["source_emirate"]} if source.get("source_emirate") else set()

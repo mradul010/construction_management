@@ -1,5 +1,171 @@
 # UAE VAT 201 Return
 
+## Default GL view: 2026-11-07
+
+The report now defaults to **View: General Ledger**. Its cards show period VAT
+credits, debits and net credit movement directly from the existing ledger summary.
+Opening and closing balances are separate. All selected GL rows appear with voucher
+links. No recovery approval is required to display these amounts. The source reader
+continues to enforce company, account, date, submission and access restrictions.
+
+Choose **Internal VAT Review** to use the existing VAT 201 box preparation and
+manager review workflow. Decisions do not replace the books totals. GL movement
+is not labelled as filed liability or approved recoverable VAT. The default Excel
+and PDF follow the selected view; detailed Excel retains the internal audit sheets.
+CSV includes the GL summary followed by explicitly labelled internal review data.
+
+Added `gl_view.py`, `gl_content.html` and `test_gl_view.py`; updated the report
+controller, automatic result view selection, form export dispatch and JS filter.
+No metadata migration or accounting edits are needed for this view change.
+The qatra cache was cleared; reload the report to fetch the new filter.
+
+Validation: 198 Python tests and 10 JavaScript tests passed. Live qatra GL cards
+show 104,540.10 credits, 37,274.40 debits and 67,265.70 net credit; the exported
+327 rows match the selected ledger. Internal review remains 55,062.68.
+Authenticated browser interaction was not exercised in this session.
+
+## Recovery and filing hardening handover: 2026-11-07
+
+This section supersedes older recovery, precision and readiness statements below.
+The earlier sections remain as implementation history.
+
+### Root cause and implementation
+
+ERPNext's `recoverable_standard_rated_expenses` Currency field defaults to zero.
+Previously, `automatic.py` discarded approved Purchase Invoice classifications
+and substituted this saved value. An untouched default therefore looked like an
+intentional zero claim. Saved values are now proposals: approved classifications
+take precedence, followed by applicable approved recovery policies. Explicitly
+approved 0% stays zero; missing approval stays pending. There is no blanket 100%
+recovery or rewrite of invoice values.
+
+Expense journal input remains pending until supported recovery is approved.
+Customer advances require reviewed treatment, tax date, supply allocation and
+overlap evidence before inclusion. Existing saved journal bases and VAT splits,
+source fingerprints, GL extraction and recorded-tax bridge are retained.
+
+Independent submitted evidence records preserve filed values, corrections,
+payments, explanations and external documentary VAT. Recalculation cannot replace
+filed values. Unknown box values differ from known zero; acknowledgment alone
+does not establish payment. Payments on earlier filings remain included after a
+filing correction. Documentary VAT requires an explicit duplicate check.
+
+### Changed files and responsibilities
+
+Paths below are relative to `construction_management/construction_management/`:
+
+| Files | Responsibility |
+| --- | --- |
+| `report/uae_vat_201_return/automatic.py` | Recovery precedence, pending source decisions, quality warnings and filing comparison |
+| `report/uae_vat_201_return/engine.py` | Explicit tax dates, approved recovery and Decimal half-up two-decimal AED amounts |
+| `report/uae_vat_201_return/policy.py` | Approved policy protection, explicit tax-date basis and revocation |
+| `report/uae_vat_201_return/configuration.py` | Evidence schema installation, settings history and approval protection |
+| `report/uae_vat_201_return/review.py` | Evidence-backed review, advance overlap checks and decision fingerprints |
+| `report/uae_vat_201_return/journal.py` | Preserve source split evidence for journal treatment |
+| `report/uae_vat_201_return/reconciliation.py` | Distinguish pending recovery and approved nonclaims |
+| `report/uae_vat_201_return/filing.py` | Protected filing/payment/difference records and comparison calculations |
+| `report/uae_vat_201_return/tax_evidence.py` | Reviewed documentary VAT without fabricated GL postings |
+| `report/uae_vat_201_return/uae_vat_201_return.py` | Shared export data, filed comparison, advance detail and GL coverage sheets |
+| `report/uae_vat_201_return/uae_vat_201_return.js` | Manager review dialog and evidence-register navigation |
+| `report/uae_vat_201_return/form_layout.py`, `form_content.html` | Filing comparison in the shared form presentation |
+| `doctype/vat_201_classification/vat_201_classification.json` | Journal treatment and overlap evidence fields |
+| `doctype/vat_201_recovery_policy/vat_201_recovery_policy.json` | Explicit policy tax-date basis |
+| New `doctype/vat_201_filed_value/`, `vat_201_filing/`, `vat_201_payment/`, `vat_201_filed_difference/`, `vat_201_tax_evidence/` | JSON schemas, Python controllers and package initializers for evidence records |
+| Report `test_acceptance.py`, `test_filing.py`, `test_runner.py` | Synthetic historical scenarios, documentary protections and site-aware test runner |
+| Report `test_automatic.py`, `test_completeness.py`, `test_journal.py`, `test_policy.py`, `test_recorded_bridge.py`, `test_uae_vat_201_return.py`, `test_uae_vat_201_return.js` | Regression coverage for changed behavior |
+
+No core ERPNext/HRMS edits, new patch registrations or hook changes are required.
+The existing app `after_migrate` calls `configuration.setup`, which installs the
+metadata. Existing custom fields and approved decisions are retained. No new
+fixture data grants recovery or inserts client filing values.
+
+### Fresh verification
+
+On 2026-11-07, all **195 Python tests** and **10 Node handler tests** passed.
+`git diff --check` passed. The initial sandboxed Python run could not access the
+local database; the successful rerun used authorized local service access.
+Installed versions: Frappe v16.26.3 and ERPNext v16.26.2. These are mocked/unit
+fixtures using site metadata, plus a read-only live report/export check, not a
+full accounting integration suite. Frappe/ERPNext v15, authenticated browser
+interaction, and a fresh end-to-end filing submission were not tested in this
+resumed session. The preceding session installed the targeted metadata on qatra;
+this session did not repeat migration or create accounting/evidence records.
+
+Qatra, 2026-05-01 through 2026-07-31, AED:
+
+| Measure | Verified amount |
+| --- | ---: |
+| Opening debit | 535.57 |
+| Period debit | 37,274.40 |
+| Period credit | 104,540.10 |
+| Net credit movement | 67,265.70 |
+| Closing credit | 66,730.13 |
+| Recorded output | 104,378.45 |
+| Recorded net input | 37,112.75 |
+| Allocated output / calculated Box 14 | 55,062.68 |
+| Claimed input | 0.00 |
+| Pending input recovery | 37,112.75 |
+| Pending output allocation | 49,315.77 |
+| Unexplained input/output accounting residuals | 0.00 |
+
+The live export contains **327 GL rows** (295 Purchase Invoice, 19 Journal Entry,
+13 Sales Invoice), versus 323 rows in the supplied historical specification.
+Amounts reconcile exactly; the historical row-count discrepancy is not silently
+normalized or treated as an amount difference. The GL Line Coverage sheet retains
+every current selected row for comparison with the original export.
+
+The supplied filed liability of 66,609.25 yields a GL-minus-filed difference of
+**656.45, unresolved**. No source evidence explains it. The live database has no
+submitted filing, payment, difference or external tax-evidence records, so the
+live report correctly shows unknown filed/payment amounts. The synthetic tests
+exercise the supplied acknowledgment scenario without inserting production data.
+The current calculated return remains explicitly incomplete.
+
+### Accountant actions
+
+1. Review 295 purchase VAT rows, including five return rows, and the five expense
+   journals. Supply eligibility evidence and approve full, partial or zero recovery
+   with an explicit tax-date basis. Net purchase VAT is 36,515.54; JE input is 597.21.
+2. Review both advance journals: supply emirate, tax date, base evidence and final
+   invoice/advance overlap evidence. Pending advance output is 49,315.77.
+3. Resolve import/reverse-charge invoices ACC-PINV-2026-00344, -00345 and -00346
+   from actual supply/customs documents; foreign supplier status alone is insufficient.
+4. Attach the acknowledgment in VAT 201 Filing and record the actual reference,
+   dates, known Box 14 and amount due. Obtain the full submitted return before
+   entering unknown Boxes 1–13. Obtain separate payment evidence before recording
+   a payment. The supplied acknowledgment is not a payment receipt.
+5. Investigate the 656.45 difference using source-linked documentary explanations.
+   Compare the original GL export with current GL Line Coverage for the row-count
+   discrepancy. Do not create an arbitrary adjustment to force agreement.
+
+### Deployment and rollback
+
+Back up the target database and public/private files before deployment. Retain
+the previous app revision and database backup together. On a staging copy first:
+
+```sh
+bench --site qatra backup --with-files
+bench --site qatra migrate
+bench --site qatra clear-cache
+bench --site qatra execute construction_management.construction_management.report.uae_vat_201_return.test_runner.run
+node --test apps/construction_management/construction_management/construction_management/report/uae_vat_201_return/test_uae_vat_201_return.js
+```
+
+Use the actual target site instead of qatra on another installation. If only the
+targeted VAT metadata installation is needed, the existing idempotent entry point
+is `bench --site qatra execute construction_management.construction_management.report.uae_vat_201_return.configuration.setup`.
+Check company VAT account mappings (Both for combined controls), filing calendar,
+taxpayer details and manager permissions. Refresh Desk and verify review actions,
+unknown-versus-zero behavior, detailed Excel and normal accounting workflows.
+Restart production web/workers through the deployment's existing process manager
+when required to load updated Python. Do not insert acceptance fixtures as live data.
+
+If rollback is necessary, preserve/export all newly submitted evidence first.
+Do not delete new DocTypes or their records. Restore matching application/database
+backups only through the site's controlled recovery procedure, accounting for
+transactions created since backup. A code-only rollback restores the old unsafe
+recovery semantics and is not an accounting-data rollback.
+
 ## Form-Style Presentation and Exports: 2026-10-31
 
 Presentation-only update. The specified [VAT Return Form 201 reference](https://tallysolutions.com/mena/wp-content/uploads/2018/vat/VAT%20Return%20Form%20201.pdf)

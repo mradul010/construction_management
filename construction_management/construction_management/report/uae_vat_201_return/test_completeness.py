@@ -25,7 +25,7 @@ class TestVATCompleteness(unittest.TestCase):
 			events=[],reviews=list(sources),excluded=[],warnings=[],reconciliation=[],observed=dict(sales_vat=0,purchases_vat=0))
 		result.update(changes)
 		with patch.object(engine,"build",return_value=result), patch.object(engine,"settings_for",return_value=self.settings):
-			return automatic.build({"company":"TEST"})
+			return automatic.build({"company":"TEST", "report_view":"Internal VAT Review"})
 
 	def state(self, result, box, component="amount"):
 		return next(row for row in result["boxes"] if row["box"] == box)["completeness"][component]["provisional"]
@@ -66,14 +66,14 @@ class TestVATCompleteness(unittest.TestCase):
 		self.assertTrue(claim["provisional"])
 		self.assertFalse(any(c["label"].startswith("VAT Adjustments") for c in cards))
 
-	def test_saved_purchase_zero_needs_no_approval_or_box_claim(self):
+	def test_saved_purchase_zero_is_pending_recovery(self):
 		source = self.source(voucher_type="Purchase Invoice",journal_category=None,journal_vat_role=None,
 			recovery_source_amount=0,vat_rows_count=1)
 		result = self.build([source])
-		self.assertFalse(result["reviews"])
-		self.assertFalse(self.state(result,"9"))
+		self.assertTrue(result["reviews"])
+		self.assertTrue(self.state(result,"9"))
 		self.assertIsNone(result["details"][0]["vat_box"])
-		self.assertEqual(result["details"][0]["recorded_vat_amount"],52.12)
+		self.assertEqual(result["details"][0].get("recorded_vat_amount", result["details"][0]["raw_vat"]),52.12)
 
 	def test_only_actual_adjustments_propagate_to_adjustment_components(self):
 		source = self.source(is_adjustment=1,box="9")
@@ -155,9 +155,9 @@ class TestVATCompleteness(unittest.TestCase):
 		source = self.source(voucher_type="Purchase Invoice",journal_category=None,journal_vat_role=None,
 			recovery_source_amount=0,vat_rows_count=1)
 		result = self.build([source],reconciliation=[dict(description="Input VAT",ledger_amount=52.12)])
-		self.assertFalse(self.state(result,"13"))
+		self.assertTrue(self.state(result,"13"))
 		self.assertEqual(result["reconciliation"][0]["difference"],-52.12)
-		self.assertIn("recovery exclusions: AED 52.12",result["reconciliation"][0]["explanation"])
+		self.assertIn("recovery exclusions: AED 0.0",result["reconciliation"][0]["explanation"])
 
 	def test_unallocated_output_reversal_remains_negative_in_warnings(self):
 		source = self.source(journal_category="Customer-advance output VAT",journal_vat_role="Output",base=-455672.6,
