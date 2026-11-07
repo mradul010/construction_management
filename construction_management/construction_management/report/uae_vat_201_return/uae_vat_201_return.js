@@ -9,6 +9,49 @@
 	const voucher = (row) =>
 		frappe.utils.get_form_link(row.voucher_type, row.voucher_no, true, esc(row.voucher_no));
 
+	function paginate_tables(root) {
+		for (const container of root?.querySelectorAll?.(".vat201-paged-table") || []) {
+			if (container.dataset.paginationReady) continue;
+			container.dataset.paginationReady = "1";
+			const rows = Array.from(container.querySelectorAll("tbody > tr"));
+			const normalize = value => value.toLocaleLowerCase().replaceAll(",", "").replace(/\s+/g, " ").trim();
+			const texts = rows.map(row => normalize(row.textContent));
+			let page = 0, size = 25, matching = rows;
+			const controls = document.createElement("div");
+			controls.className = "vat201-pagination d-flex flex-wrap align-items-center mb-2";
+			controls.style.gap = "8px";
+			controls.innerHTML = `<input type="search" class="form-control input-sm" style="max-width:320px" aria-label="${esc(__("Search transactions"))}" placeholder="${esc(__("Search voucher, date, account or amount"))}">
+				<label class="mb-0">${esc(__("Rows per page"))} <select class="form-control input-sm" style="display:inline-block;width:auto"><option>25</option><option>50</option><option>100</option></select></label>
+				<button type="button" class="btn btn-default btn-sm" data-page="previous">${esc(__("Previous"))}</button>
+				<button type="button" class="btn btn-default btn-sm" data-page="next">${esc(__("Next"))}</button>
+				<span class="text-muted" aria-live="polite"></span>`;
+			container.before(controls);
+			const search = controls.querySelector("input");
+			const select = controls.querySelector("select");
+			const previous = controls.querySelector('[data-page="previous"]');
+			const next = controls.querySelector('[data-page="next"]');
+			const status = controls.querySelector("span");
+			const render = () => {
+				page = Math.max(0, Math.min(page, Math.ceil(matching.length / size) - 1));
+				const visible = new Set(matching.slice(page * size, (page + 1) * size));
+				rows.forEach(row => row.style.display = visible.has(row) ? "" : "none");
+				previous.disabled = page === 0;
+				next.disabled = (page + 1) * size >= matching.length;
+				status.textContent = matching.length ? `${page * size + 1}–${Math.min((page + 1) * size, matching.length)} / ${matching.length} (${rows.length} ${__("total")})` : __("No matching transactions");
+			};
+			search.addEventListener("input", () => {
+				const terms = normalize(search.value).split(" ").filter(Boolean);
+				matching = rows.filter((row, index) => terms.every(term => texts[index].includes(term)));
+				page = 0;
+				render();
+			});
+			select.addEventListener("change", () => { size = Number(select.value); page = 0; render(); });
+			previous.addEventListener("click", () => { page--; render(); });
+			next.addEventListener("click", () => { page++; render(); });
+			render();
+		}
+	}
+
 	async function period(report, reset = false, requested_period = null) {
 		if (report._no_refresh || !report.get_filter_value("company")) return;
 		const filters = report.get_filter_values();
@@ -98,7 +141,7 @@
 					.join("")}</tr>`;
 			})
 			.join("");
-		return `<div class="table-responsive"><table class="table table-bordered"><thead><tr>${headings
+		return `<div class="table-responsive vat201-paged-table"><table class="table table-bordered"><thead><tr>${headings
 			.map((h) => `<th>${esc(__(h))}</th>`)
 			.join("")}</tr></thead><tbody>${
 			body || `<tr><td colspan="${headings.length}">${__("No transactions")}</td></tr>`
@@ -155,6 +198,7 @@
 			panel.querySelector(".vat201-tab-content").innerHTML = table(
 				groups[index]
 			);
+			paginate_tables(panel.querySelector(".vat201-tab-content"));
 		};
 		panel.addEventListener("click", (event) => {
 			const button = event.target.closest("[data-tab]");
@@ -217,6 +261,7 @@
 	}
 
 	frappe.query_reports["UAE VAT 201 Return"] = {
+		paginate_tables,
 		html_format: "<div>{%= report.raw_data.vat201_context.form_print_html %}</div>",
 		async onload(report) {
 			report.ignore_prepared_report = true;
@@ -338,10 +383,32 @@
 				report.$report_message.hide();
 				report.$summary?.children().addClass("qatra-vat201-return-card").css({ "flex": "1 1 220px", "min-width": "0", "border-radius": "4px" });
 			}
+			paginate_tables(wrapper);
 			if (wrapper.vat201_handler)
 				for (const type of ["click", "mousedown", "dblclick"])
 					wrapper.removeEventListener(type, wrapper.vat201_handler, true);
 			wrapper.vat201_handler = async (event) => {
+				const ledgerLink = event.target.closest(".vat201-ledger-total");
+				if (ledgerLink && wrapper.contains(ledgerLink)) {
+					event.preventDefault();
+					event.stopImmediatePropagation();
+					if (event.type !== "click") return;
+					const {message} = await frappe.call({method: endpoint + "ledger_details", args: {
+						filters: report.get_filter_values(), group: ledgerLink.dataset.group, component: ledgerLink.dataset.component,
+					}});
+					const currency = report.raw_data?.vat201_context?.ledger_summary?.currency || "AED";
+					const headings = message.kind === "sources" ? ["Date", "Voucher", "Amount Excluding VAT", "Recorded VAT", "GL Entries", "Category"] : ["Date", "Voucher", "VAT Account", "GL Entry", "Debit", "Credit"];
+					const rows = message.rows.map(row => {
+						const cells = message.kind === "sources" ? [esc(row.posting_date), voucher(row), money(row.base, currency), money(row.vat, currency), (row.gl_entries || "").split(", ").filter(Boolean).map(name => frappe.utils.get_form_link("GL Entry", name, true, esc(name))).join(", "), esc(row.category)] :
+							[esc(row.posting_date), voucher(row), esc(row.account), frappe.utils.get_form_link("GL Entry", row.name, true, esc(row.name)), money(row.debit, currency), money(row.credit, currency)];
+						return `<tr>${cells.map(cell => `<td>${cell}</td>`).join("")}</tr>`;
+					}).join("");
+					const dialog = new frappe.ui.Dialog({title: __(message.label), size: "extra-large", fields: [{fieldname: "transactions", fieldtype: "HTML"}]});
+					dialog.fields_dict.transactions.$wrapper.html(`<div class="table-responsive vat201-paged-table"><table class="table table-bordered"><thead><tr>${headings.map(h => `<th>${__(h)}</th>`).join("")}</tr></thead><tbody>${rows}</tbody></table></div>`);
+					dialog.show();
+					paginate_tables(dialog.fields_dict.transactions.$wrapper[0]);
+					return;
+				}
 				const link = event.target.closest(".vat201-amount");
 				if (!link || !wrapper.contains(link)) return;
 				event.preventDefault();
@@ -362,6 +429,7 @@
 				});
 				dialog.fields_dict.transactions.$wrapper.html(table(message));
 				dialog.show();
+				paginate_tables(dialog.fields_dict.transactions.$wrapper[0]);
 			};
 			for (const type of ["click", "mousedown", "dblclick"])
 				wrapper.addEventListener(type, wrapper.vat201_handler, true);

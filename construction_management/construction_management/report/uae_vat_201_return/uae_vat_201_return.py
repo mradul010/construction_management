@@ -73,6 +73,12 @@ def context_for(result):
 
 
 @frappe.whitelist()
+def ledger_details(filters, group, component="vat"):
+	from construction_management.construction_management.report.uae_vat_201_return import gl_view
+	return gl_view.drilldown(build(filters), group, component)
+
+
+@frappe.whitelist()
 def transactions(filters, box, fieldname=None):
 	result = build(filters)
 	keys = OUTPUT if box in ("8","12") else INPUT if box in ("11","13") else OUTPUT+INPUT if box=="14" else [box]

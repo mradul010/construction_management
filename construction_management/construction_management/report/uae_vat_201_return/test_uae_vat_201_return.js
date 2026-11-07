@@ -3,7 +3,7 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const vm = require("node:vm");
 
-function setup() {
+function setup(document) {
 	const calls = [];
 	const frappe = {
 		query_reports: {},
@@ -29,6 +29,7 @@ function setup() {
 	};
 	vm.runInNewContext(fs.readFileSync(`${__dirname}/uae_vat_201_return.js`, "utf8"), {
 		frappe,
+		document,
 		__: (s) => s,
 		URLSearchParams,
 		window: { open() {} },
@@ -170,7 +171,7 @@ test("currency clicks capture cell events and send exact box and value column", 
 	assert.equal(removed, 3);
 	const event = {
 		type: "mousedown",
-		target: { closest: () => ({ dataset: { box: "14", field: "amount" } }) },
+		target: { closest: (selector) => selector === ".vat201-amount" ? ({ dataset: { box: "14", field: "amount" } }) : null },
 		preventDefault: () => stopped++,
 		stopImmediatePropagation: () => stopped++,
 	};
@@ -236,7 +237,7 @@ test("transaction columns show source taxable and recorded VAT independently of 
 	});
 	await handler({
 		type: "click",
-		target: { closest: () => ({ dataset: { box: "9", field: "vat_amount" } }) },
+		target: { closest: (selector) => selector === ".vat201-amount" ? ({ dataset: { box: "9", field: "vat_amount" } }) : null },
 		preventDefault() {},
 		stopImmediatePropagation() {},
 	});
@@ -302,7 +303,7 @@ test("unknown source base is not replaced with a reviewed claim allocation", asy
 	});
 	await handler({
 		type: "click",
-		target: { closest: () => ({ dataset: { box: "9", field: "amount" } }) },
+		target: { closest: (selector) => selector === ".vat201-amount" ? ({ dataset: { box: "9", field: "amount" } }) : null },
 		preventDefault() {},
 		stopImmediatePropagation() {},
 	});
@@ -344,4 +345,65 @@ test("manager review calls the correct backend and preserves explicit zero recov
 	assert.equal(decision.args.values.recovery_percent, 0);
 	assert.equal(decision.args.expected_fingerprint, "CURRENT-EVIDENCE");
 	assert.equal(decision.args.action, "Approve");
+});
+
+test("sales/purchase and opening totals open their scoped audit details", async () => {
+ const {report, frappe, calls} = setup();
+ const handlers = {};
+ let rendered = "";
+ frappe.ui.Dialog = class {
+  constructor() {this.fields_dict = {transactions: {$wrapper: {html: value => rendered = value}}};}
+  show() {}
+ };
+ frappe.call = async args => {
+  calls.push(args);
+  return {message: {kind: args.args.component === "base" ? "sources" : "ledger", label: "Audit", rows: [{posting_date:"2026-04-30", voucher_type:"Purchase Invoice", voucher_no:"PI-1",name:"GL-1",account:"VAT",base:100,vat:-5,debit:0,credit:5,gl_entries:"GL-1",category:"Return"}]}};
+ };
+ report.after_datatable_render({wrapper: {contains:()=>true, addEventListener:(type, fn)=>handlers[type]=fn}});
+ for (const [group,component] of [["purchases","base"],["purchases","vat"],["opening_debit","vat"]]) {
+  await handlers.click({type:"click",target:{closest:selector=>selector===".vat201-ledger-total"?{dataset:{group,component}}:null},preventDefault(){},stopImmediatePropagation(){}});
+  assert.equal(calls.at(-1).args.group,group);
+  assert.equal(calls.at(-1).args.component,component);
+  assert.ok(calls.at(-1).method.endsWith("ledger_details"));
+  assert.ok(rendered.includes("2026-04-30"));
+  assert.ok(rendered.includes(component === "base" ? "Amount Excluding VAT" : "Debit"));
+ }
+});
+
+
+test("pagination searches all rows, resets pages, changes size and avoids duplicate controls", () => {
+ const element = () => ({value:"", style:{}, handlers:{}, addEventListener(type, fn){this.handlers[type]=fn;}});
+ const input=element(), select=element(), previous=element(), next=element(), status=element();
+ const controls={style:{},querySelector:selector=>({input,select,span:status,'[data-page="previous"]':previous,'[data-page="next"]':next})[selector]};
+ const {report}=setup({createElement:()=>controls});
+ const rows=Array.from({length:62},(_,i)=>({textContent:`2026-05-01 PI-${i} VAT ${i===61 ? "1,234.50 special" : "10.00"}`,style:{}}));
+ let inserted=0;
+ const container={dataset:{},querySelectorAll:()=>rows,before:()=>inserted++};
+ const root={querySelectorAll:()=>[container]};
+ const visible=()=>rows.filter(row=>row.style.display!=="none");
+ report.paginate_tables(root);
+ assert.equal(visible().length,25);
+ assert.equal(previous.disabled,true);
+ next.handlers.click();
+ assert.equal(visible()[0],rows[25]);
+ next.handlers.click();
+ assert.equal(visible().length,12);
+ assert.equal(next.disabled,true);
+ input.value="SPECIAL 1234.50";
+ input.handlers.input();
+ assert.equal(visible().length,1);
+ assert.equal(visible()[0],rows[61]);
+ assert.equal(previous.disabled,true);
+ input.value="missing-voucher";
+ input.handlers.input();
+ assert.equal(visible().length,0);
+ assert.equal(status.textContent,"No matching transactions");
+ input.value=""; input.handlers.input();
+ select.value="50"; select.handlers.change();
+ assert.equal(visible().length,50);
+ next.handlers.click(); previous.handlers.click();
+ assert.equal(visible()[0],rows[0]);
+ report.paginate_tables(root);
+ assert.equal(inserted,1);
+ assert.equal(rows.length,62);
 });

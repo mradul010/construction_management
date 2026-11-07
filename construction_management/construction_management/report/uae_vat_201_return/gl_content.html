@@ -1,3 +1,6 @@
+{% macro total(value, group, component='vat') %}
+{% if interactive %}<a href="#" class="vat201-ledger-total" data-group="{{ group }}" data-component="{{ component }}">{% endif %}{{ frappe.utils.fmt_money(value, precision=2) if value is not none else 'Not Available' }}{% if interactive %}</a>{% endif %}
+{% endmacro %}
 <style>
 .qatra-vat201-form {max-width:1150px;margin:auto;color:var(--text-color,#30373d);font-size:13px;}
 .qatra-vat201-form table {width:100%;border-collapse:collapse;margin:14px 0;}
@@ -5,14 +8,21 @@
 .qatra-vat201-form .number {text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap;}
 .qatra-vat201-form .gl-scroll {overflow-x:auto;}
 .qatra-vat201-form h2 {font-size:18px;margin-top:20px;}
-@media print {.qatra-vat201-form {font-size:10pt;} .qatra-vat201-form tr {page-break-inside:avoid;} .qatra-vat201-form .gl-scroll {overflow:visible;} }
+@media print {.vat201-pagination {display:none!important;} .vat201-paged-table tbody > tr {display:table-row!important;} .qatra-vat201-form {font-size:10pt;} .qatra-vat201-form tr {page-break-inside:avoid;} .qatra-vat201-form .gl-scroll {overflow:visible;} }
 </style>
 <article class="qatra-vat201-form">
-<h2>VAT per General Ledger</h2>
+<h2>VAT Sales and Purchases</h2>
 <p>{{ result.header.company|e }} · {{ result.header.from_date|e }} to {{ result.header.to_date|e }} · {{ result.get('ledger_summary', {}).get('currency', 'Not Available')|e }}</p>
-<p>Posted movements in configured VAT accounts. No internal recovery approval is needed for these totals. Opening balances are shown separately.</p>
+<p>Recorded amounts before internal recovery review. Returns reduce their original sales or purchase category. Amounts exclude VAT and come from source documents linked to the selected VAT accounts. Zero-rated or exempt supplies without VAT-account postings are outside this books summary.</p>
+<table><thead><tr><th>Category</th><th class="number">Amount Excluding VAT</th><th class="number">Recorded VAT</th></tr></thead><tbody>
+{% for key in summary_categories %}{% set data = business[key] %}<tr><th>{{ data.label|e }}{% if data.missing_bases %}<br><small>{{ data.missing_bases }} voucher(s) have an unavailable taxable base; open the amount for details.</small>{% endif %}</th><td class="number">{{ total(data.base, key, 'base') }}</td><td class="number">{{ total(data.vat, key) }}</td></tr>{% endfor %}
+</tbody></table>
+<p>Sales include customer advances. Purchases include identified expense journals. Sales VAT − purchase/expense VAT = net VAT payable on recorded transactions.</p>
+<table><tbody><tr><th>{{ 'Net VAT Payable' if payable >= 0 else 'Net VAT Refundable' }}</th><td class="number"><strong>{{ total(payable, 'net_payable') }}</strong></td></tr></tbody></table>
+{% if business.other.entries %}<p>Some ledger entries are outside sales and purchases. They remain in GL Reconciliation and the ledger list and are excluded from the net VAT payable calculation.</p>{% endif %}
+<h2>GL Reconciliation</h2><p>Raw debit and credit totals include returns and are not sales or purchase totals. Opening and closing links include all entries contributing to the net balance.</p>
 <table><thead><tr><th>Measure</th><th class="number">Amount ({{ result.get('ledger_summary', {}).get('currency', 'Not Available')|e }})</th></tr></thead><tbody>
-{% for row in rows %}<tr><th>{{ row.description|e }}</th><td class="number">{{ frappe.utils.fmt_money(row.amount, precision=2) if row.amount is not none else 'Not Available' }}</td></tr>{% endfor %}
+{% for row in rows %}<tr><th>{{ row.description|e }}</th><td class="number">{{ total(row.amount, row.key) }}</td></tr>{% endfor %}
 </tbody></table>
 <p>Use <strong>View → Internal VAT Review</strong> for recovery decisions and VAT 201 allocations. Net VAT per Books is a ledger balance movement, not the filed return liability.</p>
 {% if result.get('filed_comparison', {}).get('filed_liability') is not none %}
@@ -20,7 +30,7 @@
 {% endif %}
 {% if result.get('scope_incomplete') %}<p>Source access or report scope is incomplete. Review the detailed audit before relying on these totals.</p>{% endif %}
 <h2>VAT Ledger Entries ({{ entries|length }})</h2>
-<div class="gl-scroll"><table><thead><tr><th>Posting Date</th><th>Voucher</th><th>VAT Account</th><th>GL Entry</th><th class="number">Debit</th><th class="number">Credit</th></tr></thead><tbody>
-{% for row in entries %}<tr><td>{{ row.posting_date|e }}</td><td>{% if interactive %}<a href="{{ row.voucher_url|e }}">{{ row.voucher_no|e }}</a>{% else %}{{ row.voucher_no|e }}{% endif %}<br>{{ row.voucher_type|e }}</td><td>{{ row.account|e }}</td><td>{{ row.name|e }}</td><td class="number">{{ frappe.utils.fmt_money(row.debit, precision=2) }}</td><td class="number">{{ frappe.utils.fmt_money(row.credit, precision=2) }}</td></tr>{% endfor %}
+<div class="gl-scroll{% if interactive %} vat201-paged-table{% endif %}"><table><thead><tr><th>Posting Date</th><th>Voucher</th><th>VAT Account</th><th>GL Entry</th><th class="number">Debit</th><th class="number">Credit</th></tr></thead><tbody>
+{% for row in entries %}<tr{% if interactive and loop.index > 25 %} style="display:none"{% endif %}><td>{{ row.posting_date|e }}</td><td>{% if interactive %}<a href="{{ row.voucher_url|e }}">{{ row.voucher_no|e }}</a>{% else %}{{ row.voucher_no|e }}{% endif %}<br>{{ row.voucher_type|e }}</td><td>{{ row.account|e }}</td><td>{{ row.name|e }}</td><td class="number">{{ frappe.utils.fmt_money(row.debit, precision=2) }}</td><td class="number">{{ frappe.utils.fmt_money(row.credit, precision=2) }}</td></tr>{% endfor %}
 </tbody></table></div>
 </article>

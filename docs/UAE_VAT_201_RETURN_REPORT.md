@@ -1,5 +1,75 @@
 # UAE VAT 201 Return
 
+## Customer advances included in sales
+
+The current books summary includes customer advances within sales amounts and VAT.
+Advance vouchers remain labelled in sales drill-downs and the sales export sheet;
+there is no separate advance summary row. The Other VAT movements summary row is
+removed. Unallocated movements remain in the GL reconciliation and its export
+details, rather than being reassigned to sales or purchases.
+
+Net VAT Payable is recorded sales VAT (including advances) less recorded purchase
+and expense VAT, excluding opening balances and unallocated entries. Negative
+results display as Net VAT Refundable with the signed value retained. The net
+figure links to its sales and purchase ledger entries. Internal approved-return
+calculations and actual filed liabilities remain independent.
+
+Verified qatra May–July totals: sales base 2,087,568.86 and VAT 104,378.45;
+purchase/expense base 742,253.93 and VAT 37,112.75; net payable 67,265.70.
+Sales drill-down includes 13 invoices and two advance journals. All 202 Python
+and 12 JavaScript tests pass; live HTML and Excel were regenerated. This section
+supersedes earlier descriptions that display advances separately.
+
+## Search and pagination
+
+Interactive ledger lists, sales/purchase/GL drill-downs, internal box details and
+supporting transaction tabs show 25 rows per page, with 50/100-row options,
+Previous/Next controls and a visible result count. Case-insensitive search matches
+all loaded rows across pages, including vouchers, dates, accounts and amounts;
+comma separators in amounts are ignored. Multiple search terms must all match.
+Search and page-size changes reset the page, and repeated rendering does not
+duplicate controls. Search filters the detail list only, not report totals.
+
+Pagination is client-side over the existing permission-filtered report results;
+it reduces visible list length without introducing new database queries. Complete
+Excel and generated PDF/print data remain unpaginated. Validation: 202 Python tests
+and 12 JavaScript tests passed, including search beyond the current page, empty
+results, size changes, repeated initialization and complete Excel/print output.
+
+## Sales and purchase audit summary: 2026-11-07 meeting update
+
+The default General Ledger view now leads with four figures: net sales base,
+recorded sales VAT, net purchase/expense base and recorded purchase/expense VAT.
+Purchase returns reduce purchases, sales returns reduce sales; raw GL directions
+remain unchanged. Invoice VAT comes from the selected ledger entries, and bases
+come from the existing permission-checked source reader, not VAT divided by a rate.
+Unknown or ambiguous bases remain unavailable. The scope is documents contributing
+to configured VAT accounts, not all turnover or zero/exempt transactions.
+
+Identified expense journals are included with purchases and labelled in source
+details. Customer advances and other movements remain separate. The category
+bridge is sales VAT minus purchase/expense VAT plus advances plus other signed
+movements equals period credit-minus-debit. No approval is required for these
+recorded figures, and internal classifications do not replace the source bases.
+
+Click each summary amount for contributing source documents or VAT GL rows.
+Opening links show pre-period entries; closing links show opening plus period
+entries, because these are net balances, not just one side of the ledger. All
+listings sort by posting date, voucher type/name and GL identifier. Excel includes
+category source sheets and opening entries; detailed exports retain the prior audit.
+
+Live qatra verification for May–July 2026: sales base 1,101,253.46 and VAT 55,062.68;
+purchase/expense base 742,253.93 and VAT 37,112.75. The latter includes purchase
+invoice net base 730,309.57 / VAT 36,515.54 plus expense journals base 11,944.36 /
+VAT 597.21. Advance base 986,315.40 / VAT 49,315.77 remains separate. Net VAT
+per books remains 67,265.70. These are recorded amounts, not approved recovery.
+
+Validation: 201 Python tests and 11 Node tests passed, including return signs,
+split-GL base deduplication, unknown bases, approval independence, opening/closing
+scope, chronological sorting and clicked drill-down routing. Live HTML and Excel
+were regenerated; authenticated browser interaction was not tested. No schema
+migration is needed. Clear the site cache and reload Desk for the updated JS.
+
 ## Default GL view: 2026-11-07
 
 The report now defaults to **View: General Ledger**. Its cards show period VAT
