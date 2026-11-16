@@ -476,11 +476,13 @@ def rows_by_item(rows):
 
 def get_item_rows(filters, period, received, consumed, returned):
 	purchase_item_codes, purchase_invoice_item_details = get_purchase_invoice_item_details(filters, period)
+	consumption_item_codes, consumption_item_details = get_site_material_consumption_item_details(filters, period)
+	item_details = {**consumption_item_details, **purchase_invoice_item_details}
 	item_rows = []
-	item_codes = sorted(purchase_item_codes)
+	item_codes = sorted(purchase_item_codes | consumption_item_codes)
 
 	for item_code in item_codes:
-		details = purchase_invoice_item_details[item_code]
+		details = item_details[item_code]
 		item_description = details.get("description") or details.get("item_name") or item_code
 		uom = details.get("uom") or ""
 
@@ -499,23 +501,7 @@ def get_purchase_invoice_item_details(filters, period):
 	if not frappe.has_permission("Purchase Invoice", "read"):
 		return set(), {}
 
-	conditions = [
-		"`tabPurchase Invoice`.docstatus = 1",
-		"`tabPurchase Invoice`.posting_date between %(period_start)s and %(period_end)s",
-	]
-	values = {"period_start": period.start, "period_end": period.end}
-
-	add_filter(conditions, values, "`tabPurchase Invoice`.company", "company", filters)
-	add_filter(conditions, values, "`tabPurchase Invoice`.supplier", "supplier", filters)
-	add_filter(conditions, values, "`tabPurchase Invoice Item`.item_code", "item", filters)
-	add_filter(conditions, values, "`tabItem`.item_group", "item_group", filters)
-
-	if filters.get("project"):
-		values["projects"] = get_project_filter_values(filters.project)
-		conditions.append(
-			"coalesce(nullif(`tabPurchase Invoice Item`.project, ''), nullif(`tabPurchase Invoice`.project, ''), `tabSite Material Consumption`.project) in %(projects)s"
-		)
-
+	conditions, values = get_purchase_invoice_conditions(filters, period)
 	add_match_condition(conditions, "Purchase Invoice")
 	item_join = ""
 	if filters.get("item_group"):

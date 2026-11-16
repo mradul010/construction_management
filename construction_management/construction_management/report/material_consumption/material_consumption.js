@@ -44,7 +44,7 @@ frappe.query_reports["Material Consumption"] = {
 		},
 		{
 			fieldname: "month",
-			label: __("Month"),
+			label: __("Monthly"),
 			fieldtype: "Select",
 			options: [
 				"January",
