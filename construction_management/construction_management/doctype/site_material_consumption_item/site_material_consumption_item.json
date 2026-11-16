@@ -76,6 +76,13 @@
    "fieldname": "available_qty",
    "fieldtype": "Float",
    "in_list_view": 1,
+   "label": "Available Qty",
+   "read_only": 1
+  },
+  {
+   "fieldname": "previous_qty",
+   "fieldtype": "Float",
+   "in_list_view": 1,
    "label": "Previous Qty",
    "read_only": 1
   },

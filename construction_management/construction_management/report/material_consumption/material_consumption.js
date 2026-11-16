@@ -1,14 +1,46 @@
+function refreshMaterialConsumptionReport(query_report) {
+	const report = query_report || frappe.query_report;
+	if (report && report.report_name === "Material Consumption") {
+		report.refresh(true);
+	}
+}
+
 frappe.query_reports["Material Consumption"] = {
 	filters: [
-		{ fieldname: "company", label: __("Company"), fieldtype: "Link", options: "Company" },
-		{ fieldname: "project", label: __("Project"), fieldtype: "Link", options: "Project" },
-		{ fieldname: "supplier", label: __("Supplier"), fieldtype: "Link", options: "Supplier" },
-		{ fieldname: "item", label: __("Item"), fieldtype: "Link", options: "Item" },
+		{
+			fieldname: "company",
+			label: __("Company"),
+			fieldtype: "Link",
+			options: "Company",
+			on_change: refreshMaterialConsumptionReport,
+		},
+		{
+			fieldname: "project",
+			label: __("Project"),
+			fieldtype: "Link",
+			options: "Project",
+			on_change: refreshMaterialConsumptionReport,
+		},
+		{
+			fieldname: "supplier",
+			label: __("Supplier"),
+			fieldtype: "Link",
+			options: "Supplier",
+			on_change: refreshMaterialConsumptionReport,
+		},
+		{
+			fieldname: "item",
+			label: __("Item"),
+			fieldtype: "Link",
+			options: "Item",
+			on_change: refreshMaterialConsumptionReport,
+		},
 		{
 			fieldname: "item_group",
 			label: __("Item Group"),
 			fieldtype: "Link",
 			options: "Item Group",
+			on_change: refreshMaterialConsumptionReport,
 		},
 		{
 			fieldname: "month",
@@ -32,6 +64,7 @@ frappe.query_reports["Material Consumption"] = {
 				month: "long",
 			}),
 			reqd: 1,
+			on_change: refreshMaterialConsumptionReport,
 		},
 		{
 			fieldname: "year",
@@ -39,6 +72,7 @@ frappe.query_reports["Material Consumption"] = {
 			fieldtype: "Int",
 			default: frappe.datetime.str_to_obj(frappe.datetime.get_today()).getFullYear(),
 			reqd: 1,
+			on_change: refreshMaterialConsumptionReport,
 		},
 	],
 

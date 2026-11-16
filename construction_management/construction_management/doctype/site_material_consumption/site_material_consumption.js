@@ -40,6 +40,7 @@ function smcUpdateItemDetails(frm, cdt, cdn) {
 			posting_date: frm.doc.posting_date,
 			posting_time: frm.doc.posting_time,
 			uom: row.uom,
+			document_name: frm.is_new() ? null : frm.doc.name,
 		},
 		callback: function (r) {
 			const values = r.message || {};
@@ -90,6 +91,7 @@ function smcGetAvailableMaterials(frm) {
 				added += 1;
 			});
 			frm.refresh_field("items");
+			smcRefreshItemBalances(frm);
 			smcRecalculateTotals(frm);
 			frappe.show_alert({
 				message: added ? __("Available materials added.") : __("No new available materials found."),
@@ -281,7 +283,11 @@ frappe.ui.form.on("Site Material Consumption", {
 			const updates = {};
 			if (project.company && !frm.doc.company) updates.company = project.company;
 			if (project.cost_center && !frm.doc.cost_center) updates.cost_center = project.cost_center;
-			if (Object.keys(updates).length) frm.set_value(updates);
+			if (Object.keys(updates).length) {
+				frm.set_value(updates).then(() => smcRefreshItemBalances(frm));
+			} else {
+				smcRefreshItemBalances(frm);
+			}
 		});
 	},
 

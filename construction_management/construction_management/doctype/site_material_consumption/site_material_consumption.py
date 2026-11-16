@@ -810,6 +810,7 @@ def get_consumption_item_details(
 	posting_date=None,
 	posting_time=None,
 	uom=None,
+	document_name=None,
 ):
 	item = frappe.get_cached_doc("Item", item_code)
 	if cint(item.disabled):
@@ -818,7 +819,25 @@ def get_consumption_item_details(
 	stock_uom = item.stock_uom
 	uom = uom or stock_uom
 	conversion = flt(get_conversion_factor(item_code, uom).get("conversion_factor") or 1)
-	available_qty, valuation_rate = (0, 0)
+	available_qty, previous_qty, valuation_rate = (0, 0, 0)
+	exclude_document = None
+	if document_name:
+		document_context = frappe.db.get_value(
+			"Site Material Consumption",
+			document_name,
+			["name", "project", "company"],
+			as_dict=True,
+		)
+		if not document_context:
+			frappe.throw(_("Site Material Consumption {0} was not found.").format(frappe.bold(document_name)))
+		if document_context.project != project or document_context.company != company:
+			frappe.throw(
+				_("Document context does not match the selected company and project for {0}.").format(
+					frappe.bold(document_name)
+				)
+			)
+		exclude_document = document_name
+
 	if cint(item.is_stock_item):
 		source_warehouse = source_warehouse or get_site_material_warehouse(
 			company=company,
@@ -834,6 +853,14 @@ def get_consumption_item_details(
 				posting_time or nowtime(),
 				with_valuation_rate=True,
 			)
+		if project:
+			quantities = get_project_item_quantities(
+				item_code,
+				project,
+				posting_date or nowdate(),
+				exclude_document=exclude_document,
+			)
+			previous_qty = quantities["previous_gross_consumed"]
 
 	return {
 		"item_name": item.item_name,
@@ -842,11 +869,112 @@ def get_consumption_item_details(
 		"stock_uom": stock_uom,
 		"conversion_factor": conversion,
 		"available_qty": flt(available_qty),
+		"previous_qty": flt(previous_qty),
 		"valuation_rate": flt(valuation_rate),
 		"expense_account": get_default_expense_account(item_code, company),
 		"project": project,
 		"cost_center": get_default_cost_center(item_code, company, project),
 	}
+
+
+def get_project_item_quantities(item_code, project, posting_date, exclude_document=None):
+	"""Calculate project-scoped receipt, prior-consumption, and return quantities."""
+	values = {"item_code": item_code, "project": project, "posting_date": posting_date}
+	exclude_condition = ""
+	if exclude_document:
+		exclude_condition = "and smc.name != %(exclude_document)s"
+		values["exclude_document"] = exclude_document
+
+	received = frappe.db.sql(
+		"""
+		select coalesce(sum(
+			case when ifnull(pi.is_return, 0) = 1
+				then -abs(coalesce(pii.stock_qty, pii.qty * ifnull(pii.conversion_factor, 1)))
+			else abs(coalesce(pii.stock_qty, pii.qty * ifnull(pii.conversion_factor, 1))) end
+		), 0) as qty
+		from `tabPurchase Invoice` pi
+		inner join `tabPurchase Invoice Item` pii on pii.parent = pi.name
+		left join `tabSite Material Consumption` smc on smc.name = pi.site_material_consumption
+		where pi.docstatus = 1
+			and (smc.name is null or smc.docstatus = 1)
+			and pi.posting_date <= %(posting_date)s
+			and coalesce(nullif(pii.project, ''), nullif(pi.project, ''), smc.project) = %(project)s
+			and pii.item_code = %(item_code)s
+		""",
+		values,
+		as_dict=True,
+	)[0].qty
+
+	consumed = frappe.db.sql(
+		f"""
+		select coalesce(sum(item.qty * ifnull(item.conversion_factor, 1)), 0) as qty
+		from `tabSite Material Consumption` smc
+		inner join `tabSite Material Consumption Item` item on item.parent = smc.name
+		where smc.docstatus = 1
+			and ifnull(smc.transaction_type, 'Material Issue') = 'Material Issue'
+			and smc.project = %(project)s
+			and smc.posting_date <= %(posting_date)s
+			and item.item_code = %(item_code)s
+			{exclude_condition}
+		""",
+		values,
+		as_dict=True,
+	)[0].qty
+
+	returned = frappe.db.sql(
+		"""
+		select coalesce(sum(item.qty * ifnull(item.conversion_factor, 1)), 0) as qty
+		from `tabSite Material Consumption` smc
+		inner join `tabSite Material Consumption Item` item on item.parent = smc.name
+		where smc.docstatus = 1
+			and smc.transaction_type = 'Material Return'
+			and smc.project = %(project)s
+			and smc.posting_date <= %(posting_date)s
+			and item.item_code = %(item_code)s
+		""",
+		values,
+		as_dict=True,
+	)[0].qty
+
+	return {
+		"received": flt(received),
+		"previous_gross_consumed": flt(consumed),
+		"previous_returns": flt(returned),
+	}
+
+
+def get_project_purchase_invoice_items(project, company=None, posting_date=None):
+	if not project:
+		return []
+
+	conditions = [
+		"pi.docstatus = 1",
+		"pi.posting_date <= %(posting_date)s",
+		"coalesce(nullif(pii.project, ''), nullif(pi.project, '')) = %(project)s",
+	]
+	values = {
+		"project": project,
+		"posting_date": posting_date or nowdate(),
+	}
+	if company:
+		conditions.append("pi.company = %(company)s")
+		values["company"] = company
+
+	return frappe.db.sql(
+		f"""
+		select distinct
+			pii.item_code,
+			pii.item_name,
+			pii.description,
+			coalesce(pii.stock_uom, pii.uom) as uom
+		from `tabPurchase Invoice` pi
+		inner join `tabPurchase Invoice Item` pii on pii.parent = pi.name
+		where {" and ".join(conditions)}
+		order by pii.item_name, pii.item_code
+		""",
+		values,
+		as_dict=True,
+	)
 
 
 @frappe.whitelist()
@@ -892,6 +1020,27 @@ def get_available_materials(source_warehouse=None, company=None, project=None, p
 				"available_qty": flt(row.actual_qty),
 				"qty": 0,
 				"valuation_rate": valuation_rate,
+				"expense_account": get_default_expense_account(row.item_code, company),
+				"project": project,
+				"cost_center": get_default_cost_center(row.item_code, company, project),
+			}
+		)
+
+	seen_item_codes = {row["item_code"] for row in rows}
+	for row in get_project_purchase_invoice_items(project, company, posting_date):
+		if row.item_code in seen_item_codes:
+			continue
+		rows.append(
+			{
+				"item_code": row.item_code,
+				"item_name": row.item_name,
+				"description": row.description,
+				"uom": row.uom,
+				"stock_uom": row.uom,
+				"conversion_factor": 1,
+				"available_qty": 0,
+				"qty": 0,
+				"valuation_rate": 0,
 				"expense_account": get_default_expense_account(row.item_code, company),
 				"project": project,
 				"cost_center": get_default_cost_center(row.item_code, company, project),

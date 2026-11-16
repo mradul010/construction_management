@@ -1,4 +1,4 @@
-(() => {
+;(() => {
 	const parent_tables = {
 		"BOQ": ["items"],
 		"Sales Order": ["items"],
