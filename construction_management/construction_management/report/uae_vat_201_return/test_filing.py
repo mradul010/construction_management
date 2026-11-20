@@ -31,9 +31,9 @@ class TestFiledComparison(unittest.TestCase):
 	def test_acknowledgment_is_not_payment(self):
 		r = filing.compare(self.result, self.filed)
 		self.assertEqual(r["filing_status"], "Submitted")
-		self.assertEqual(r["payment_status"], "Unknown / Not Verified")
+		self.assertEqual(r["payment_status"], "Payment Pending")
 		self.assertIsNone(r["payment_amount"])
-		self.assertIsNone(r["outstanding_balance"])
+		self.assertEqual(r["outstanding_balance"], 66609.25)
 
 	def test_unknown_boxes_are_not_reverse_engineered(self):
 		r = filing.compare(self.result, self.filed)
@@ -54,8 +54,8 @@ class TestFiledComparison(unittest.TestCase):
 		self.assertEqual(r["calculated_liability"], 0)
 		self.assertEqual(self.filed, original)
 
-	def test_partial_full_and_overpayment_require_payment_rows(self):
-		for amount, status, balance in ((100, "Partially Paid", 66509.25), (66609.25, "Paid", 0), (66610.25, "Overpaid", -1)):
+	def test_partial_full_and_legacy_overpayment_comparison(self):
+		for amount, status, balance in ((100, "Partially Paid", 66509.25), (66609.25, "Paid", 0), (66610.25, "Paid", 0)):
 			r = filing.compare(self.result, self.filed, [dict(payment_amount=amount)])
 			self.assertEqual((r["payment_status"], r["outstanding_balance"]), (status, balance))
 
@@ -146,9 +146,9 @@ class TestFiledComparison(unittest.TestCase):
 				return [frappe._dict(name="ORIGINAL"), frappe._dict(name="CORRECTED", correction_of="ORIGINAL")]
 			if dt == "VAT 201 Payment":
 				self.assertEqual(kwargs["filters"]["filing"], ["in", ["CORRECTED", "ORIGINAL"]])
-				return [dict(payment_amount=100)]
+				return [frappe._dict(payment_amount=100, accounting_voucher_type="Journal Entry", accounting_voucher="JV-PAY")]
 			return []
-		with patch.object(frappe.db, "exists", return_value=True), patch.object(frappe, "has_permission", return_value=True), patch.object(frappe, "get_list", side_effect=get_list), patch.object(frappe, "get_doc", return_value=doc):
+		with patch.object(frappe.db, "exists", return_value=True), patch.object(frappe.db, "get_value", return_value=1), patch.object(frappe, "has_permission", return_value=True), patch.object(frappe, "get_list", side_effect=get_list), patch.object(frappe, "get_doc", return_value=doc):
 			filing.attach_comparison(self.result)
 		self.assertEqual(self.result["filed_comparison"]["payment_amount"], 100)
 
@@ -175,7 +175,7 @@ class TestFilingDocumentValidation(unittest.TestCase):
 
 	def test_missing_liability_is_not_a_nil_filing(self):
 		with self.assertRaises(frappe.ValidationError):
-			self.make_filing(filed_liability_known=0).validate()
+			self.make_filing(docstatus=1, filed_liability_known=0).validate()
 
 	def test_conflicting_and_duplicate_components_fail(self):
 		for rows in ([dict(box="14", component="amount", value=1, evidence_reference="TEST")],
@@ -196,7 +196,86 @@ class TestFilingDocumentValidation(unittest.TestCase):
 	def test_missing_evidence_is_rejected(self):
 		with patch.object(frappe, "get_list", return_value=[]):
 			with self.assertRaises(frappe.ValidationError):
-				self.make_filing().validate()
+				self.make_filing(docstatus=1).validate()
+
+	def test_generated_draft_can_be_saved_before_fta_evidence_is_available(self):
+		doc = self.make_filing(docstatus=0, fta_reference=None, submission_date=None,
+			supporting_evidence=None, reason=None)
+		doc.validate()
+		self.assertEqual(doc.docstatus, 0)
+
+	def test_calculated_values_include_all_applicable_box_components(self):
+		result = dict(boxes=list(engine.aggregate([
+			dict(box="1a", amount=100, vat_amount=5, adjustment=1),
+			dict(box="9", amount=40, vat_amount=2, adjustment=0),
+		]).values()))
+		values = {(row["box"], row["component"]): row["value"] for row in filing.calculated_filing_values(result)}
+		self.assertEqual(values[("1a", "amount")], 100)
+		self.assertEqual(values[("1a", "vat_amount")], 5)
+		self.assertEqual(values[("1a", "adjustment")], 1)
+		self.assertEqual(values[("9", "vat_amount")], 2)
+		self.assertEqual(values[("14", "amount")], 4)
+		self.assertNotIn(("14", "vat_amount"), values)
+
+	def test_draft_preview_uses_saved_filing_rows_without_recalculation(self):
+		doc = frappe._dict(fta_reference="FTA-REF", submission_date="2026-08-27",
+			filed_values=[frappe._dict(box="1b", component="amount", value=2087568.93),
+				frappe._dict(box="1b", component="vat_amount", value=104378.45),
+				frappe._dict(box="14", component="amount", value=66609.25)])
+		result = filing.draft_result(doc, dict(company="TEST", from_date="2026-05-01", to_date="2026-07-31"))
+		boxes = {box["box"]: box for box in result["boxes"]}
+		self.assertEqual(boxes["1b"]["amount"], 2087568.93)
+		self.assertEqual(boxes["1b"]["vat_amount"], 104378.45)
+		self.assertEqual(boxes["14"]["amount"], 66609.25)
+		self.assertEqual(boxes["1f"]["amount"], 0)
+		self.assertEqual(result["header"]["fta_reference"], "FTA-REF")
+
+
+class TestPaymentSettlementWorkflow(unittest.TestCase):
+	def parent(self, **changes):
+		values = dict(name="FILING", company="SYNTHETIC", docstatus=1, from_date="2026-05-01", to_date="2026-07-31",
+			filed_liability_known=1, filed_liability=100, amount_due_known=1, amount_due=100)
+		values.update(changes)
+		return frappe._dict(values)
+
+	def test_payment_states_cover_pending_partial_paid_and_recoverable(self):
+		parent = self.parent()
+		self.assertEqual(filing.payment_state(parent, 0), (100, "Filed / Payment Pending"))
+		self.assertEqual(filing.payment_state(parent, 40), (60, "Partially Paid"))
+		self.assertEqual(filing.payment_state(parent, 100), (0, "Paid"))
+		self.assertEqual(filing.payment_state(self.parent(filed_liability=-25, amount_due=0), 0), (0, "Recoverable"))
+
+	def test_payment_cannot_exceed_locked_outstanding(self):
+		doc = frappe.get_doc(dict(doctype="VAT 201 Payment", name="PAYMENT", company="SYNTHETIC", filing="FILING",
+			payment_amount=100.01, payment_reference="REF", accounting_voucher_type="Journal Entry", accounting_voucher="JV-PAY"))
+		with patch.object(filing.EvidenceRecord, "before_submit"), patch.object(frappe.db, "sql"), \
+			patch.object(frappe.db, "exists", return_value=False), patch.object(filing, "linked_filing", return_value=self.parent()), \
+			patch.object(filing, "submitted_payment_total", return_value=0), patch.object(filing, "payment_state", return_value=(100, "Filed / Payment Pending")):
+			with self.assertRaises(frappe.ValidationError):
+				filing.PaymentRecord.before_submit(doc)
+
+	def test_accounting_voucher_must_clear_vat_to_selected_bank(self):
+		doc = frappe._dict(company="SYNTHETIC", payment_date="2026-08-20", payment_amount=100,
+			bank_account="BANK", accounting_voucher_type="Journal Entry", accounting_voucher="JV-PAY")
+		voucher = frappe._dict(company="SYNTHETIC", docstatus=1, posting_date="2026-08-20", check_permission=Mock())
+		account = frappe._dict(company="SYNTHETIC", is_group=0, account_type="Bank")
+		settings = frappe._dict(uae_vat_accounts=[frappe._dict(account="VAT", custom_vat201_side="Both")])
+		rows = [frappe._dict(account="VAT", debit=100, credit=0), frappe._dict(account="BANK", debit=0, credit=100)]
+		with patch.object(frappe, "get_doc", return_value=voucher), patch.object(frappe, "get_cached_doc", return_value=account), \
+			patch.object(engine, "settings_for", return_value=settings), patch.object(frappe, "get_all", return_value=rows):
+			self.assertIs(filing.validate_accounting_settlement(doc), voucher)
+			rows[1].credit = 99
+			with self.assertRaises(frappe.ValidationError):
+				filing.validate_accounting_settlement(doc)
+
+	def test_filing_submission_marks_configured_period_filed(self):
+		doc = frappe._dict(company="SYNTHETIC", from_date="2026-05-01", to_date="2026-07-31",
+			submission_date="2026-08-20", fta_reference="FTA-REF", approved_by="manager@example.com", approved_on="2026-08-20")
+		period = frappe._dict(name="PERIOD-1")
+		with patch.object(filing, "filing_period", return_value=period), patch.object(frappe.db, "set_value") as setter:
+			filing.FilingRecord.on_submit(doc)
+		setter.assert_called_once()
+		self.assertEqual(setter.call_args.args[2]["status"], "Filed")
 
 
 class TestDocumentaryTax(unittest.TestCase):

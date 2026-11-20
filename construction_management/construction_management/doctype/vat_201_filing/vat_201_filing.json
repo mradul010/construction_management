@@ -13,6 +13,9 @@
     "filed_liability",
     "amount_due_known",
     "amount_due",
+    "filing_status",
+    "outstanding_amount",
+    "vat_return_preview",
     "filed_values",
     "correction_of",
     "calculation_snapshot",
@@ -49,14 +52,12 @@
       "fieldname": "fta_reference",
       "fieldtype": "Data",
       "label": "Fta Reference",
-      "reqd": 1,
       "in_list_view": 1
     },
     {
       "fieldname": "submission_date",
       "fieldtype": "Date",
-      "label": "Submission Date",
-      "reqd": 1
+      "label": "Submission Date"
     },
     {
       "fieldname": "filed_liability_known",
@@ -81,6 +82,28 @@
       "fieldtype": "Currency",
       "label": "Amount Due",
       "options": "AED"
+    },
+    {
+      "fieldname": "filing_status",
+      "fieldtype": "Select",
+      "label": "Filing / Payment Status",
+      "options": "Draft\nFiled / Payment Pending\nPartially Paid\nPaid\nRecoverable",
+      "default": "Draft",
+      "read_only": 1,
+      "in_list_view": 1
+    },
+    {
+      "fieldname": "outstanding_amount",
+      "fieldtype": "Currency",
+      "label": "Outstanding VAT Payable",
+      "options": "AED",
+      "read_only": 1,
+      "in_list_view": 1
+    },
+    {
+      "fieldname": "vat_return_preview",
+      "fieldtype": "HTML",
+      "label": "VAT 201 Return Preview"
     },
     {
       "fieldname": "filed_values",
@@ -109,14 +132,12 @@
     {
       "fieldname": "supporting_evidence",
       "fieldtype": "Attach",
-      "label": "Supporting Evidence",
-      "reqd": 1
+      "label": "Supporting Evidence"
     },
     {
       "fieldname": "reason",
       "fieldtype": "Small Text",
-      "label": "Reason",
-      "reqd": 1
+      "label": "Reason"
     },
     {
       "fieldname": "approved_by",

@@ -72,6 +72,7 @@
 <section><h2>VAT Return Period</h2><table class="vat201-meta"><tbody>
 <tr><td><span class="vat201-label">Tax Period From / To</span>{{ value(form.header.from_date) }} to {{ value(form.header.to_date) }}</td><td><span class="vat201-label">VAT Return Due Date</span>{{ value(form.header.due_date) }}</td></tr>
 <tr><td><span class="vat201-label">Tax Year End</span>{{ value(form.header.tax_year_end) }}</td><td><span class="vat201-label">Filing Frequency / VAT Stagger</span>{{ value(form.header.filing_frequency) }} / {{ value(form.header.stagger) }}</td></tr>
+{% if form.header.get('fta_reference') or form.header.get('submission_date') %}<tr><td><span class="vat201-label">FTA Reference</span>{{ value(form.header.get('fta_reference')) }}</td><td><span class="vat201-label">Date of Submission</span>{{ value(form.header.get('submission_date')) }}</td></tr>{% endif %}
 </tbody></table></section>
 <section class="vat201-outputs"><h2>VAT on Sales and All Other Outputs</h2>{{ table(form.outputs) }}</section>
 <section class="vat201-inputs"><div class="vat201-print-heading"><strong>UAE VAT Return - VAT 201</strong><br>{{ value(form.header.legal_name_english) }} | TRN {{ value(form.header.trn) }}<br>{{ value(form.header.from_date) }} to {{ value(form.header.to_date) }} | {{ form.status|e }}</div><h2>VAT on Expenses and All Other Inputs</h2>{{ table(form.inputs, true) }}</section>

@@ -6,9 +6,13 @@
   "field_order": [
     "company",
     "filing",
+    "from_date",
+    "to_date",
+    "outstanding_before_payment",
     "payment_date",
     "payment_reference",
     "payment_amount",
+    "bank_account",
     "accounting_voucher_type",
     "accounting_voucher",
     "supporting_evidence",
@@ -23,7 +27,31 @@
       "label": "Company",
       "options": "Company",
       "reqd": 1,
+      "fetch_from": "filing.company",
+      "read_only": 1,
       "in_list_view": 1
+    },
+    {
+      "fieldname": "from_date",
+      "fieldtype": "Date",
+      "label": "Reporting Period From",
+      "fetch_from": "filing.from_date",
+      "read_only": 1
+    },
+    {
+      "fieldname": "to_date",
+      "fieldtype": "Date",
+      "label": "Reporting Period To",
+      "fetch_from": "filing.to_date",
+      "read_only": 1
+    },
+    {
+      "fieldname": "outstanding_before_payment",
+      "fieldtype": "Currency",
+      "label": "Outstanding Before Payment",
+      "options": "AED",
+      "fetch_from": "filing.outstanding_amount",
+      "read_only": 1
     },
     {
       "fieldname": "filing",
@@ -32,6 +60,13 @@
       "options": "VAT 201 Filing",
       "reqd": 1,
       "in_list_view": 1
+    },
+    {
+      "fieldname": "bank_account",
+      "fieldtype": "Link",
+      "label": "Bank Account",
+      "options": "Account",
+      "reqd": 1
     },
     {
       "fieldname": "payment_date",

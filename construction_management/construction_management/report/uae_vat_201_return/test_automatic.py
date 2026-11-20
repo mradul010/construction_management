@@ -142,16 +142,15 @@ class TestAutomaticVAT201(unittest.TestCase):
 		self.assertEqual(row["VAT Amount"], 77.88)
 		self.assertIn("Recoverable VAT: AED 0.00", row["Remarks"])
 
-	def test_saved_zero_is_read_without_suppressing_source_amounts(self):
+	def test_dashboard_purchase_rows_are_fully_allocated_despite_legacy_zero_default(self):
 		for base, vat in ((1557.5, 77.88), (323, 16.15)):
-			output = self.run_build(self.result([self.purchase(base=base, raw_vat=vat, recovery_source_amount=0)]))
-			self.assertFalse(output["events"])
+			output = self.run_build(self.result([self.purchase(base=base, raw_vat=vat, recovery_source_amount=0)]), use_dashboard=True)
+			self.assertEqual((output["events"][0]["box"], output["events"][0]["amount"], output["events"][0]["vat_amount"]), ("9", base, vat))
 			row = output["details"][0]
 			self.assertEqual((row["base"], row["raw_vat"]), (base, vat))
-			self.assertEqual(row["recovery_status"], "Not specified in source")
-			self.assertIsNone(row["vat_box"])
-			self.assertTrue(output["reviews"])
-			self.assertTrue(output["reviews"])
+			self.assertEqual(row["recovery_status"], "Verified fully recoverable")
+			self.assertEqual(row["vat_box"], "9")
+			self.assertFalse(output["reviews"])
 
 	def test_retained_zero_claim_is_not_included_in_box_nine(self):
 		source = self.purchase(recovery_source_amount=0)
@@ -238,7 +237,7 @@ class TestAutomaticVAT201(unittest.TestCase):
 			excluded=[], warnings=["Unapproved sources are NOT included in VAT boxes"],
 			reconciliation=[dict(description="Output VAT", ledger_amount=49.99), dict(description="Input VAT", ledger_amount=0)])
 
-	def run_build(self, result):
+	def run_build(self, result, use_dashboard=False):
 		# Explicit approval fixtures model engine-validated events, not live decisions.
 		for source in list(result["reviews"]):
 			if not source.get("_approved_fixture"):
@@ -252,12 +251,13 @@ class TestAutomaticVAT201(unittest.TestCase):
 				self.assertIsNone(error)
 				result["events"].append(event)
 			result["reviews"].remove(source)
-		with patch.object(engine, "build", return_value=result), patch.object(engine, "settings_for", return_value={"uae_vat_accounts": [frappe._dict(account="VAT", custom_vat201_side="Both")]}):
+		with patch.object(engine, "build", return_value=result), patch.object(engine, "settings_for", return_value={"custom_vat201_use_recorded_purchases": int(use_dashboard), "uae_vat_accounts": [frappe._dict(account="VAT", custom_vat201_side="Both")]}):
 			return automatic.build({"company": "TEST"})
 
 	def test_automatic_calculation_deduplicates_and_does_not_write_records(self):
 		source = self.sales()
-		with patch.object(frappe, "get_doc", side_effect=AssertionError("Unexpected document write")):
+		with patch.object(frappe.utils, "now_datetime", return_value="2026-06-30 12:00:00"), \
+				patch.object(frappe, "get_doc", side_effect=AssertionError("Unexpected document write")):
 			result = self.run_build(self.result([source, dict(source)]))
 		self.assertEqual(len(result["events"]), 1)
 		self.assertFalse(result["reviews"])

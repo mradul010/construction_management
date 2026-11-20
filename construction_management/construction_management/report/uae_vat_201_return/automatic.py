@@ -59,6 +59,30 @@ def sales_emirate_box(source):
 	return "1" + chr(97 + engine.get_emirates().index(emirate)), None
 
 
+def recorded_purchase_rule(source, base_currency):
+	"""Allocate the same validated purchase/expense rows shown in the GL dashboard to Box 9."""
+	if base_currency != "AED":
+		return None, "AED tax-point exchange evidence is required; Company base amounts are not AED"
+	if source.get("base") is None:
+		return None, "Saved taxable-base allocation is missing"
+	if source.get("invoice_tax_difference"):
+		return None, "Source VAT does not reconcile with active GL postings"
+	if source["voucher_type"] == "Journal Entry":
+		if source.get("journal_category") != "Recorded purchase VAT":
+			return None, None
+		if source.get("journal_invoice_linked"):
+			return None, "Invoice-linked journal VAT is not an additional expense claim; verify settlement or duplicate invoice VAT"
+		if source.get("journal_duplicate_risk") or source.get("journal_match_issue"):
+			return None, source.get("journal_duplicate_risk") or source.get("journal_match_issue")
+	elif not standard_purchase(source):
+		return None, None
+	return frappe._dict(box="9", tax_date=source["posting_date"],
+		reason="Recorded purchase/expense transaction included in the General Ledger dashboard",
+		supporting_reference="General Ledger dashboard: Purchases and expenses less returns",
+		recovery_confirmed=1, recovery_percent=100, override_base=0, is_adjustment=0,
+		recorded_purchase_dashboard=1), None
+
+
 def source_rule(source, base_currency, standard_rate=None):
 	"""Return a calculation adapter only when source evidence establishes treatment."""
 	dt = source["voucher_type"]
@@ -75,7 +99,7 @@ def source_rule(source, base_currency, standard_rate=None):
 			box, error = sales_emirate_box(source)
 			if error:
 				return None, error
-			evidence = "Saved transaction VAT Emirate: " + source["voucher_no"]
+			evidence = (source.get("source_emirate_evidence") or "Saved transaction VAT Emirate") + ": " + source["voucher_no"]
 		else:
 			return None, "Sales tax treatment is not supported by saved tax rows or explicit item flags"
 	elif dt == "Purchase Invoice":
@@ -134,7 +158,7 @@ def source_rule(source, base_currency, standard_rate=None):
 					return None, "Customer-advance output VAT: reporting VAT Emirate is missing or invalid on the transaction or an authoritative linked document"
 				if standard_rate <= 0 or engine.number(source.get("tax_rate")) != standard_rate:
 					return None, "Customer-advance output VAT rate does not establish standard-rated Emirate reporting"
-				return None, "Customer-advance VAT requires approved supply allocation, tax date and supporting evidence"
+				evidence = (source.get("source_emirate_evidence") or "Structured customer-advance accounting") + ": " + source["voucher_no"]
 			elif source.get("journal_invoice_linked"):
 				return None, "Invoice-linked journal VAT is not an additional expense claim; verify settlement or duplicate invoice VAT"
 			elif source.get("journal_match_issue"):
@@ -161,13 +185,21 @@ def build(filters=None, settings_override=None):
 	result = engine.build(filters, settings_override=settings_override)
 	result["report_view"] = (frappe.parse_json(filters) or {}).get("report_view") or "General Ledger"
 	settings = settings_override if settings_override is not None else engine.settings_for(result["filters"].company)
+	use_recorded_purchases = bool(settings.get("custom_vat201_use_recorded_purchases"))
+	from construction_management.construction_management.report.uae_vat_201_return.filing import settlement_exclusions
+	settlements = settlement_exclusions(result["filters"].company, result["filters"].from_date, result["filters"].to_date, settings)
+	if settlements:
+		settled = {(row["voucher_type"], row["voucher_no"], row["source_row"]) for row in settlements}
+		result["excluded"].extend(settlements)
+		result["reviews"] = [row for row in result["reviews"] if (row["voucher_type"], row["voucher_no"], row["source_row"]) not in settled]
+		result["events"] = [row for row in result["events"] if (row["voucher_type"], row["voucher_no"], row["source_row"]) not in settled]
 	result["settings_name"] = settings.get("name")
 	result["calculated_at"] = str(frappe.utils.now_datetime())
 	mappings = engine.account_mappings(settings.get("uae_vat_accounts", []))
 	allocate_saved_recovery([row for row in result["reviews"] if mappings.get(row.get("tax_account")) in ("Input", "Both")])
 	events = []
 	issues, details = [], []
-	# Saved invoice Emirate also governs any retained historical standard-rated event.
+	# Customer supply-address Emirate also governs retained historical standard-rated events.
 	for event in result["events"]:
 		event = dict(event)
 		event["treatment_source"] = "Manual approved override"
@@ -192,13 +224,17 @@ def build(filters=None, settings_override=None):
 			continue
 		seen.add(key)
 		row = dict(source, currency=result["header"]["base_currency"], vat_box=None)
-		if (source.get("classification_status") in ("Rejected", "Needs Review") or source.get("requires_review") or source.get("review", "").startswith(("Duplicated", "Source evidence changed", "Outside VAT exclusion conflicts"))):
+		recorded_purchase = standard_purchase(source) or source.get("journal_category") == "Recorded purchase VAT"
+		dashboard_purchase = use_recorded_purchases and recorded_purchase
+		if (not dashboard_purchase and (source.get("classification_status") in ("Rejected", "Needs Review") or source.get("requires_review") or source.get("review", "").startswith(("Duplicated", "Source evidence changed", "Outside VAT exclusion conflicts")))):
 			rule, problem = None, "Previous source verification is rejected, conflicting or no longer valid; verify source evidence"
 			events = [e for e in events if tuple(e[k] for k in ("voucher_type", "voucher_no", "source_row")) != key]
 		else:
 			if source["voucher_type"] == "Purchase Invoice" and source.get("reverse_charge") == "Y":
 				rule, problem = None, "Reverse-charge output and recovery require approved tax treatment and tax date"
-			elif standard_purchase(source) or source.get("journal_category") == "Recorded purchase VAT":
+			elif dashboard_purchase:
+				rule, problem = recorded_purchase_rule(source, result["header"]["base_currency"])
+			elif recorded_purchase:
 				from construction_management.construction_management.report.uae_vat_201_return.policy import resolve
 				rule, problem = resolve(source, settings, result["header"]["base_currency"])
 			else:
@@ -220,6 +256,12 @@ def build(filters=None, settings_override=None):
 					event, problem = engine.apply_rule(source, calculation_rule, result["header"]["base_currency"], source_verified=True)
 					if problem:
 						break
+					if calculation_rule.get("recorded_purchase_dashboard"):
+						event.update(treatment_source="General Ledger dashboard",
+							recovery_basis="Recorded Purchases and expenses less returns",
+							treatment="Recorded expense JV VAT" if source["voucher_type"] == "Journal Entry" else "Recorded standard-rated purchase")
+						calculated.append(event)
+						continue
 					if calculation_rule.get("treatment_source"):
 						event.update(treatment_source=calculation_rule.treatment_source, policy_id=calculation_rule.get("policy_id"),
 							policy_name=calculation_rule.get("policy_name"), policy_approved_by=calculation_rule.get("policy_approved_by"),
@@ -243,7 +285,7 @@ def build(filters=None, settings_override=None):
 					elif calculation_rule.box == "3":
 						event["treatment"] = "Recorded reverse-charge output VAT; input recovery does not reduce output liability"
 					else:
-						event["treatment"] = "Customer-advance output VAT" if source.get("journal_vat_role") == "Output" else "Saved sales VAT Emirate and tax row" if calculation_rule.box in engine.OUTPUT[:7] else "Saved source-item " + str(source.get("treatment_hint") or "VAT treatment")
+						event["treatment"] = "Customer-advance output VAT" if source.get("journal_vat_role") == "Output" else "Customer-address Emirate and saved tax row" if calculation_rule.box in engine.OUTPUT[:7] else "Saved source-item " + str(source.get("treatment_hint") or "VAT treatment")
 					calculated.append(event)
 				if not problem:
 					events.extend(calculated)
@@ -339,6 +381,8 @@ def transaction_label(row):
 			return "Purchase return"
 		if not row.get("raw_vat"):
 			return "No recorded VAT"
+		if row.get("treatment_source") == "General Ledger dashboard":
+			return "Recorded standard-rated purchase"
 		return "Saved recoverable input VAT" if row.get("recoverable_vat_amount") else "Recorded standard-rated purchase"
 	return row.get("treatment") or "Recorded source transaction"
 

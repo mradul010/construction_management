@@ -62,7 +62,8 @@ class TestHistoricalAcceptance(unittest.TestCase):
 
 	def build(self, **kwargs):
 		initial = fixture(**kwargs)
-		settings = {"uae_vat_accounts": [frappe._dict(account="SYNTHETIC-VAT", custom_vat201_side="Both")]}
+		settings = {"custom_vat201_use_recorded_purchases": 1,
+			"uae_vat_accounts": [frappe._dict(account="SYNTHETIC-VAT", custom_vat201_side="Both")]}
 		with patch.object(engine, "build", return_value=copy.deepcopy(initial)), patch.object(engine, "settings_for", return_value=settings):
 			result = automatic.build({"company":"SYNTHETIC"})
 		self.assertEqual(len(result["ledger_entries"]), 323)
@@ -78,14 +79,15 @@ class TestHistoricalAcceptance(unittest.TestCase):
 		self.assertEqual(covered, {g["name"] for g in initial["ledger_entries"]})
 		return result
 
-	def test_unreviewed_purchase_and_journal_inputs_are_pending(self):
+	def test_dashboard_purchases_and_structured_customer_advances_are_allocated(self):
 		r = self.build()
-		self.assertEqual(r["tax_measures"]["pending_input"], 37112.75)
+		self.assertEqual(r["tax_measures"]["pending_input"], 0)
+		self.assertEqual(r["tax_measures"]["claimed_input"], 37112.75)
 		self.assertEqual(r["tax_measures"]["known_nonclaimed"], 0)
-		self.assertEqual(r["tax_measures"]["pending_output"], 49315.77)
+		self.assertEqual(r["tax_measures"]["pending_output"], 0)
 		boxes = {b["box"]:b for b in r["boxes"]}
-		self.assertEqual((boxes["1f"]["amount"], boxes["1f"]["vat_amount"]), (1101253.46,55062.68))
-		self.assertEqual(boxes["13"]["amount"], 0)
+		self.assertEqual((boxes["1f"]["amount"], boxes["1f"]["vat_amount"]), (2087253.46,104378.45))
+		self.assertEqual((boxes["9"]["amount"], boxes["13"]["amount"]), (742309.57, 37112.75))
 
 	def test_scenario_a_all_supported_and_approved(self):
 		r = self.build(approved=True)

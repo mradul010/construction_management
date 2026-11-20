@@ -6,8 +6,30 @@
 		value == null
 			? __("Not specified")
 			: frappe.format(value, { fieldtype: "Currency", options: currency, precision: 2 });
-	const voucher = (row) =>
-		frappe.utils.get_form_link(row.voucher_type, row.voucher_no, true, esc(row.voucher_no));
+	const voucher = (row) => {
+		const voucher_no = row?.voucher_no;
+		return row?.voucher_type && voucher_no
+			? frappe.utils.get_form_link(row.voucher_type, voucher_no, true, esc(voucher_no))
+			: esc(voucher_no || __("Not specified"));
+	};
+	const numeric_total = (rows, value) => {
+		const values = rows.map(value);
+		return values.every(
+			item =>
+				item !== null &&
+				item !== undefined &&
+				item !== "" &&
+				Number.isFinite(Number(item))
+		)
+			? values.reduce((total, item) => total + Number(item), 0)
+			: null;
+	};
+	const amount_including_vat = row =>
+		[row.base, row.vat].every(
+			item => item !== null && item !== undefined && item !== "" && Number.isFinite(Number(item))
+		)
+			? Number(row.base) + Number(row.vat)
+			: null;
 
 	function paginate_tables(root) {
 		for (const container of root?.querySelectorAll?.(".vat201-paged-table") || []) {
@@ -141,16 +163,22 @@
 					.join("")}</tr>`;
 			})
 			.join("");
+		const taxable_total = numeric_total(rows, row =>
+			"invoice_taxable_amount" in row ? row.invoice_taxable_amount : row.base
+		);
+		const vat_total = numeric_total(rows, row =>
+			"recorded_vat_amount" in row ? row.recorded_vat_amount : row.raw_vat
+		);
 		return `<div class="table-responsive vat201-paged-table"><table class="table table-bordered"><thead><tr>${headings
 			.map((h) => `<th>${esc(__(h))}</th>`)
 			.join("")}</tr></thead><tbody>${
 			body || `<tr><td colspan="${headings.length}">${__("No transactions")}</td></tr>`
-		}</tbody></table></div>`;
+		}</tbody><tfoot><tr class="font-weight-bold"><th colspan="3">${esc(__("Total"))}</th><th class="text-right">${money(taxable_total)}</th><th class="text-right">${money(vat_total)}</th><th colspan="3"></th></tr></tfoot></table></div>`;
 	}
 	async function details(report) {
 		const filters = report.get_filter_values();
 		const snapshot = JSON.stringify(filters);
-		const { message } = report.raw_data?.vat201_context ? { message: report.raw_data.vat201_context } : await frappe.call({
+		const { message } = await frappe.call({
 			method: endpoint + "report_context",
 			args: { filters },
 		});
@@ -260,6 +288,19 @@
 		pick.show();
 	}
 
+	async function open_filing(report) {
+		const filters = report.get_filter_values();
+		const snapshot = JSON.stringify(filters);
+		const {message} = await frappe.call({
+			method: endpoint.slice(0, -"uae_vat_201_return.".length) + "filing.create_draft",
+			args: {filters},
+			freeze: true,
+			freeze_message: __("Preparing VAT 201 Filing draft"),
+		});
+		if (snapshot !== JSON.stringify(report.get_filter_values())) return;
+		frappe.set_route("Form", "VAT 201 Filing", message.name);
+	}
+
 	frappe.query_reports["UAE VAT 201 Return"] = {
 		paginate_tables,
 		html_format: "<div>{%= report.raw_data.vat201_context.form_print_html %}</div>",
@@ -268,7 +309,8 @@
 			report.page.add_inner_button(__("View Details"), () => details(report));
 			if ((frappe.user_roles || []).some(role => ["Accounts Manager", "System Manager"].includes(role))) {
 				report.page.add_inner_button(__("Review VAT Treatment"), () => review_transaction(report));
-				for (const doctype of ["VAT 201 Filing", "VAT 201 Payment", "VAT 201 Filed Difference", "VAT 201 Tax Evidence"])
+				report.page.add_inner_button(__("VAT 201 Filing"), () => open_filing(report), __("Filing Evidence"));
+				for (const doctype of ["VAT 201 Payment", "VAT 201 Filed Difference", "VAT 201 Tax Evidence"])
 					report.page.add_inner_button(__(doctype), () => { frappe.route_options = {company: report.get_filter_value("company")}; frappe.set_route("List", doctype); }, __("Filing Evidence"));
 			}
 			for (const [type, label, detailed = 0] of [
@@ -393,18 +435,29 @@
 					event.preventDefault();
 					event.stopImmediatePropagation();
 					if (event.type !== "click") return;
+					const filters = report.get_filter_values();
+					const snapshot = JSON.stringify(filters);
 					const {message} = await frappe.call({method: endpoint + "ledger_details", args: {
-						filters: report.get_filter_values(), group: ledgerLink.dataset.group, component: ledgerLink.dataset.component,
+						filters, group: ledgerLink.dataset.group, component: ledgerLink.dataset.component,
 					}});
+					if (snapshot !== JSON.stringify(report.get_filter_values())) return;
 					const currency = report.raw_data?.vat201_context?.ledger_summary?.currency || "AED";
-					const headings = message.kind === "sources" ? ["Date", "Voucher", "Amount Excluding VAT", "Recorded VAT", "GL Entries", "Category"] : ["Date", "Voucher", "VAT Account", "GL Entry", "Debit", "Credit"];
+					const headings = message.kind === "sources" ? ["Date", "Voucher", "Amount Excluding VAT", "Recorded VAT", "Amount Including VAT", "GL Entries", "Category"] : ["Date", "Voucher", "VAT Account", "GL Entry", "Debit", "Credit"];
 					const rows = message.rows.map(row => {
-						const cells = message.kind === "sources" ? [esc(row.posting_date), voucher(row), money(row.base, currency), money(row.vat, currency), (row.gl_entries || "").split(", ").filter(Boolean).map(name => frappe.utils.get_form_link("GL Entry", name, true, esc(name))).join(", "), esc(row.category)] :
+						const including_vat = amount_including_vat(row);
+						const cells = message.kind === "sources" ? [esc(row.posting_date), voucher(row), money(row.base, currency), money(row.vat, currency), money(including_vat, currency), (row.gl_entries || "").split(", ").filter(Boolean).map(name => frappe.utils.get_form_link("GL Entry", name, true, esc(name))).join(", "), esc(row.category)] :
 							[esc(row.posting_date), voucher(row), esc(row.account), frappe.utils.get_form_link("GL Entry", row.name, true, esc(row.name)), money(row.debit, currency), money(row.credit, currency)];
 						return `<tr>${cells.map(cell => `<td>${cell}</td>`).join("")}</tr>`;
 					}).join("");
+					const totals = message.kind === "sources"
+						? [numeric_total(message.rows, row => row.base), numeric_total(message.rows, row => row.vat),
+							numeric_total(message.rows, amount_including_vat)]
+						: [numeric_total(message.rows, row => row.debit), numeric_total(message.rows, row => row.credit)];
+					const footer = `<tfoot><tr class="font-weight-bold"><th colspan="2">${esc(__("Total"))}</th>${message.kind === "sources"
+						? `<th class="text-right">${money(totals[0], currency)}</th><th class="text-right">${money(totals[1], currency)}</th><th class="text-right">${money(totals[2], currency)}</th><th colspan="2"></th>`
+						: `<th colspan="2"></th><th class="text-right">${money(totals[0], currency)}</th><th class="text-right">${money(totals[1], currency)}</th>`}</tr></tfoot>`;
 					const dialog = new frappe.ui.Dialog({title: __(message.label), size: "extra-large", fields: [{fieldname: "transactions", fieldtype: "HTML"}]});
-					dialog.fields_dict.transactions.$wrapper.html(`<div class="table-responsive vat201-paged-table"><table class="table table-bordered"><thead><tr>${headings.map(h => `<th>${__(h)}</th>`).join("")}</tr></thead><tbody>${rows}</tbody></table></div>`);
+					dialog.fields_dict.transactions.$wrapper.html(`<div class="table-responsive vat201-paged-table"><table class="table table-bordered"><thead><tr>${headings.map(h => `<th>${esc(__(h))}</th>`).join("")}</tr></thead><tbody>${rows}</tbody>${footer}</table></div>`);
 					dialog.show();
 					paginate_tables(dialog.fields_dict.transactions.$wrapper[0]);
 					return;
@@ -414,14 +467,17 @@
 				event.preventDefault();
 				event.stopImmediatePropagation();
 				if (event.type !== "click") return;
+				const filters = report.get_filter_values();
+				const snapshot = JSON.stringify(filters);
 				const { message } = await frappe.call({
 					method: endpoint + "transactions",
 					args: {
-						filters: report.get_filter_values(),
+						filters,
 						box: link.dataset.box,
 						fieldname: link.dataset.field,
 					},
 				});
+				if (snapshot !== JSON.stringify(report.get_filter_values())) return;
 				const dialog = new frappe.ui.Dialog({
 					title: __("VAT Transactions") + " - " + link.dataset.box,
 					size: "extra-large",

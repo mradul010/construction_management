@@ -18,7 +18,12 @@ def setup():
 	make_property_setter("UAE VAT Settings", None, "track_changes", 1, "Check", for_doctype=True)
 	for name in ("vat_201_filing_period", "vat_201_classification", "vat_201_recovery_policy"):
 		frappe.reload_doc("construction_management", "doctype", name)
-	create_custom_fields({"UAE VAT Settings": [dict(fieldname="custom_vat201_standard_rate", fieldtype="Percent", label="VAT 201 Standard Rate (%)", default="5", module="Construction Management")]})
+	create_custom_fields({"UAE VAT Settings": [
+		dict(fieldname="custom_vat201_standard_rate", fieldtype="Percent", label="VAT 201 Standard Rate (%)", default="5", module="Construction Management"),
+		dict(fieldname="custom_vat201_use_recorded_purchases", fieldtype="Check",
+			label="Use Recorded Purchases and Expenses for Box 9", default="0", module="Construction Management",
+			description="Allocate the validated Purchases and expenses less returns dashboard dataset to VAT 201 Box 9."),
+	]})
 	fields = [
 		("custom_vat201_periods", "Table", "VAT 201 Filing Periods", "VAT 201 Filing Period"),
 		("custom_vat201_classifications", "Table", "VAT 201 Classifications", "VAT 201 Classification"),

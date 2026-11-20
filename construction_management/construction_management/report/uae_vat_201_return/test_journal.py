@@ -29,6 +29,15 @@ class TestJournalVAT(unittest.TestCase):
 		journal.match_journal(dict(accounts=rows), sources, {"Expense"}, "AED")
 		return sources
 
+	def test_capitalised_purchase_and_prepayment_are_purchase_vat(self):
+		for account in ("Capital Asset", "Prepayment"):
+			source = self.source()
+			journal.match_journal(dict(accounts=[self.base(account=account), self.tax()]),
+				[source], {"Expense", "Capital Asset", "Prepayment"}, "AED")
+			self.assertEqual(source["journal_category"], "Recorded purchase VAT")
+			self.assertEqual(source["journal_vat_role"], "Input")
+			self.assertEqual(source["recorded_vat_amount"], 52.12)
+
 	def test_requested_pair_uses_saved_base_not_remark_or_whole_journal(self):
 		source = self.match([self.base(), self.tax(), dict(name="CASH", debit=0, credit=99999)])[0]
 		self.assertEqual(source["base"], journal.number("1042.37"))
@@ -202,9 +211,9 @@ class TestJournalVAT(unittest.TestCase):
 			source, doc = self.advance(reversal=reversal, emirate="Ras Al Khaimah")
 			journal.link_advance_evidence([source], [])
 			rule, error = automatic.source_rule(source, "AED")
-			self.assertIn("approved", error)
-			rule = frappe._dict(box="1f", tax_date=source["posting_date"], approved_by="Reviewer", reason="Advance tax invoice", supporting_reference="EVIDENCE")
-			event, error = engine.apply_rule(source, rule, "AED")
+			self.assertIsNone(error)
+			self.assertEqual(rule.box, "1f")
+			event, error = engine.apply_rule(source, rule, "AED", source_verified=True)
 			self.assertIsNone(error)
 			sign = -1 if reversal else 1
 			self.assertEqual(event["box"], "1f")

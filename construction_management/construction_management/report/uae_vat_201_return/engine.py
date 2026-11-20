@@ -128,7 +128,7 @@ def source_data(f, rules, candidate_accounts):
 			or_filters.append(["name", "in", dated])
 		doc_filters = {"company": f.company, "docstatus": 1}
 		docs = frappe.get_list(dt, filters=doc_filters, or_filters=or_filters,
-			fields=fields_existing(dt, ["name","modified","posting_date",party,"base_net_total","currency","conversion_rate","is_return","return_against","reverse_charge", "supplier_address", "vat_emirate", "project", "bill_no", "bill_date", "tax_id", "remarks", "ra_bill", "recoverable_standard_rated_expenses", "recoverable_reverse_charge", "custom_vat201_evidence_reference", "tax_category", "taxes_and_charges", "outstanding_amount"]), limit_page_length=0)
+			fields=fields_existing(dt, ["name","modified","posting_date",party,"base_net_total","currency","conversion_rate","is_return","return_against","reverse_charge", "supplier_address", "customer_address", "vat_emirate", "project", "bill_no", "bill_date", "tax_id", "remarks", "ra_bill", "recoverable_standard_rated_expenses", "recoverable_reverse_charge", "custom_vat201_evidence_reference", "tax_category", "taxes_and_charges", "outstanding_amount"]), limit_page_length=0)
 		if not docs:
 			continue
 		posted_gl = frappe.get_list("GL Entry", filters={"company":f.company,"voucher_type":dt,"voucher_no":["in",[d.name for d in docs]],"docstatus":1,"is_cancelled":0}, fields=["name","voucher_no","account","debit","credit"],limit_page_length=0)
@@ -145,6 +145,9 @@ def source_data(f, rules, candidate_accounts):
 		supplier_names = {d.get("supplier") for d in docs if d.get("supplier")} if dt == "Purchase Invoice" else set()
 		suppliers = {r.name:r for r in frappe.get_list("Supplier", filters={"name":["in",list(supplier_names)]},
 			fields=fields_existing("Supplier",["name","tax_id","supplier_primary_address","country"]),limit_page_length=0)} if supplier_names and frappe.has_permission("Supplier","read") else {}
+		customer_names = {d.get("customer") for d in docs if d.get("customer")} if dt in ("Sales Invoice", "POS Invoice") else set()
+		customers = {r.name:r for r in frappe.get_list("Customer", filters={"name":["in",list(customer_names)]},
+			fields=fields_existing("Customer", ["name", "customer_primary_address"]), limit_page_length=0)} if customer_names and frappe.has_permission("Customer", "read") else {}
 		for doc in docs:
 			supplier = suppliers.get(doc.get("supplier"), {})
 			if not doc.get("supplier_address") and supplier.get("supplier_primary_address"):
@@ -153,8 +156,20 @@ def source_data(f, rules, candidate_accounts):
 			if not doc.get("tax_id") and supplier.get("tax_id"):
 				doc["tax_id"] = supplier["tax_id"]
 				doc["trn_evidence_source"] = "Linked Supplier tax ID"
-		addresses = {d.get("supplier_address") for d in docs if d.get("supplier_address")} if dt == "Purchase Invoice" else set()
-		countries = {row.name:row.country for row in frappe.get_list("Address",filters={"name":["in",list(addresses)]},fields=["name","country"],limit_page_length=0)} if addresses and frappe.has_permission("Address","read") else {}
+		can_read_addresses = frappe.has_permission("Address", "read")
+		customer_links = frappe.get_all("Dynamic Link", filters={"parenttype": "Address", "link_doctype": "Customer",
+			"link_name": ["in", list(customer_names)]}, fields=["parent", "link_name"], limit_page_length=0) if customer_names and can_read_addresses else []
+		linked_customer_addresses = defaultdict(list)
+		for link in customer_links:
+			linked_customer_addresses[link.link_name].append(link.parent)
+		address_names = ({d.get("supplier_address") for d in docs if d.get("supplier_address")} |
+			{d.get("customer_address") for d in docs if d.get("customer_address")} |
+			{c.get("customer_primary_address") for c in customers.values() if c.get("customer_primary_address")} |
+			{link.parent for link in customer_links})
+		address_rows = frappe.get_list("Address", filters={"name": ["in", list(address_names)]},
+			fields=fields_existing("Address", ["name", "country", "emirate", "is_primary_address"]), limit_page_length=0) if address_names and can_read_addresses else []
+		address_by_name = {row.name: row for row in address_rows}
+		countries = {name: row.get("country") for name, row in address_by_name.items()}
 		taxes = frappe.get_all(tax_dt, filters={"parent": ["in", names], "parenttype": dt}, fields=fields_existing(tax_dt,["name","parent","idx","row_id","account_head","charge_type","rate","base_tax_amount_after_discount_amount","base_total","add_deduct_tax","category","item_wise_tax_detail"]), order_by="idx asc", limit_page_length=0)
 		items = frappe.get_all(item_dt, filters={"parent": ["in", names], "parenttype":dt}, fields=fields_existing(item_dt,["name","parent","base_net_amount","income_account","expense_account","is_zero_rated","is_exempt","description","project","cost_center","item_code","item_tax_template"]), limit_page_length=0)
 		by_tax, by_item = defaultdict(list), defaultdict(list)
@@ -168,11 +183,13 @@ def source_data(f, rules, candidate_accounts):
 			if not doc.get("supplier_address") and suppliers.get(doc.get("supplier"), {}).get("country"):
 				country = suppliers[doc.supplier].country
 				doc["address_evidence_source"] = "Saved linked Supplier country (no address link)"
+			source_emirate, emirate_source = customer_address_emirate(doc, customers, linked_customer_addresses, address_by_name)
 			evidence = dict(project=doc.get("project"), is_return=doc.get("is_return"), return_against=doc.get("return_against"),
 				tax_category=doc.get("tax_category"), tax_template=doc.get("taxes_and_charges"), outstanding_amount=doc.get("outstanding_amount"),
 				purchase_country=country,
 				potential_reverse_charge=bool(dt=="Purchase Invoice" and (doc.get("reverse_charge")=="Y" or country not in (None,"","United Arab Emirates"))),
-				source_emirate=doc.get("vat_emirate"), bill_no=doc.get("bill_no"), bill_date=doc.get("bill_date"),
+				source_emirate=source_emirate, source_emirate_evidence=emirate_source,
+				bill_no=doc.get("bill_no"), bill_date=doc.get("bill_date"),
 				source_tax_id=doc.get("tax_id"), remarks=doc.get("remarks"), ra_bill=doc.get("ra_bill"),
 				address_evidence_source=doc.get("address_evidence_source") or "Saved invoice supplier address",
 				trn_evidence_source=doc.get("trn_evidence_source") or "Saved invoice supplier TRN",
@@ -214,6 +231,20 @@ def source_data(f, rules, candidate_accounts):
 					raw_vat=Decimal(0),tax_rate=0,tax_account=None,account=item.get("income_account") or item.get("expense_account"),currency=doc.currency,
 					treatment_hint="Exempt" if item.get("is_exempt") else "Zero Rated" if item.get("is_zero_rated") else "Unclassified"))
 	return sources, headers, warnings
+
+
+def customer_address_emirate(doc, customers, linked_addresses, address_by_name):
+	"""Prefer the invoice/customer supply address; retain saved invoice Emirate as fallback."""
+	customer = customers.get(doc.get("customer"), {})
+	candidates = [doc.get("customer_address"), customer.get("customer_primary_address")]
+	linked = sorted(linked_addresses.get(doc.get("customer"), []), key=lambda name:
+		(not bool(address_by_name.get(name, {}).get("is_primary_address")), name))
+	candidates.extend(linked)
+	for name in dict.fromkeys(name for name in candidates if name):
+		emirate = address_by_name.get(name, {}).get("emirate")
+		if emirate:
+			return emirate, "Customer address: " + name
+	return doc.get("vat_emirate"), "Saved invoice VAT Emirate (customer address unavailable)"
 
 
 def item_tax_base(tax, items, conversion_rate):

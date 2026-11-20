@@ -252,8 +252,8 @@ test("transaction columns show source taxable and recorded VAT independently of 
 		"Remarks",
 	])
 		assert.ok(html.includes(`<th>${label}</th>`));
-	const rows = [...html.matchAll(/<tr>([\s\S]*?)<\/tr>/g)]
-		.slice(1)
+	const body = html.match(/<tbody>([\s\S]*?)<\/tbody>/)[1];
+	const rows = [...body.matchAll(/<tr>([\s\S]*?)<\/tr>/g)]
 		.map((match) =>
 			[...match[1].matchAll(/<td[^>]*>([\s\S]*?)<\/td>/g)].map((cell) => cell[1])
 		);
@@ -267,6 +267,9 @@ test("transaction columns show source taxable and recorded VAT independently of 
 	assert.equal(rows[0][6], "");
 	assert.equal(rows[0].length, 8);
 	assert.ok(html.includes("No input VAT claimed"));
+	assert.ok(html.includes('<th colspan="3">Total</th>'));
+	assert.ok(html.includes("AED 1880.5"));
+	assert.ok(html.includes("AED 94.03"));
 });
 
 test("unknown source base is not replaced with a reviewed claim allocation", async () => {
@@ -347,10 +350,42 @@ test("manager review calls the correct backend and preserves explicit zero recov
 	assert.equal(decision.args.action, "Approve");
 });
 
+test("VAT filing button creates or opens the period filing returned by the backend", async () => {
+	const {report, frappe, calls} = setup();
+	const buttons = new Map();
+	let route;
+	frappe.user_roles = ["Accounts Manager"];
+	frappe.call = async args => {
+		calls.push(args);
+		if (args.method.endsWith("period_context"))
+			return {message: {from_date: "2026-08-01", to_date: "2026-10-31", available_periods: []}};
+		if (args.method.endsWith("filing.create_draft"))
+			return {message: {name: "VAT-FILING-DRAFT", created: true, docstatus: 0}};
+		return {message: {}};
+	};
+	frappe.set_route = (...parts) => route = parts;
+	const view = {
+		_no_refresh: true,
+		page: {add_inner_button: (label, action) => buttons.set(label, action)},
+		get_filter_values: () => ({company: "TEST", from_date: "2026-08-01", to_date: "2026-10-31"}),
+		get_filter_value: key => key === "company" ? "TEST" : null,
+		get_filter: () => ({df: {}, refresh() {}, set_value: async () => {}}),
+	};
+	await report.onload(view);
+	await buttons.get("VAT 201 Filing")();
+	assert.ok(calls.at(-1).method.endsWith("filing.create_draft"));
+	assert.deepEqual(route, ["Form", "VAT 201 Filing", "VAT-FILING-DRAFT"]);
+});
+
 test("sales/purchase and opening totals open their scoped audit details", async () => {
  const {report, frappe, calls} = setup();
  const handlers = {};
  let rendered = "";
+ const links = [];
+ frappe.utils.get_form_link = (doctype, name, html, label) => {
+  links.push({doctype, name, html, label});
+  return `<a>${label}</a>`;
+ };
  frappe.ui.Dialog = class {
   constructor() {this.fields_dict = {transactions: {$wrapper: {html: value => rendered = value}}};}
   show() {}
@@ -367,7 +402,15 @@ test("sales/purchase and opening totals open their scoped audit details", async 
   assert.ok(calls.at(-1).method.endsWith("ledger_details"));
   assert.ok(rendered.includes("2026-04-30"));
   assert.ok(rendered.includes(component === "base" ? "Amount Excluding VAT" : "Debit"));
+  assert.ok(rendered.includes('<th colspan="2">Total</th>'));
+  assert.ok(rendered.includes(component === "base" ? "AED 100" : "AED 5"));
+	  if (component === "base") {
+	   assert.ok(rendered.includes("Amount Including VAT"));
+	   assert.ok(rendered.includes("AED 95"));
+	  }
  }
+ assert.ok(links.some(link => link.doctype === "Purchase Invoice" && link.name === "PI-1" && link.label === "PI-1"));
+ assert.ok(!links.some(link => link.doctype === "Purchase Invoice" && link.name === "GL-1"));
 });
 
 

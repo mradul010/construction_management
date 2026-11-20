@@ -12,6 +12,22 @@ class TestUAEVAT201Return(unittest.TestCase):
 	def setUp(self):
 		self.enterContext(patch.object(engine.frappe,"get_precision",return_value=2))
 
+	def test_customer_address_emirate_precedes_company_address_derived_invoice_value(self):
+		doc = frappe._dict(customer="CUSTOMER", customer_address="CUSTOMER-DUBAI", vat_emirate="Ras Al Khaimah")
+		addresses = {"CUSTOMER-DUBAI": frappe._dict(emirate="Dubai", is_primary_address=1)}
+		emirate, source = engine.customer_address_emirate(doc, {}, {}, addresses)
+		self.assertEqual(emirate, "Dubai")
+		self.assertIn("CUSTOMER-DUBAI", source)
+
+	def test_primary_linked_customer_address_and_invoice_fallback_are_deterministic(self):
+		doc = frappe._dict(customer="CUSTOMER", vat_emirate="Ras Al Khaimah")
+		addresses = {"SECONDARY": frappe._dict(emirate="Ajman", is_primary_address=0),
+			"PRIMARY": frappe._dict(emirate="Dubai", is_primary_address=1)}
+		emirate, source = engine.customer_address_emirate(doc, {}, {"CUSTOMER": ["SECONDARY", "PRIMARY"]}, addresses)
+		self.assertEqual((emirate, source), ("Dubai", "Customer address: PRIMARY"))
+		self.assertEqual(engine.customer_address_emirate(doc, {}, {}, {}),
+			("Ras Al Khaimah", "Saved invoice VAT Emirate (customer address unavailable)"))
+
 	def source(self, **values):
 		return dict(dict(voucher_type="Sales Invoice",voucher_no="TEST-SI",source_row="TEST-TAX",posting_date="2026-06-01",base=1000,raw_vat=50,tax_rate=5,tax_account="TEST-VAT",company="TEST",currency="AED"),**values)
 

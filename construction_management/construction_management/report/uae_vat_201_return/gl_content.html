@@ -26,7 +26,7 @@
 </tbody></table>
 <p>Use <strong>View → Internal VAT Review</strong> for recovery decisions and VAT 201 allocations. Net VAT per Books is a ledger balance movement, not the filed return liability.</p>
 {% if result.get('filed_comparison', {}).get('filed_liability') is not none %}
-<h2>Filed Return Comparison</h2><p>Filed liability (AED): {{ frappe.utils.fmt_money(result.filed_comparison.filed_liability, precision=2) }}. GL movement less filed (AED): {{ frappe.utils.fmt_money(result.filed_comparison.gl_less_filed, precision=2) if result.filed_comparison.gl_less_filed is not none else 'Not Available' }}.</p>
+<h2>Filed Return Comparison</h2><p>Filed liability (AED): {{ frappe.utils.fmt_money(result.filed_comparison.filed_liability, precision=2) }}. Payment status: {{ result.filed_comparison.payment_status|e }}. Outstanding VAT payable (AED): {{ frappe.utils.fmt_money(result.filed_comparison.outstanding_balance, precision=2) if result.filed_comparison.outstanding_balance is not none else 'Not Available' }}. GL movement less filed (AED): {{ frappe.utils.fmt_money(result.filed_comparison.gl_less_filed, precision=2) if result.filed_comparison.gl_less_filed is not none else 'Not Available' }}.</p>
 {% endif %}
 {% if result.get('scope_incomplete') %}<p>Source access or report scope is incomplete. Review the detailed audit before relying on these totals.</p>{% endif %}
 <h2>VAT Ledger Entries ({{ entries|length }})</h2>

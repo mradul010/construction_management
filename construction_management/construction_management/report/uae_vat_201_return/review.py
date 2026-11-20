@@ -67,7 +67,15 @@ def enrich_journals(sources):
 		doc = evidence["document"]
 		company = doc["company"]
 		if company not in account_catalog:
-			account_catalog[company] = set(frappe.get_list("Account", filters={"company":company,"root_type":"Expense"}, pluck="name",limit_page_length=0))
+			# Input VAT can be recorded against capitalised purchases and
+			# prepayments as well as P&L expenses.  Restrict the journal matcher
+			# to purchase-like debit accounts, while keeping cash/bank and
+			# receivable movements out of the purchase summary.
+			accounts = frappe.get_list("Account", filters={"company": company, "is_group": 0},
+				fields=["name", "root_type", "account_type"], limit_page_length=0)
+			account_catalog[company] = {account.name for account in accounts if
+				account.root_type == "Expense" or
+				(account.root_type == "Asset" and account.account_type not in ("Bank", "Cash", "Receivable"))}
 		matching = [source for source in sources if source["voucher_type"] == doctype and source["voucher_no"] == doc["name"]]
 		company_doc = frappe.get_cached_doc("Company", company)
 		advance_accounts = {company_doc.get(field) for field in ("default_customer_advance_account", "default_advance_received_account") if company_doc.get(field)}
@@ -79,6 +87,7 @@ def enrich_journals(sources):
 			s.get("journal_evidence", {}).get("document", {}).get("company") == company]
 		if not advances:
 			continue
+		apply_customer_address_emirates(advances)
 		can_check_invoices = frappe.has_permission("Sales Invoice", "read")
 		invoices = frappe.get_list("Sales Invoice", filters={"company":company,"docstatus":1},
 			fields=["name","company","customer","vat_emirate","modified","posting_date","base_net_total","base_total_taxes_and_charges"], limit_page_length=0) if can_check_invoices else []
@@ -94,6 +103,30 @@ def enrich_journals(sources):
 		if not can_check_invoices:
 			for source in advances:
 				source["journal_duplicate_risk"] = "Sales Invoice access is required to check customer-advance VAT overlap; source scope is incomplete"
+
+
+def apply_customer_address_emirates(sources):
+	"""Attach the same customer-address Emirate evidence used by invoice sales."""
+	from construction_management.construction_management.report.uae_vat_201_return.engine import customer_address_emirate, fields_existing
+	customers = {source.get("party") for source in sources if source.get("party")}
+	if not customers or not frappe.has_permission("Customer", "read") or not frappe.has_permission("Address", "read"):
+		return
+	customer_rows = {row.name: row for row in frappe.get_list("Customer", filters={"name": ["in", list(customers)]},
+		fields=fields_existing("Customer", ["name", "customer_primary_address"]), limit_page_length=0)}
+	links = frappe.get_all("Dynamic Link", filters={"parenttype": "Address", "link_doctype": "Customer",
+		"link_name": ["in", list(customers)]}, fields=["parent", "link_name"], limit_page_length=0)
+	by_customer = {}
+	for link in links:
+		by_customer.setdefault(link.link_name, []).append(link.parent)
+	address_names = ({row.get("customer_primary_address") for row in customer_rows.values() if row.get("customer_primary_address")} |
+		{link.parent for link in links})
+	addresses = {row.name: row for row in frappe.get_list("Address", filters={"name": ["in", list(address_names)]},
+		fields=fields_existing("Address", ["name", "emirate", "is_primary_address"]), limit_page_length=0)} if address_names else {}
+	for source in sources:
+		doc = frappe._dict(customer=source.get("party"), vat_emirate=source.get("source_emirate"))
+		emirate, evidence = customer_address_emirate(doc, customer_rows, by_customer, addresses)
+		if emirate:
+			source.update(source_emirate=emirate, source_emirate_evidence=evidence)
 
 
 def suggest(source, mappings, rules=()):

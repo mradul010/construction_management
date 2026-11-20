@@ -79,6 +79,7 @@ app_include_js = [
 ]
 
 doctype_js = {
+	"Bank Statement Import": "public/js/bank_statement_pdf_import.js",
     "Journal Entry": "public/js/journal_entry.js",
     "Company": "public/js/company.js",
     "Project": "public/js/project_dpr.js",

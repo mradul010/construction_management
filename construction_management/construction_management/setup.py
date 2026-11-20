@@ -6,6 +6,9 @@ from frappe.utils import flt
 
 
 def after_install():
+	from construction_management.construction_management.bank_statement_pdf_import import setup as setup_bank_pdf
+	setup_bank_pdf()
+	ensure_vat201_accounting_report_link()
 	from construction_management.construction_management.report.uae_vat_201_return.configuration import setup as setup_vat201
 	setup_vat201()
 	from construction_management.construction_management.report.project_profitability.setup import configure_report
@@ -32,6 +35,9 @@ def after_install():
 
 
 def after_migrate():
+	from construction_management.construction_management.bank_statement_pdf_import import setup as setup_bank_pdf
+	setup_bank_pdf()
+	ensure_vat201_accounting_report_link()
 	from construction_management.construction_management.report.uae_vat_201_return.configuration import setup as setup_vat201
 	setup_vat201()
 	from construction_management.construction_management.report.project_profitability.setup import configure_report
@@ -55,6 +61,53 @@ def after_migrate():
 	backfill_sales_invoice_ra_bill_links()
 	ensure_ra_bill_items()
 	backfill_boq_revision_fields()
+
+
+def ensure_vat201_accounting_report_link():
+	"""Add the existing custom VAT report to ERPNext's Financial Reports workspace without editing core files."""
+	remove_standard_uae_vat201_navigation()
+	if not frappe.db.exists("Report", "UAE VAT 201 Return"):
+		return
+	workspace = "Financial Reports"
+	if frappe.db.exists("Workspace", workspace) and not frappe.db.exists("Workspace Link", {
+		"parent": workspace, "parenttype": "Workspace", "parentfield": "links",
+		"link_type": "Report", "link_to": "UAE VAT 201 Return",
+	}):
+		row = frappe.get_doc({
+			"doctype": "Workspace Link", "parent": workspace, "parenttype": "Workspace", "parentfield": "links",
+			"idx": 35, "type": "Link", "label": "UAE VAT 201 Return", "link_type": "Report",
+			"link_to": "UAE VAT 201 Return", "is_query_report": 1, "dependencies": "GL Entry", "hidden": 0,
+		})
+		row.db_insert()
+		card = frappe.db.get_value("Workspace Link", {"parent": workspace, "type": "Card Break", "label": "Other Reports"}, "name")
+		if card:
+			count = frappe.db.count("Workspace Link", {"parent": workspace, "type": "Link", "idx": [">", 27]})
+			frappe.db.set_value("Workspace Link", card, "link_count", count, update_modified=False)
+	if frappe.db.exists("Workspace Sidebar", workspace) and not frappe.db.exists("Workspace Sidebar Item", {
+		"parent": workspace, "parenttype": "Workspace Sidebar", "parentfield": "items",
+		"link_type": "Report", "link_to": "UAE VAT 201 Return",
+	}):
+		row = frappe.get_doc({
+			"doctype": "Workspace Sidebar Item", "parent": workspace, "parenttype": "Workspace Sidebar",
+			"parentfield": "items", "idx": 35, "type": "Link", "label": "UAE VAT 201 Return",
+			"link_type": "Report", "link_to": "UAE VAT 201 Return",
+		})
+		row.db_insert()
+	frappe.clear_cache()
+
+
+def remove_standard_uae_vat201_navigation():
+	"""Remove only the standard UAE VAT 201 navigation entries to avoid confusion with the custom return."""
+	workspace = "Financial Reports"
+	frappe.db.delete("Workspace Link", {"parent": workspace, "link_type": "Report", "link_to": "UAE VAT 201"})
+	frappe.db.delete("Workspace Sidebar Item", {"parent": workspace, "link_type": "Report", "link_to": "UAE VAT 201"})
+	frappe.db.delete("Workspace Shortcut", {"link_to": "UAE VAT 201"})
+	frappe.db.delete("Desktop Icon", {"link_to": "UAE VAT 201"})
+	frappe.db.delete("Desktop Icon", {"label": "UAE VAT 201"})
+	card = frappe.db.get_value("Workspace Link", {"parent": workspace, "type": "Card Break", "label": "Other Reports"}, ["name", "idx"], as_dict=True)
+	if card:
+		count = frappe.db.count("Workspace Link", {"parent": workspace, "type": "Link", "idx": [">", card.idx]})
+		frappe.db.set_value("Workspace Link", card.name, "link_count", count, update_modified=False)
 
 
 def create_boq_client_script():
