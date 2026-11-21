@@ -21,7 +21,7 @@ from frappe.utils import getdate
 MAX_FILE_SIZE = 20 * 1024 * 1024
 MAX_TRANSACTIONS = 2000
 MONEY = re.compile(r"^-?\(?\d[\d,]*(?:\.\d+)?\)?$")
-DATE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+DATE = re.compile(r"^(?:\d{4}-\d{2}-\d{2}|\d{2}/\d{2}/\d{4})$")
 NOISE = (
 	"The items and balance shown", "verified. Report any discrepancies", "of the statement date",
 	"All charges, terms and conditions", "Please note that for foreign currency", "indicative only",
@@ -79,7 +79,7 @@ class PDFTextExtractor:
 		for index, page in enumerate(document):
 			text = page.get_text("text") or ""
 			texts.append(text)
-			words = [dict(page=index, x0=float(row[0]), top=float(row[1]), text=str(row[4]),
+			words = [dict(page=index, x0=float(row[0]), x1=float(row[2]), top=float(row[1]), text=str(row[4]),
 				width=float(page.rect.width), height=float(page.rect.height)) for row in page.get_text("words")]
 			pages.append(words)
 		return dict(engine="PyMuPDF", pages=pages, text="\n".join(texts))
@@ -95,7 +95,7 @@ class PDFTextExtractor:
 			for index, page in enumerate(document.pages):
 				text = page.extract_text() or ""
 				texts.append(text)
-				pages.append([dict(page=index, x0=float(row["x0"]), top=float(row["top"]), text=row["text"],
+				pages.append([dict(page=index, x0=float(row["x0"]), x1=float(row["x1"]), top=float(row["top"]), text=row["text"],
 					width=float(page.width), height=float(page.height)) for row in page.extract_words()])
 		return dict(engine="pdfplumber", pages=pages, text="\n".join(texts))
 
@@ -105,17 +105,24 @@ class MashreqQatraParser:
 
 	def accepts(self, extracted):
 		text = extracted["text"]
-		return "Account Statement" in text and "Mashreq" in text and "Reference Number" in text
+		statement = "Account Statement" in text or "Current Account Statement" in text or "Statement for Period" in text
+		reference = "Reference Number" in text or re.search(r"Reference\s+no\b", text, re.I)
+		return bool(statement and "Mashreq" in text and reference)
 
 	def parse(self, extracted):
 		text = extracted["text"]
 		if len(text.strip()) < 100:
 			frappe.throw(_("No extractable text was found. This appears to be a scanned PDF; OCR is not enabled."))
-		opening = self._label_amount(text, "Opening balance")
-		closing = self._label_amount(text, "Closing balance")
-		currency_match = re.search(r"Account Currency\s+([A-Z]{3})", text)
+		opening = self._statement_balance(extracted["pages"], "Opening balance")
+		closing = self._statement_balance(extracted["pages"], "Closing balance")
+		opening = self._label_amount(text, "Opening balance") if opening is None else opening
+		closing = self._label_amount(text, "Closing balance") if closing is None else closing
+		currency_match = (re.search(r"Account Currency\s+([A-Z]{3})", text)
+			or re.search(r"Account No\s*\n\d{8,}\s*\n([A-Z]{3})", text, re.I)
+			or re.search(r"\n\d{8,}\s*\n([A-Z]{3})\s*\n", text))
 		account_match = (re.search(r"Account Number[^\n]*\n(\d{8,})", text)
-			or re.search(r"(\d{8,})\s*\nAccount Number", text))
+			or re.search(r"(\d{8,})\s*\nAccount Number", text)
+			or re.search(r"Account No\s*\n(\d{8,})", text, re.I))
 		currency = currency_match.group(1) if currency_match else None
 		account_number = account_match.group(1) if account_match else None
 		columns = self._columns(extracted["pages"])
@@ -125,6 +132,7 @@ class MashreqQatraParser:
 		previous = opening
 		for index, start in enumerate(starts):
 			end = starts[index + 1]["global_top"] - 14 if index + 1 < len(starts) else float("inf")
+			end = min(end, (start["page"] + 1) * 1000)
 			block = [word for word in words if start["global_top"] - 14 <= word["global_top"] < end]
 			row = self._transaction(start, block, columns, previous, index + 1)
 			rows.append(row)
@@ -145,13 +153,36 @@ class MashreqQatraParser:
 		match = re.search(re.escape(label) + r"\s+([\d,]+(?:\.\d+)?)", text, re.I)
 		return amount(match.group(1)) if match else None
 
+	def _statement_balance(self, pages, label):
+		first, second = label.lower().split()
+		for page in pages:
+			for word in page:
+				if word["text"].lower() != first:
+					continue
+				line = [item for item in page if abs(item["top"] - word["top"]) <= 2]
+				if second not in {item["text"].strip(":").lower() for item in line}:
+					continue
+				values = [item for item in line if MONEY.match(item["text"])]
+				if values:
+					return amount(max(values, key=lambda item: item["x0"])["text"])
+		return None
+
 	def _columns(self, pages):
 		all_words = [word for page in pages for word in page]
+		for page in pages:
+			for date in (word for word in page if word["text"].lower() == "date"):
+				line = [word for word in page if abs(word["top"] - date["top"]) <= 2]
+				labels = {word["text"].lower(): word for word in line}
+				if all(label in labels for label in ("transaction", "debit", "credit", "balance")):
+					return dict(date=date["x0"], description=labels["transaction"]["x0"],
+						reference=labels.get("reference", {"x0": 227})["x0"],
+						debit=labels["debit"]["x0"], credit=labels["credit"]["x0"],
+						balance=labels["balance"]["x0"], page_width=date["width"])
 		def x(label, fallback):
 			word = next((word for word in all_words if word["text"].lower() == label.lower()), None)
 			return word["x0"] if word else fallback
 		return dict(date=x("Date", 29), description=x("Transaction", 100), reference=x("Reference", 227),
-			debit=x("Debit", 333), credit=x("Credit", 412), balance=x("Balance", 500))
+			debit=x("Debit", 333), credit=x("Credit", 412), balance=x("Balance", 500), page_width=595)
 
 	def _body_words(self, pages):
 		out = []
@@ -166,13 +197,23 @@ class MashreqQatraParser:
 
 	def _transaction(self, start, block, columns, previous, index):
 		line = [word for word in block if abs(word["global_top"] - start["global_top"]) <= 3]
-		debit = self._column_amount(line, columns["debit"], columns["credit"])
-		credit = self._column_amount(line, columns["credit"], columns["balance"])
-		balances = [word for word in block if abs(word["x0"] - columns["balance"]) < 35 and MONEY.match(word["text"])]
-		balance = amount(balances[-1]["text"]) if balances else None
-		ref_words = [word["text"] for word in line if columns["reference"] - 15 <= word["x0"] < columns["debit"] - 10]
+		debit = self._column_amount(line, columns, "debit")
+		credit = self._column_amount(line, columns, "credit")
+		# Mashreq prints reversals as a negative value in the original column.
+		# Bank Transaction expects positive deposit/withdrawal values.
+		if debit < 0:
+			credit, debit = credit - debit, Decimal("0")
+		if credit < 0:
+			debit, credit = debit - credit, Decimal("0")
+		balances = [word for word in block if self._in_column(word, columns, "balance") and MONEY.match(word["text"])]
+		balance_word = min(balances, key=lambda word: abs(word["global_top"] - start["global_top"])) if balances else None
+		balance = amount(balance_word["text"]) if balance_word else None
+		debit_left = columns["debit"] - 30
+		ref_words = [word["text"] for word in line if columns["reference"] - 15 <= word["x0"] and self._center(word) < debit_left]
 		reference = " ".join(ref_words).strip(" -")
-		excluded = {id(start), *(id(word) for word in line if MONEY.match(word["text"]) and word["x0"] >= columns["debit"] - 10),
+		financial = [word for word in block if MONEY.match(word["text"]) and
+			any(self._in_column(word, columns, key) for key in ("debit", "credit", "balance"))]
+		excluded = {id(start), *(id(word) for word in financial),
 			*(id(word) for word in balances)}
 		description_words = [word["text"] for word in block if id(word) not in excluded and word["x0"] >= columns["description"] - 15]
 		description = re.sub(r"\s+", " ", " ".join(description_words)).strip()
@@ -188,13 +229,26 @@ class MashreqQatraParser:
 			balance_mismatch = expected.quantize(Decimal("0.01")) != balance.quantize(Decimal("0.01"))
 		if balance_mismatch:
 			problems.append("Running balance mismatch")
-		return dict(row_id=str(index), selected=1, date=start["text"], value_date=None,
+		date = datetime.strptime(start["text"], "%d/%m/%Y").strftime("%Y-%m-%d") if "/" in start["text"] else start["text"]
+		return dict(row_id=str(index), selected=1, date=date, value_date=None,
 			description=description, reference=reference, withdrawal=money(debit), deposit=money(credit),
 			balance=money(balance) if balance is not None else None, balance_mismatch=int(balance_mismatch),
 			balance_reviewed=0, duplicate_reviewed=0, validation_status="; ".join(problems) or "Valid")
 
-	def _column_amount(self, words, left, right):
-		values = [amount(word["text"]) for word in words if left - 12 <= word["x0"] < right - 12 and MONEY.match(word["text"])]
+	def _center(self, word):
+		return (word["x0"] + word.get("x1", word["x0"])) / 2
+
+	def _in_column(self, word, columns, key):
+		bounds = {
+			"debit": (columns["debit"] - 30, columns["credit"] - 30),
+			"credit": (columns["credit"] - 30, columns["balance"] - 35),
+			"balance": (columns["balance"] - 35, columns["page_width"]),
+		}
+		left, right = bounds[key]
+		return left <= self._center(word) < right
+
+	def _column_amount(self, words, columns, key):
+		values = [amount(word["text"]) for word in words if self._in_column(word, columns, key) and MONEY.match(word["text"])]
 		return values[0] if len(values) == 1 else Decimal("0")
 
 

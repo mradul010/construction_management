@@ -6,8 +6,8 @@ import frappe
 from construction_management.construction_management import bank_statement_pdf_import as pdf_import
 
 
-def word(page, x, top, text, width=595, height=842):
-	return dict(page=page, x0=x, top=top, text=text, width=width, height=height)
+def word(page, x, top, text, width=595, height=842, x1=None):
+	return dict(page=page, x0=x, x1=x if x1 is None else x1, top=top, text=text, width=width, height=height)
 
 
 class TestMashreqPDFParser(unittest.TestCase):
@@ -55,6 +55,47 @@ Closing balance 950.00
 		self.assertEqual(len(result["rows"]), 1)
 		self.assertEqual(result["rows"][0]["reference"], "")
 		self.assertEqual(result["rows"][0]["validation_status"], "Valid")
+
+	def test_consolidated_statement_ddmmyyyy_and_negative_debit_reversal(self):
+		text = """Consolidated Relationship Statement
+Mashreqbank PSC
+Current Account Statement
+Account No
+019102096113
+AED
+Statement for Period 01/05/2026 to 31/05/2026
+Reference no Debit Credit Balance
+"""
+		page = [
+			word(0, 51, 330, "Date", x1=67), word(0, 104, 330, "Transaction", x1=143),
+			word(0, 272, 330, "Reference", x1=305), word(0, 409, 330, "Debit", x1=427),
+			word(0, 470, 330, "Credit", x1=490), word(0, 541, 330, "Balance", x1=567),
+			word(0, 104, 362, "OPENING", x1=136), word(0, 138, 362, "BALANCE", x1=174),
+			word(0, 409, 362, "0.000", x1=427), word(0, 471, 362, "0.000", x1=490),
+			word(0, 549, 362, "0.000", x1=567),
+			word(0, 51, 377, "02/05/2026", x1=90), word(0, 104, 377, "Cash", x1=122),
+			word(0, 124, 377, "Deposit", x1=151), word(0, 272, 377, "REF-1", x1=300),
+			word(0, 409, 377, "0.000", x1=427), word(0, 453, 377, "96,000.000", x1=490),
+			word(0, 531, 377, "96,000.000", x1=567),
+			word(0, 51, 400, "04/05/2026", x1=90), word(0, 104, 400, "Withdrawal", x1=150),
+			word(0, 272, 400, "REF-2", x1=300), word(0, 390, 400, "40,000.000", x1=427),
+			word(0, 472, 400, "0.000", x1=490), word(0, 527, 400, "56,000.000", x1=567),
+			word(0, 51, 423, "04/05/2026", x1=90), word(0, 104, 423, "Reversal", x1=140),
+			word(0, 272, 423, "REF-2", x1=300), word(0, 388, 423, "-40,000.000", x1=427),
+			word(0, 472, 423, "0.000", x1=490), word(0, 527, 423, "96,000.000", x1=567),
+			word(0, 104, 446, "CLOSING", x1=136), word(0, 138, 446, "BALANCE", x1=174),
+			word(0, 409, 446, "0.000", x1=427), word(0, 471, 446, "0.000", x1=490),
+			word(0, 531, 446, "96,000.000", x1=567),
+		]
+		extracted = dict(engine="PyMuPDF", text=text, pages=[page])
+		parser = pdf_import.MashreqQatraParser()
+		self.assertTrue(parser.accepts(extracted))
+		result = parser.parse(extracted)
+		self.assertEqual((result["account_number"], result["currency"]), ("019102096113", "AED"))
+		self.assertEqual((result["opening_balance"], result["closing_balance"]), ("0.00", "96000.00"))
+		self.assertEqual([row["date"] for row in result["rows"]], ["2026-05-02", "2026-05-04", "2026-05-04"])
+		self.assertEqual((result["rows"][1]["withdrawal"], result["rows"][2]["deposit"]), ("40000.00", "40000.00"))
+		self.assertTrue(all(row["validation_status"] == "Valid" for row in result["rows"]))
 
 	def test_balance_mismatch_is_never_silently_skipped(self):
 		extracted = self.extracted()
